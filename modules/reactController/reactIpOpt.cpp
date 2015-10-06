@@ -44,19 +44,13 @@ private:
 
 protected:
     iKinChain &chain;
-    iKinChain &chain2ndTask;
 
     iKinLinIneqConstr &LIC;
 
     unsigned int dim;
-    unsigned int dim_2nd;
     unsigned int ctrlPose;
 
     yarp::sig::Vector &xd;
-    yarp::sig::Vector &xd_2nd;
-    yarp::sig::Vector &w_2nd;
-    yarp::sig::Vector &qd_3rd;
-    yarp::sig::Vector &w_3rd;
     yarp::sig::Vector  qd;
     yarp::sig::Vector  q0;
     yarp::sig::Vector  q;
@@ -65,13 +59,10 @@ protected:
     yarp::sig::Vector  e_zero;
     yarp::sig::Vector  e_xyz;
     yarp::sig::Vector  e_ang;
-    yarp::sig::Vector  e_2nd;
-    yarp::sig::Vector  e_3rd;
 
     yarp::sig::Matrix  J_zero;
     yarp::sig::Matrix  J_xyz;
     yarp::sig::Matrix  J_ang;
-    yarp::sig::Matrix  J_2nd;
 
     yarp::sig::Vector *e_1st;
     yarp::sig::Matrix *J_1st;
@@ -88,8 +79,6 @@ protected:
 
     iKinIterateCallback *callback;
 
-    double weight2ndTask;
-    double weight3rdTask;
     bool   firstGo;
 
     /************************************************************************/
@@ -134,27 +123,6 @@ protected:
             submatrix(J1,J_xyz,0,2,0,dim-1);
             submatrix(J1,J_ang,3,5,0,dim-1);
 
-            if (weight2ndTask!=0.0)
-            {
-                yarp::sig::Matrix H_2nd=chain2ndTask.getH();
-                e_2nd[0]=w_2nd[0]*(xd_2nd[0]-H_2nd(0,3));
-                e_2nd[1]=w_2nd[1]*(xd_2nd[1]-H_2nd(1,3));
-                e_2nd[2]=w_2nd[2]*(xd_2nd[2]-H_2nd(2,3));
-
-                yarp::sig::Matrix J2=chain2ndTask.GeoJacobian();
-
-                for (unsigned int i=0; i<dim_2nd; i++)
-                {
-                    J_2nd(0,i)=w_2nd[0]*J2(0,i);
-                    J_2nd(1,i)=w_2nd[1]*J2(1,i);
-                    J_2nd(2,i)=w_2nd[2]*J2(2,i);
-                }
-            }
-
-            if (weight3rdTask!=0.0)
-                for (unsigned int i=0; i<dim; i++)
-                    e_3rd[i]=w_3rd[i]*(qd_3rd[i]-q[i]);
-
             if (LIC.isActive())
                 linC=LIC.getC()*q;
         }
@@ -164,25 +132,18 @@ protected:
 public:
     /************************************************************************/
     iKin_NLP(iKinChain &c, unsigned int _ctrlPose, const yarp::sig::Vector &_q0,
-             yarp::sig::Vector &_xd, double _weight2ndTask, iKinChain &_chain2ndTask,
-             yarp::sig::Vector &_xd_2nd, yarp::sig::Vector &_w_2nd, double _weight3rdTask,
-             yarp::sig::Vector &_qd_3rd, yarp::sig::Vector &_w_3rd, iKinLinIneqConstr &_LIC,
+             yarp::sig::Vector &_xd, iKinLinIneqConstr &_LIC,
              bool *_exhalt=NULL) :
              chain(c), q0(_q0), xd(_xd),
-             chain2ndTask(_chain2ndTask),   xd_2nd(_xd_2nd), w_2nd(_w_2nd),
-             weight3rdTask(_weight3rdTask), qd_3rd(_qd_3rd), w_3rd(_w_3rd),
              LIC(_LIC), 
              exhalt(_exhalt)
     {
         dim=chain.getDOF();
-        dim_2nd=chain2ndTask.getDOF();
 
         ctrlPose=_ctrlPose;
 
         if (ctrlPose>IKINCTRL_POSE_ANG)
             ctrlPose=IKINCTRL_POSE_ANG;
-
-        weight2ndTask=dim_2nd>0 ? _weight2ndTask : 0.0;
 
         qd.resize(dim);
 
@@ -201,13 +162,10 @@ public:
         e_zero.resize(3,0.0);
         e_xyz.resize(3,0.0);
         e_ang.resize(3,0.0);
-        e_2nd.resize(3,0.0);
-        e_3rd.resize(dim,0.0);
 
         J_zero.resize(3,dim); J_zero.zero();
         J_xyz.resize(3,dim);  J_xyz.zero();
         J_ang.resize(3,dim);  J_ang.zero();
-        J_2nd.resize(3,dim);  J_2nd.zero();
 
         if (ctrlPose==IKINCTRL_POSE_FULL)
         {
@@ -356,12 +314,6 @@ public:
 
         obj_value=norm2(*e_1st);
 
-        if (weight2ndTask!=0.0)
-            obj_value+=weight2ndTask*norm2(e_2nd);
-
-        if (weight3rdTask!=0.0)
-            obj_value+=weight3rdTask*norm2(e_3rd);
-
         return true;
     }
     
@@ -371,12 +323,6 @@ public:
         computeQuantities(x);
 
         yarp::sig::Vector grad=-2.0*(J_1st->transposed() * *e_1st);
-
-        if (weight2ndTask!=0.0)
-            grad=grad-2.0*weight2ndTask*(J_2nd.transposed()*e_2nd);
-
-        if (weight3rdTask!=0.0)
-            grad=grad-2.0*weight3rdTask*(w_3rd*e_3rd);
 
         for (Index i=0; i<n; i++)
             grad_f[i]=grad[i];
@@ -481,9 +427,6 @@ public:
             computeQuantities(x);
             chain.prepareForHessian();
 
-            if (weight2ndTask!=0.0)
-                chain2ndTask.prepareForHessian();
-
             Index idx=0;
             for (Index row=0; row<n; row++)
             {
@@ -510,20 +453,7 @@ public:
                 
                     values[idx]=2.0*(obj_factor*(dot(*J_1st,row,*J_1st,col)-dot(*h_1st,*e_1st))+
                                      lambda[0]*(dot(*J_cst,row,*J_cst,col)-dot(*h_cst,*e_cst)));
-                
-                    if ((weight2ndTask!=0.0) && (row<(int)dim_2nd) && (col<(int)dim_2nd))
-                    {    
-                        // warning: row and col are swapped due to asymmetry
-                        // of orientation part within the hessian 
-                        yarp::sig::Vector h2=chain2ndTask.fastHessian_ij(col,row);
-                        yarp::sig::Vector h_2nd(3);
-                        h_2nd[0]=(w_2nd[0]*w_2nd[0])*h2[0];
-                        h_2nd[1]=(w_2nd[1]*w_2nd[1])*h2[1];
-                        h_2nd[2]=(w_2nd[2]*w_2nd[2])*h2[2];
-                
-                        values[idx]+=2.0*obj_factor*weight2ndTask*(dot(J_2nd,row,J_2nd,col)-dot(h_2nd,e_2nd));
-                    }
-                
+
                     idx++;
                 }
             }
@@ -640,31 +570,6 @@ bool reactIpOpt::set_posePriority(const string &priority)
     else 
         return false;
 }
-
-
-/************************************************************************/
-void reactIpOpt::specify2ndTaskEndEff(const unsigned int n)
-{
-    unsigned int _n=n;
-    if (_n>chain.getN())
-        _n=chain.getN();
-
-    chain2ndTask.clear();
-    for (unsigned int i=0; i<_n; i++)
-        chain2ndTask<<chain[i];
-
-    chain2ndTask.setH0(chain.getH0());
-    if (_n==chain.getN())
-        chain2ndTask.setHN(chain.getHN()); 
-}
-
-
-/************************************************************************/
-iKinChain &reactIpOpt::get2ndTaskChain()
-{
-    return chain2ndTask;
-}
-
 
 /************************************************************************/
 void reactIpOpt::setMaxIter(const int max_iter)
@@ -786,14 +691,9 @@ void reactIpOpt::setBoundsInf(const double lower, const double upper)
 
 /************************************************************************/
 yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &q0, yarp::sig::Vector &xd,
-                                      double weight2ndTask, yarp::sig::Vector &xd_2nd,
-                                      yarp::sig::Vector &w_2nd, double weight3rdTask,
-                                      yarp::sig::Vector &qd_3rd, yarp::sig::Vector &w_3rd,
-                                      int *exit_code, bool *exhalt, iKinIterateCallback *iterate)
+                                    int *exit_code, bool *exhalt, iKinIterateCallback *iterate)
 {
     SmartPtr<iKin_NLP> nlp=new iKin_NLP(chain,ctrlPose,q0,xd,
-                                        weight2ndTask,chain2ndTask,xd_2nd,w_2nd,
-                                        weight3rdTask,qd_3rd,w_3rd,
                                         *pLIC,exhalt);
     
     nlp->set_scaling(obj_scaling,x_scaling,g_scaling);
@@ -811,22 +711,10 @@ yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &q0, yarp::sig::Vect
 
 
 /************************************************************************/
-yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &q0, yarp::sig::Vector &xd,
-                                      double weight2ndTask, yarp::sig::Vector &xd_2nd,
-                                      yarp::sig::Vector &w_2nd)
-{
-    yarp::sig::Vector dummy(1);
-    return solve(q0,xd,weight2ndTask,xd_2nd,w_2nd,0.0,dummy,dummy);
-}
-
-
-/************************************************************************/
 yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &q0, yarp::sig::Vector &xd)
 {
-    yarp::sig::Vector dummy(1);
-    return solve(q0,xd,0.0,dummy,dummy,0.0,dummy,dummy);
+    return solve(q0,xd,NULL); // The NULL has been made to force the call of the function above
 }
-
 
 /************************************************************************/
 reactIpOpt::~reactIpOpt()

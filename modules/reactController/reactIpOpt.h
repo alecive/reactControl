@@ -41,10 +41,10 @@ private:
     reactIpOpt &operator=(const reactIpOpt&);    
 
 protected:
+    // The IpOpt application that supposedly will solve the task
     void *App;
 
     iCub::iKin::iKinChain &chain;
-    iCub::iKin::iKinChain chain2ndTask;
 
     iCub::iKin::iKinLinIneqConstr  noLIC;
     iCub::iKin::iKinLinIneqConstr *pLIC;
@@ -129,20 +129,6 @@ public:
     iCub::iKin::iKinLinIneqConstr &getLIC() { return *pLIC; }
 
     /**
-    * Selects the End-Effector of the 2nd task by giving the ordinal
-    * number n of last joint pointing at it. 
-    * @param n is the ordinal number of last joint pointing at the 
-    *          2nd End-Effector.
-    */
-    void specify2ndTaskEndEff(const unsigned int n);
-
-    /**
-    * Retrieves the 2nd task's chain. 
-    * @return a reference to the 2nd task's chain.  
-    */
-    iCub::iKin::iKinChain &get2ndTaskChain();
-
-    /**
     * Sets Maximum Iteration.
     * @param max_iter exits if iter>=max_iter (max_iter<0 
     *                 (IKINCTRL_DISABLED) disables this check).
@@ -223,20 +209,6 @@ public:
     * Executes the IpOpt algorithm trying to converge on target. 
     * @param q0 is the vector of initial joint angles values. 
     * @param xd is the End-Effector target Pose to be attained. 
-    * @param weight2ndTask weights the second task (disabled if 
-    *                      0.0).
-    * @param xd_2nd is the second target task traslational Pose to 
-    *             be attained (typically a particular elbow xyz
-    *             position).
-    * @param w_2nd weights each components of the distance vector 
-    *              xd_2nd-x_2nd. Hence, the follows holds as second
-    *              task: min 1/2*norm2(((xd_i-x_i)*w_i)_i)
-    * @param weight3rdTask weights the third task (disabled if 0.0).
-    * @param qd_3rd is the third task joint angles target 
-    *             positions to be attained.
-    * @param w_3rd weights each components of the distance vector 
-    *              qd-q. Hence, the follows holds as third task:
-    *             min 1/2*norm2(((qd_i-q_i)*w_i)_i)
     * @param exit_code stores the exit code (NULL by default). Test 
     *                  for one of this:
     *                   SUCCESS
@@ -258,26 +230,7 @@ public:
     * @return estimated joint angles.
     */
     virtual yarp::sig::Vector solve(const yarp::sig::Vector &q0, yarp::sig::Vector &xd,
-                                    double weight2ndTask, yarp::sig::Vector &xd_2nd, yarp::sig::Vector &w_2nd,
-                                    double weight3rdTask, yarp::sig::Vector &qd_3rd, yarp::sig::Vector &w_3rd,
                                     int *exit_code=NULL, bool *exhalt=NULL, iCub::iKin::iKinIterateCallback *iterate=NULL);
-
-    /**
-    * Executes the IpOpt algorithm trying to converge on target. 
-    * @param q0 is the vector of initial joint angles values. 
-    * @param xd is the End-Effector target Pose to be attained. 
-    * @param weight2ndTask weights the second task (disabled if 
-    *                      0.0).
-    * @param xd_2nd is the second target task traslational Pose to 
-    *             be attained (typically a particular elbow xyz
-    *             position).
-    * @param w_2nd weights each components of the distance vector 
-    *              xd_2nd-x_2nd. Hence, the follows holds as second
-    *              task: min 1/2*norm2(((xd_i-x_i)*w_i)_i)
-    * @return estimated joint angles.
-    */
-    virtual yarp::sig::Vector solve(const yarp::sig::Vector &q0, yarp::sig::Vector &xd,
-                                    double weight2ndTask, yarp::sig::Vector &xd_2nd, yarp::sig::Vector &w_2nd);
 
     /**
     * Executes the IpOpt algorithm trying to converge on target. 
