@@ -89,7 +89,9 @@ private:
     RpcClient            rpcClnt;
     RpcServer            rpcSrvr;
 
-    string robot,name;
+    string robot;
+    string name;
+    string part;
 
     int verbosity,rate,record;
 
@@ -100,8 +102,9 @@ public:
     {
         rctCtrlThrd=0;
 
-        robot    = "icubSim";
-        name     = "reactController";
+        robot     = "icubSim";
+        name      = "reactController";
+        part      = "left_arm";
 
         verbosity =    0;    // verbosity
         rate      =  100;    // rate of the reactCtrlThread
@@ -198,6 +201,14 @@ public:
             }
             else yInfo("[reactController] Could not find robot option in the config file; using %s as default",robot.c_str());
 
+        //******************* PART ******************
+            if (rf.check("part"))
+            {
+                part = rf.find("part").asString();
+                yInfo("[reactController] Robot is: %s", part.c_str());
+            }
+            else yInfo("[reactController] Could not find part option in the config file; using %s as default",part.c_str());
+
         //******************* VERBOSE ******************
             if (rf.check("verbosity"))
             {
@@ -215,7 +226,7 @@ public:
             else yInfo("[reactController] Could not find rate in the config file; using %i as default",rate);
 
         //************* THREAD *************
-        rctCtrlThrd = new reactCtrlThread(rate, name, robot, verbosity, autoconnect);
+        rctCtrlThrd = new reactCtrlThread(rate, name, robot, part, verbosity, autoconnect);
         bool strt = rctCtrlThrd -> start();
         if (!strt)
         {
@@ -270,6 +281,7 @@ int main(int argc, char * argv[])
         yInfo("   --from        from:  the name of the .ini file.");
         yInfo("   --name        name:  the name of the module (default reactController).");
         yInfo("   --robot       robot: the name of the robot. Default icubSim.");
+        yInfo("   --part        part:  the arm to use. Default left_arm.");
         yInfo("   --rate        rate:  the period used by the thread. Default 100ms.");
         yInfo("   --verbosity   int:   verbosity level (default 0).");
         yInfo("");

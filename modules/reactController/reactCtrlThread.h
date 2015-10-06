@@ -68,12 +68,14 @@ protected:
     string name;
     // Name of the robot (to address the module toward icub or icubSim):
     string robot;
+    // Which arm to use:
+    string part;
     // Flag used to know if the doubleTouch should automatically connect to the skinManager
     bool autoconnect;
 
     /***************************************************************************/
     // INTERNAL VARIABLES:
-    int        step; // Flag to know in which step the thread is
+    int        step; // Flag to know in which step the thread ismake -
 
     // Driver for "classical" interfaces
     PolyDriver       dd;
@@ -115,7 +117,7 @@ protected:
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & ,
-                    int , bool  );
+                    const string &_ , int , bool  );
     // INIT
     virtual bool threadInit();
     // RUN

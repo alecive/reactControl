@@ -24,8 +24,8 @@
 #include <iomanip>
 
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,
-                                 int _verbosity, bool _autoconnect) :
-                                 RateThread(_rate), name(_name), robot(_robot),
+                                 const string &_part, int _verbosity, bool _autoconnect) :
+                                 RateThread(_rate), name(_name), robot(_robot), part(_part),
                                  verbosity(_verbosity), autoconnect(_autoconnect)
 {
     step     = 0;
