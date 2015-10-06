@@ -14,7 +14,7 @@ include_directories(${YARP_INCLUDE_DIRS})
 
 add_executable(${PROJECT_NAME} ${source} ${header} )
 
-target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES} iKin)
 
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 

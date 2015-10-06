@@ -68,8 +68,10 @@ protected:
     string name;
     // Name of the robot (to address the module toward icub or icubSim):
     string robot;
-    // Which arm to use:
+    // Which arm to use: either left_arm or right_arm
     string part;
+    // Which arm to use (short version): either left or right
+    string part_short;
     // Flag used to know if the doubleTouch should automatically connect to the skinManager
     bool autoconnect;
 

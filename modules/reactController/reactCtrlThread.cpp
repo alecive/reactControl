@@ -30,6 +30,16 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
 {
     step     = 0;
 
+    if (part=="left_arm")
+    {
+        part_short="left";
+    }
+    else if (part=="right_arm")
+    {
+        part_short="right";
+    }
+    arm = new iCubArm(part_short.c_str());
+
     // slv=NULL;
     // gue=NULL;
     // sol=NULL;

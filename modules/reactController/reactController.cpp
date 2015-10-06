@@ -205,7 +205,20 @@ public:
             if (rf.check("part"))
             {
                 part = rf.find("part").asString();
-                yInfo("[reactController] Robot is: %s", part.c_str());
+                if (part=="left")
+                {
+                    part="left_arm";
+                }
+                else if (part=="right")
+                {
+                    part="right_arm";
+                }
+                else if (part!="left_arm" && part!="right_arm")
+                {
+                    part="left_arm";
+                    yWarning("[reactController] part was not in the admissible values. Using %s as default.",part.c_str());
+                }
+                yInfo("[reactController] part to use is: %s", part.c_str());
             }
             else yInfo("[reactController] Could not find part option in the config file; using %s as default",part.c_str());
 
