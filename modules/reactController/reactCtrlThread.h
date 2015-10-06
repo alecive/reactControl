@@ -1,7 +1,6 @@
 /* 
  * Copyright: (C) 2015 iCub Facility - Istituto Italiano di Tecnologia
- * Author: Alessandro Roncone
- * email:  alessandro.roncone@iit.it
+ * Author: Alessandro Roncone <alessandro.roncone@iit.it>
  * website: www.robotcub.org
  * author website: http://alecive.github.io
  * 
@@ -36,15 +35,14 @@
 #include <yarp/dev/Drivers.h>
 #include <yarp/dev/all.h>
 
+#include <iCub/iKin/iKinFwd.h>
+
 #include <gsl/gsl_math.h>
 
 #include <iostream>
 #include <string>
 #include <stdio.h>
 #include <stdarg.h>
-
-#include <iCub/periPersonalSpace/iCubDblTchSlv.h>
-#include <iCub/periPersonalSpace/utils.h>
 
 YARP_DECLARE_DEVICES(icubmod)
 

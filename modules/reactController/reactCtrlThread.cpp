@@ -1,7 +1,6 @@
 /* 
  * Copyright: (C) 2015 iCub Facility - Istituto Italiano di Tecnologia
- * Author: Alessandro Roncone
- * email:  alessandro.roncone@iit.it
+ * Author: Alessandro Roncone <alessandro.roncone@iit.it>
  * website: www.robotcub.org
  * author website: http://alecive.github.io
  * 
