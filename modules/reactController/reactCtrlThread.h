@@ -48,16 +48,11 @@
 
 YARP_DECLARE_DEVICES(icubmod)
 
-using namespace yarp;
-using namespace yarp::os;
-using namespace yarp::sig;
-using namespace yarp::math;
 using namespace yarp::dev;
-using namespace iCub::iKin;
 
 using namespace std;
 
-class reactCtrlThread: public RateThread
+class reactCtrlThread: public yarp::os::RateThread
 {
 protected:
     /***************************************************************************/
@@ -88,8 +83,8 @@ protected:
     IInteractionMode  *imode;
     IImpedanceControl *iimp;
     IControlLimits    *ilim;
-    Vector            *encs;
-    iCubArm           *arm;
+    yarp::sig::Vector            *encs;
+    iCub::iKin::iCubArm           *arm;
     int jnts;
 
     // IPOPT STUFF

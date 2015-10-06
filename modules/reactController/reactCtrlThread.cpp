@@ -38,7 +38,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
     {
         part_short="right";
     }
-    arm = new iCubArm(part_short.c_str());
+    arm = new iCub::iKin::iCubArm(part_short.c_str());
 
     // slv=NULL;
     // gue=NULL;
@@ -50,16 +50,16 @@ bool reactCtrlThread::threadInit()
     if (autoconnect)
     {
         yInfo("[reactController] Autoconnect flag set to ON");
-        if (!Network::connect("/skinManager/skin_events:o",("/"+name+"/contacts:i").c_str()))
+        if (!yarp::os::Network::connect("/skinManager/skin_events:o",("/"+name+"/contacts:i").c_str()))
         {
-            Network::connect("/virtualContactGeneration/virtualContacts:o",
+            yarp::os::Network::connect("/virtualContactGeneration/virtualContacts:o",
                              ("/"+name+"/contacts:i").c_str());
         }
     }
-    Network::connect(("/"+name+"/status:o").c_str(),"/visuoTactileRF/input:i");
-    Network::connect(("/"+name+"/status:o").c_str(),"/visuoTactileWrapper/reactController:i");
+    yarp::os::Network::connect(("/"+name+"/status:o").c_str(),"/visuoTactileRF/input:i");
+    yarp::os::Network::connect(("/"+name+"/status:o").c_str(),"/visuoTactileWrapper/reactController:i");
 
-    Property Opt;
+    yarp::os::Property Opt;
     Opt.put("robot",  robot.c_str());
     Opt.put("part",   part.c_str());
     Opt.put("device", "remote_controlboard");
@@ -82,7 +82,7 @@ bool reactCtrlThread::threadInit()
         ok = ok && dd.view(ilim);
     }
     iencs->getAxes(&jnts);
-    encs = new Vector(jnts,0.0);
+    encs = new yarp::sig::Vector(jnts,0.0);
 
     if (!ok)
     {

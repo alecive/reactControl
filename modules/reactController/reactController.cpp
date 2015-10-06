@@ -60,9 +60,6 @@ None for now.
 #include <yarp/os/Log.h>
 #include <yarp/os/RpcClient.h>
 
-#include <yarp/sig/Vector.h>
-#include <yarp/sig/Matrix.h>
-
 #include <yarp/math/Math.h>
  
 #include <iostream>
@@ -124,7 +121,7 @@ public:
                 //-----------------
                 case VOCAB4('c','o','n','n'):
                 {
-                    Network yarpNetwork;
+                    yarp::os::Network yarpNetwork;
                     if (yarpNetwork.connect("/skinManager/skin_events:o",("/"+name+"/contacts:i").c_str()))
                         reply.addVocab(ack);
                     else
@@ -142,7 +139,7 @@ public:
                 //-----------------
                 case VOCAB4('d','i','s','c'):
                 {
-                    Network yarpNetwork;
+                    yarp::os::Network yarpNetwork;
                     if (yarpNetwork.disconnect("/skinManager/skin_events:o",("/"+name+"/contacts:i").c_str()))
                         reply.addVocab(ack);
                     else
@@ -277,7 +274,7 @@ public:
 */
 int main(int argc, char * argv[])
 {
-    Network yarp;
+    yarp::os::Network yarp;
 
     ResourceFinder rf;
     rf.setVerbose(false);
