@@ -51,13 +51,13 @@ bool reactCtrlThread::threadInit()
 
     Property Opt;
     Opt.put("robot",  robot.c_str());
-    Opt.put("part",   "right_arm");
+    Opt.put("part",   part.c_str());
     Opt.put("device", "remote_controlboard");
-    Opt.put("remote",("/"+robot+"/right_arm").c_str());
-    Opt.put("local", ("/"+name +"/right_arm").c_str());
+    Opt.put("remote",("/"+robot+"/"+part).c_str());
+    Opt.put("local", ("/"+name +"/"+part).c_str());
     if (!dd.open(Opt))
     {
-        yError("[reactController] Could not open right_arm PolyDriver!");
+        yError("[reactController] Could not open %s PolyDriver!",part.c_str());
         return false;
     }
 
@@ -76,7 +76,7 @@ bool reactCtrlThread::threadInit()
 
     if (!ok)
     {
-        yError("[reactController] Problems acquiring either left_arm or right_arm interfaces!!!!");
+        yError("[reactController] Problems acquiring either %s interfaces!!!!",part.c_str());
         return false;
     }
 
