@@ -79,7 +79,7 @@ public:
     *                enable Quasi-Newton approximation (true by
     *                default).
     */
-    reactIpOpt(iCub::iKin::iKinChain &c, const unsigned int _ctrlPose,
+    reactIpOpt(iCub::iKin::iKinChain &c,
                const double tol, const int max_iter=IKINCTRL_DISABLED,
                const unsigned int verbose=0, bool useHessian=true);
 
@@ -207,8 +207,8 @@ public:
 
     /**
     * Executes the IpOpt algorithm trying to converge on target. 
-    * @param q0 is the vector of initial joint angles values. 
     * @param xd is the End-Effector target Pose to be attained. 
+    * @param dt is the time step to use in order to solve the task. 
     * @param exit_code stores the exit code (NULL by default). Test 
     *                  for one of this:
     *                   SUCCESS
@@ -224,21 +224,9 @@ public:
     *                   INVALID_NUMBER_DETECTED
     *                   TOO_FEW_DEGREES_OF_FREEDOM
     *                   INTERNAL_ERROR
-    * @param exhalt checks for an external request to exit (NULL by 
-    *               default).
-    * @param iterate pointer to a callback object (NULL by default). 
-    * @return estimated joint angles.
+    * @return estimated joint velocities.
     */
-    virtual yarp::sig::Vector solve(const yarp::sig::Vector &q0, yarp::sig::Vector &xd,
-                                    int *exit_code=NULL, bool *exhalt=NULL, iCub::iKin::iKinIterateCallback *iterate=NULL);
-
-    /**
-    * Executes the IpOpt algorithm trying to converge on target. 
-    * @param q0 is the vector of initial joint angles values. 
-    * @param xd is the End-Effector target Pose to be attained. 
-    * @return estimated joint angles.
-    */
-    virtual yarp::sig::Vector solve(const yarp::sig::Vector &q0, yarp::sig::Vector &xd);
+    virtual yarp::sig::Vector solve(yarp::sig::Vector &xd, double &dt, int *exit_code=NULL);
 
     /**
     * Default destructor.

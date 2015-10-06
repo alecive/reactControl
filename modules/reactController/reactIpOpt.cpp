@@ -24,7 +24,7 @@
 
 #include "reactIpOpt.h"
 
-#define CAST_IPOPTAPP(x)                    (static_cast<IpoptApplication*>(x))
+#define CAST_IPOPTAPP(x)             (static_cast<IpoptApplication*>(x))
 
 using namespace std;
 using namespace yarp::sig;
@@ -43,31 +43,32 @@ private:
     iKin_NLP &operator=(const iKin_NLP&);
 
 protected:
+    // The chain that will undergo the task
     iKinChain &chain;
-
+    // The inequality constraints (if available)
     iKinLinIneqConstr &LIC;
-
+    // The dimensionality of the task (for now it should be 7)
     unsigned int dim;
-    unsigned int ctrlPose;
 
+    // The desired position to attain
     yarp::sig::Vector &xd;
-    yarp::sig::Vector  qd;
-    yarp::sig::Vector  q0;
-    yarp::sig::Vector  q;
-    bool              *exhalt;
+    // The current position
+    yarp::sig::Vector x0;
 
-    yarp::sig::Vector  e_zero;
-    yarp::sig::Vector  e_xyz;
-    yarp::sig::Vector  e_ang;
+    // The delta T with which ipopt needs to solve the task
+    double &dT;
 
-    yarp::sig::Matrix  J_zero;
-    yarp::sig::Matrix  J_xyz;
-    yarp::sig::Matrix  J_ang;
+    // The desired final joint velocities
+    yarp::sig::Vector  q_dot_d;
+    // The initial joint velocities
+    yarp::sig::Vector  q_dot0;
+    // The current joint velocities
+    yarp::sig::Vector  q_dot;
 
-    yarp::sig::Vector *e_1st;
-    yarp::sig::Matrix *J_1st;
-    yarp::sig::Vector *e_cst;
-    yarp::sig::Matrix *J_cst;
+    // The cost function
+    yarp::sig::Vector e_cst;
+    // The jacobian associated with the const function
+    yarp::sig::Matrix J_cst;
 
     yarp::sig::Vector linC;
 
@@ -77,109 +78,61 @@ protected:
     double lowerBoundInf;
     double upperBoundInf;
 
-    iKinIterateCallback *callback;
-
     bool   firstGo;
 
     /************************************************************************/
     virtual void computeQuantities(const Number *x)
     {
-        yarp::sig::Vector new_q(dim);
+        yarp::sig::Vector new_q(dim,0.0);
+
+        yarp::sig::Vector new_q_dot(dim,0.0);
         for (Index i=0; i<(int)dim; i++)
             new_q[i]=x[i];
 
-        if (!(q==new_q) || firstGo)
+        if (!(q_dot==new_q_dot) || firstGo)
         {
             firstGo=false;
-            q=new_q;
-
-            yarp::sig::Vector v(4,0.0);
-            if (xd.length()>=7)
-            {
-                v[0]=xd[3];
-                v[1]=xd[4];
-                v[2]=xd[5];
-                v[3]=xd[6];
-            }
-
-            yarp::sig::Matrix Des=axis2dcm(v);
-            Des(0,3)=xd[0];
-            Des(1,3)=xd[1];
-            Des(2,3)=xd[2];
-        
-            q=chain.setAng(q);
-            yarp::sig::Matrix H=chain.getH();
-            yarp::sig::Matrix E=Des*SE3inv(H);
-            v=dcm2axis(E);
-            
-            e_xyz[0]=xd[0]-H(0,3);
-            e_xyz[1]=xd[1]-H(1,3);
-            e_xyz[2]=xd[2]-H(2,3);
-            e_ang[0]=v[3]*v[0];
-            e_ang[1]=v[3]*v[1];
-            e_ang[2]=v[3]*v[2];
+            q_dot=new_q_dot;
 
             yarp::sig::Matrix J1=chain.GeoJacobian();
-            submatrix(J1,J_xyz,0,2,0,dim-1);
-            submatrix(J1,J_ang,3,5,0,dim-1);
+            submatrix(J1,J_cst,0,2,0,dim-1);
 
-            if (LIC.isActive())
-                linC=LIC.getC()*q;
+            e_cst=xd -(x0+dT*J_cst*q_dot);
         }
     }
 
 
 public:
     /************************************************************************/
-    iKin_NLP(iKinChain &c, unsigned int _ctrlPose, const yarp::sig::Vector &_q0,
-             yarp::sig::Vector &_xd, iKinLinIneqConstr &_LIC,
-             bool *_exhalt=NULL) :
-             chain(c), q0(_q0), xd(_xd),
-             LIC(_LIC), 
-             exhalt(_exhalt)
+    iKin_NLP(iKinChain &c, yarp::sig::Vector &_xd,
+             double &_dT, iKinLinIneqConstr &_LIC) :
+             chain(c), dT(_dT), xd(_xd), LIC(_LIC)
     {
+        // A time should always be positive
+        if (dT<0.0)
+        {
+            dT=0.05;
+        }
+
+        x0.resize(3,0.0);
+        yarp::sig::Matrix H=chain.getH();
+        x0=H.subcol(0,3,3);
+
         dim=chain.getDOF();
+        q_dot_d.resize(dim);
 
-        ctrlPose=_ctrlPose;
-
-        if (ctrlPose>IKINCTRL_POSE_ANG)
-            ctrlPose=IKINCTRL_POSE_ANG;
-
-        qd.resize(dim);
-
-        unsigned int n=q0.length();
+        unsigned int n=q_dot0.length();
         n=n>dim ? dim : n;
 
         unsigned int i;
         for (i=0; i<n; i++)
-            qd[i]=q0[i];
+            q_dot_d[i]=q_dot0[i];
 
         for (; i<dim; i++)
-            qd[i]=0.0;
+            q_dot_d[i]=0.0;
 
-        q=qd;
-
-        e_zero.resize(3,0.0);
-        e_xyz.resize(3,0.0);
-        e_ang.resize(3,0.0);
-
-        J_zero.resize(3,dim); J_zero.zero();
-        J_xyz.resize(3,dim);  J_xyz.zero();
-        J_ang.resize(3,dim);  J_ang.zero();
-
-        if (ctrlPose==IKINCTRL_POSE_FULL)
-        {
-            e_1st=&e_ang;
-            J_1st=&J_ang;
-        }
-        else
-        {
-            e_1st=&e_zero;
-            J_1st=&J_zero;
-        }
-
-        e_cst=&e_xyz;
-        J_cst=&J_xyz;
+        e_cst.resize(3,0.0);
+        J_cst.resize(3,dim); J_cst.zero();
 
         firstGo=true;
 
@@ -189,15 +142,10 @@ public:
 
         lowerBoundInf=-std::numeric_limits<double>::max();
         upperBoundInf=std::numeric_limits<double>::max();
-
-        callback=NULL;
     }
 
     /************************************************************************/
-    yarp::sig::Vector get_qd() { return qd; }
-
-    /************************************************************************/
-    void set_callback(iKinIterateCallback *_callback) { callback=_callback; }
+    yarp::sig::Vector get_q_dot_d() { return q_dot_d; }
 
     /************************************************************************/
     void set_scaling(double _obj_scaling, double _x_scaling, double _g_scaling)
@@ -212,31 +160,6 @@ public:
     {
         lowerBoundInf=lower;
         upperBoundInf=upper;
-    }
-
-    /************************************************************************/
-    bool set_posePriority(const string &priority)
-    {
-        if (priority=="position")
-        {
-            e_1st=&e_ang;
-            J_1st=&J_ang;
-
-            e_cst=&e_xyz;
-            J_cst=&J_xyz;
-        }
-        else if (priority=="orientation")
-        {
-            e_1st=&e_xyz;
-            J_1st=&J_xyz;
-
-            e_cst=&e_ang;
-            J_cst=&J_ang;
-        }
-        else 
-            return false;
-
-        return true;
     }
 
     /************************************************************************/
@@ -302,7 +225,7 @@ public:
                             Number* lambda)
     {
         for (Index i=0; i<n; i++)
-            x[i]=q0[i];
+            x[i]=q_dot0[i];
 
         return true;
     }
@@ -312,7 +235,7 @@ public:
     {
         computeQuantities(x);
 
-        obj_value=norm2(*e_1st);
+        obj_value=norm2(e_cst);
 
         return true;
     }
@@ -322,10 +245,10 @@ public:
     {
         computeQuantities(x);
 
-        yarp::sig::Vector grad=-2.0*(J_1st->transposed() * *e_1st);
+        // yarp::sig::Vector grad=-2.0*(J_1st->transposed() * *e_1st);
 
-        for (Index i=0; i<n; i++)
-            grad_f[i]=grad[i];
+        // for (Index i=0; i<n; i++)
+        //     grad_f[i]=grad[i];
 
         return true;
     }
@@ -335,18 +258,18 @@ public:
     {
         computeQuantities(x);
 
-        Index offs=0;
+        // Index offs=0;
 
-        for (Index i=0; i<m; i++)
-        {
-            if (i==0)
-            {
-                g[0]=norm2(*e_cst);
-                offs=1;
-            }
-            else
-                g[i]=linC[i-offs];
-        }
+        // for (Index i=0; i<m; i++)
+        // {
+        //     if (i==0)
+        //     {
+        //         g[0]=norm2(*e_cst);
+        //         offs=1;
+        //     }
+        //     else
+        //         g[i]=linC[i-offs];
+        // }
 
         return true;
     }
@@ -355,48 +278,8 @@ public:
     bool eval_jac_g(Index n, const Number* x, bool new_x, Index m, Index nele_jac,
                     Index* iRow, Index *jCol, Number* values)
     {
-        if (m!=0)
-        {
-            if (values==NULL)
-            {
-                Index idx=0;
-        
-                for (Index row=0; row<m; row++)
-                {
-                    for (Index col=0; col<n; col++)
-                    {
-                        iRow[idx]=row;
-                        jCol[idx]=col;
-                        idx++;
-                    }
-                }
-            }
-            else
-            {
-                computeQuantities(x);
-            
-                yarp::sig::Vector grad=-2.0*(J_cst->transposed() * *e_cst);
-
-                Index idx =0;
-                Index offs=0;
-
-                for (Index row=0; row<m; row++)
-                {
-                    for (Index col=0; col<n; col++)
-                    {    
-                        if (row==0)
-                        {
-                            values[idx]=grad[idx];                    
-                            offs=1;
-                        }
-                        else
-                            values[idx]=LIC.getC()(row-offs,col);
-                    
-                        idx++;
-                    }
-                }
-            }
-        }
+        // Empty for now
+        computeQuantities(x);
 
         return true;
     }
@@ -406,76 +289,10 @@ public:
                 Index m, const Number* lambda, bool new_lambda,
                 Index nele_hess, Index* iRow, Index* jCol, Number* values)
     {
-        if (values==NULL)
-        {
-            Index idx=0;
-        
-            for (Index row=0; row<n; row++)
-            {
-                for (Index col=0; col<=row; col++)
-                {
-                    iRow[idx]=row;
-                    jCol[idx]=col;
-                    idx++;
-                }
-            }
-        }
-        else
-        {
-            // Given the task: min f(q)=||xd-F(q)||^2
-            // the Hessian Hij is: 2 * (<dF/dqi,dF/dqj> - <d2F/dqidqj,e>)
-            computeQuantities(x);
-            chain.prepareForHessian();
+        // Empty for now
+        computeQuantities(x);
 
-            Index idx=0;
-            for (Index row=0; row<n; row++)
-            {
-                for (Index col=0; col<=row; col++)
-                {
-                    // warning: row and col are swapped due to asymmetry
-                    // of orientation part within the hessian 
-                    yarp::sig::Vector h=chain.fastHessian_ij(col,row);
-                    yarp::sig::Vector h_xyz(3), h_ang(3), h_zero(3,0.0);
-                    h_xyz[0]=h[0];
-                    h_xyz[1]=h[1];
-                    h_xyz[2]=h[2];
-                    h_ang[0]=h[3];
-                    h_ang[1]=h[4];
-                    h_ang[2]=h[5];
-                
-                    yarp::sig::Vector *h_1st;
-                    if (ctrlPose==IKINCTRL_POSE_FULL)
-                        h_1st=&h_ang;
-                    else
-                        h_1st=&h_zero;
-
-                    yarp::sig::Vector *h_cst=(e_cst==&e_xyz)?&h_xyz:&h_ang;
-                
-                    values[idx]=2.0*(obj_factor*(dot(*J_1st,row,*J_1st,col)-dot(*h_1st,*e_1st))+
-                                     lambda[0]*(dot(*J_cst,row,*J_cst,col)-dot(*h_cst,*e_cst)));
-
-                    idx++;
-                }
-            }
-        }
-        
         return true;
-    }
-
-    /************************************************************************/
-    bool intermediate_callback(AlgorithmMode mode, Index iter, Number obj_value,
-                               Number inf_pr, Number inf_du, Number mu, Number d_norm,
-                               Number regularization_size, Number alpha_du, Number alpha_pr,
-                               Index ls_trials, const IpoptData* ip_data,
-                               IpoptCalculatedQuantities* ip_cq)
-    {
-        if (callback!=NULL)
-            callback->exec(xd,q);
-
-        if (exhalt!=NULL)
-            return !(*exhalt);
-        else
-            return true;
     }
 
     /************************************************************************/
@@ -503,9 +320,7 @@ public:
                            const IpoptData* ip_data, IpoptCalculatedQuantities* ip_cq)
     {
         for (Index i=0; i<n; i++)
-            qd[i]=x[i];
-
-        qd=chain.setAng(qd);
+            q_dot_d[i]=x[i];
     }
 
     /************************************************************************/
@@ -514,16 +329,11 @@ public:
 
 
 /************************************************************************/
-reactIpOpt::reactIpOpt(iKinChain &c, const unsigned int _ctrlPose, const double tol,
-                           const int max_iter, const unsigned int verbose, bool useHessian) :
-                           chain(c)
+reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
+                       const int max_iter, const unsigned int verbose, bool useHessian) :
+                       chain(c)
 {
-    ctrlPose=_ctrlPose;
-    posePriority="position";
     pLIC=&noLIC;
-
-    if (ctrlPose>IKINCTRL_POSE_ANG)
-        ctrlPose=IKINCTRL_POSE_ANG;
 
     chain.setAllConstraints(false); // this is required since IpOpt initially relaxes constraints
 
@@ -546,29 +356,6 @@ reactIpOpt::reactIpOpt(iKinChain &c, const unsigned int _ctrlPose, const double 
         CAST_IPOPTAPP(App)->Options()->SetStringValue("hessian_approximation","limited-memory");
 
     CAST_IPOPTAPP(App)->Initialize();
-}
-
-
-/************************************************************************/
-void reactIpOpt::set_ctrlPose(const unsigned int _ctrlPose)
-{
-    ctrlPose=_ctrlPose;
-
-    if (ctrlPose>IKINCTRL_POSE_ANG)
-        ctrlPose=IKINCTRL_POSE_ANG;
-}
-
-
-/************************************************************************/
-bool reactIpOpt::set_posePriority(const string &priority)
-{
-    if ((priority=="position") || (priority=="orientation"))
-    {
-        posePriority=priority;
-        return true;
-    }
-    else 
-        return false;
 }
 
 /************************************************************************/
@@ -690,30 +477,19 @@ void reactIpOpt::setBoundsInf(const double lower, const double upper)
 
 
 /************************************************************************/
-yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &q0, yarp::sig::Vector &xd,
-                                    int *exit_code, bool *exhalt, iKinIterateCallback *iterate)
+yarp::sig::Vector reactIpOpt::solve(yarp::sig::Vector &xd, double &dt, int *exit_code)
 {
-    SmartPtr<iKin_NLP> nlp=new iKin_NLP(chain,ctrlPose,q0,xd,
-                                        *pLIC,exhalt);
+    SmartPtr<iKin_NLP> nlp=new iKin_NLP(chain,xd,dt,*pLIC);
     
     nlp->set_scaling(obj_scaling,x_scaling,g_scaling);
     nlp->set_bound_inf(lowerBoundInf,upperBoundInf);
-    nlp->set_posePriority(posePriority);
-    nlp->set_callback(iterate);
 
     ApplicationReturnStatus status=CAST_IPOPTAPP(App)->OptimizeTNLP(GetRawPtr(nlp));
 
     if (exit_code!=NULL)
         *exit_code=status;
 
-    return nlp->get_qd();
-}
-
-
-/************************************************************************/
-yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &q0, yarp::sig::Vector &xd)
-{
-    return solve(q0,xd,NULL); // The NULL has been made to force the call of the function above
+    return nlp->get_q_dot_d();
 }
 
 /************************************************************************/
