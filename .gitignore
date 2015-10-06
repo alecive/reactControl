@@ -27,5 +27,8 @@
 *.out
 *.app
 
+# Build folder
+build/*
+
 # Sublime stuff
 *.sublime*
