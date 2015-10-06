@@ -26,11 +26,11 @@ add_definitions(${YARP_DEFINES})   # add yarp definitions - this contains also -
 include(YarpInstallationHelpers)   # pick up yarp's cmake scripts
 
 ## then modules
-#add_subdirectory(modules)
+add_subdirectory(modules)
 
 ## then apps
 #add_subdirectory(app)
 
-icubcontrib_finalize_export($PROJECT_NAME)
+#makeicubcontrib_finalize_export($PROJECT_NAME)
 icubcontrib_add_uninstall_target()
 
