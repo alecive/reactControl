@@ -44,6 +44,8 @@
 #include <stdio.h>
 #include <stdarg.h>
 
+#include "reactIpOpt.h"
+
 using namespace yarp::dev;
 
 using namespace std;
@@ -68,27 +70,28 @@ protected:
 
     /***************************************************************************/
     // INTERNAL VARIABLES:
-    int        step; // Flag to know in which step the thread ismake -
+    int    step;            // Flag to know in which step the thread is in
+    bool isTask;            // Flag to know if there is a task to solve
+    yarp::sig::Vector xD;   // Vector that stores the new target
+
 
     // Driver for "classical" interfaces
     PolyDriver       dd;
 
     // "Classical" interfaces - SLAVE ARM
-    IEncoders         *iencs;
-    IPositionControl2 *ipos;
-    IInteractionMode  *imode;
-    IImpedanceControl *iimp;
-    IControlLimits    *ilim;
-    yarp::sig::Vector            *encs;
-    iCub::iKin::iCubArm           *arm;
+    IEncoders            *iencs;
+    IPositionControl2     *ipos;
+    IInteractionMode     *imode;
+    IImpedanceControl     *iimp;
+    IControlLimits        *ilim;
+    yarp::sig::Vector     *encs;
+    iCub::iKin::iCubArm    *arm;
     int jnts;
 
     // IPOPT STUFF
-    // doubleTouch_Variables *gue;    // guess
-    // doubleTouch_Variables *sol;    // solution
-    // doubleTouch_Solver    *slv;    // solver
-    // Vector solution;
-    // int nDOF;
+    reactIpOpt    *slv;    // solver
+    yarp::sig::Vector solution;
+    int nDOF;
 
     /**
     * Aligns joint bounds according to the actual limits of the robot
@@ -96,9 +99,21 @@ protected:
     bool alignJointsBounds();
 
     /**
+    * Updates the arm's kinematic chain with the encoders from the robot
+    **/
+    void updateArmChain();
+
+    /**
     * Solves the Inverse Kinematic task
     */
     void solveIK();
+
+    /**
+    * Toggles the internal state to the active state
+    * @param  _task      boolean that is true/false if task is on/off
+    * @return true/false if success/failure
+    **/
+    bool toggleTask(bool _task) { return isTask=_task; }
 
     /**
     * Prints a message according to the verbosity level:
@@ -117,6 +132,9 @@ public:
     virtual void run();
     // RELEASE
     virtual void threadRelease();
+
+    // Sets the new target
+    bool setNewTarget(const yarp::sig::Vector&);
 };
 
 #endif

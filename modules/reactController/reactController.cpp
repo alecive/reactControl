@@ -163,6 +163,34 @@ public:
                 }
 
                 //-----------------
+                case VOCAB3('s','e','t'):
+                {
+                    if (command.get(1).asString() == "xd")
+                    {
+                        yarp::sig::Vector xd(3,0.0);
+                        if (command.size()>5)
+                        {
+                            for (int i = 0; i < 3; i++)
+                            {
+                                xd[i] = command.get(2+i).asDouble();
+                            }
+                            if (rctCtrlThrd->setNewTarget(xd))
+                            {
+                                reply.addVocab(ack);
+                            }
+                            else
+                            {
+                                reply.addVocab(nack);
+                            }
+                        }
+                        else
+                            reply.addVocab(nack);
+                    }
+                    reply.addVocab(ack);
+                    return true;
+                }
+
+                //-----------------
                 default:
                     return RFModule::respond(command,reply);
             }

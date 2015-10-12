@@ -22,6 +22,9 @@
 #include <sstream>
 #include <iomanip>
 
+using namespace yarp::sig;
+using namespace yarp::math;
+
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,
                                  const string &_part, int _verbosity, bool _autoconnect) :
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
@@ -39,25 +42,13 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
     }
     arm = new iCub::iKin::iCubArm(part_short.c_str());
 
-    // slv=NULL;
-    // gue=NULL;
-    // sol=NULL;
+    slv=NULL;
+    isTask=false;
+    xD.resize(3,0.0);
 }
 
 bool reactCtrlThread::threadInit()
 {
-    if (autoconnect)
-    {
-        yInfo("[reactController] Autoconnect flag set to ON");
-        if (!yarp::os::Network::connect("/skinManager/skin_events:o",("/"+name+"/contacts:i").c_str()))
-        {
-            yarp::os::Network::connect("/virtualContactGeneration/virtualContacts:o",
-                             ("/"+name+"/contacts:i").c_str());
-        }
-    }
-    yarp::os::Network::connect(("/"+name+"/status:o").c_str(),"/visuoTactileRF/input:i");
-    yarp::os::Network::connect(("/"+name+"/status:o").c_str(),"/visuoTactileWrapper/reactController:i");
-
     yarp::os::Property Opt;
     Opt.put("robot",  robot.c_str());
     Opt.put("part",   part.c_str());
@@ -94,7 +85,19 @@ bool reactCtrlThread::threadInit()
 
 void reactCtrlThread::run()
 {
+    updateArmChain();
+    if (isTask)
+    {
+        solveIK();
 
+    }
+}
+
+void reactCtrlThread::updateArmChain()
+{
+    iencs->getEncoders(encs->data());
+    Vector q=encs->subVector(0,9);
+    arm->setAng(q*CTRL_DEG2RAD);
 }
 
 void reactCtrlThread::solveIK()
@@ -106,8 +109,17 @@ void reactCtrlThread::solveIK()
     // slv->solve(*sol);
     // // sol->print();
     // solution = CTRL_RAD2DEG * sol->joints;
+}
 
-    // testLimb->setAng(sol->joints);
+bool reactCtrlThread::setNewTarget(const Vector& _xD)
+{
+    toggleTask(true);
+    if (_xD.size()==3)
+    {
+        xD=_xD;
+        return true;
+    }
+    return false;
 }
 
 bool reactCtrlThread::alignJointsBounds()
