@@ -42,9 +42,18 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
     }
     arm = new iCub::iKin::iCubArm(part_short.c_str());
 
+    // Block torso links
+    for (int i = 0; i < 3; i++)
+    {
+        arm->blockLink(i,0.0);
+    }
+
     slv=NULL;
     isTask=false;
-    xD.resize(3,0.0);
+    x_d.resize(3,0.0);
+    x_t.resize(3,0.0);
+    x_0.resize(3,0.0);
+    H.resize(4,4);
 }
 
 bool reactCtrlThread::threadInit()
@@ -76,7 +85,7 @@ bool reactCtrlThread::threadInit()
 
     if (!ok)
     {
-        yError("[reactController] Problems acquiring either %s interfaces!!!!",part.c_str());
+        yError("[reactController] Problems acquiring %s interfaces!!!!",part.c_str());
         return false;
     }
 
@@ -86,6 +95,7 @@ bool reactCtrlThread::threadInit()
 void reactCtrlThread::run()
 {
     updateArmChain();
+    setNewTarget(Vector(3,0.0));
     if (isTask)
     {
         solveIK();
@@ -98,25 +108,33 @@ void reactCtrlThread::updateArmChain()
     iencs->getEncoders(encs->data());
     Vector q=encs->subVector(0,9);
     arm->setAng(q*CTRL_DEG2RAD);
+    H=arm->getH();
+    x_t=H.subcol(0,3,3);
 }
 
-void reactCtrlThread::solveIK()
+Vector reactCtrlThread::solveIK()
 {
-    // slv->probl->limb.setH0(SE3inv(cntctH0));
+    slv=new reactIpOpt(*arm->asChain(),1e-3,100,10,false);
+    // Next step will be provided iteratively:
+    double dT=getRate();
+    int exit_code;
+    Vector x_next = x_t + (x_d - x_t)/norm(x_d -x_t) * dT;
 
-    // slv->probl->limb.setAng(sol->joints);
     // slv->setInitialGuess(*sol);
-    // slv->solve(*sol);
+    Vector result = slv->solve(x_next,dT,&exit_code);
+    printMessage(0,"Result is %s",result.toString().c_str());
     // // sol->print();
     // solution = CTRL_RAD2DEG * sol->joints;
+    delete slv;
 }
 
-bool reactCtrlThread::setNewTarget(const Vector& _xD)
+bool reactCtrlThread::setNewTarget(const Vector& _x_d)
 {
     toggleTask(true);
-    if (_xD.size()==3)
+    if (_x_d.size()==3)
     {
-        xD=_xD;
+        x_0=x_t;
+        x_d=_x_d;
         return true;
     }
     return false;

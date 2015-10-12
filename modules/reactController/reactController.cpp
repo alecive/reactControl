@@ -168,7 +168,7 @@ public:
                     if (command.get(1).asString() == "xd")
                     {
                         yarp::sig::Vector xd(3,0.0);
-                        if (command.size()>5)
+                        if (command.size()>=5)
                         {
                             for (int i = 0; i < 3; i++)
                             {
@@ -186,7 +186,6 @@ public:
                         else
                             reply.addVocab(nack);
                     }
-                    reply.addVocab(ack);
                     return true;
                 }
 

@@ -22,6 +22,8 @@
 #include <IpTNLP.hpp>
 #include <IpIpoptApplication.hpp>
 
+#include "assert.h"
+
 #include "reactIpOpt.h"
 
 #define CAST_IPOPTAPP(x)             (static_cast<IpoptApplication*>(x))
@@ -34,13 +36,13 @@ using namespace iCub::iKin;
 using namespace Ipopt;
 
 /************************************************************************/
-class iKin_NLP : public TNLP
+class react_NLP : public TNLP
 {
 private:
     // Copy constructor: not implemented.
-    iKin_NLP(const iKin_NLP&);
+    react_NLP(const react_NLP&);
     // Assignment operator: not implemented.
-    iKin_NLP &operator=(const iKin_NLP&);
+    react_NLP &operator=(const react_NLP&);
 
 protected:
     // The chain that will undergo the task
@@ -61,7 +63,7 @@ protected:
     // The desired final joint velocities
     yarp::sig::Vector  q_dot_d;
     // The initial joint velocities
-    yarp::sig::Vector  q_dot0;
+    yarp::sig::Vector  q_dot_0;
     // The current joint velocities
     yarp::sig::Vector  q_dot;
 
@@ -86,9 +88,13 @@ protected:
         yarp::sig::Vector new_q(dim,0.0);
 
         yarp::sig::Vector new_q_dot(dim,0.0);
+        printf("dim %i\n",dim);   
         for (Index i=0; i<(int)dim; i++)
+        {
+            printf("%g\n", x[i]);
             new_q[i]=x[i];
-
+        }
+        printf("asodifj\n");
         if (!(q_dot==new_q_dot) || firstGo)
         {
             firstGo=false;
@@ -99,12 +105,13 @@ protected:
 
             e_cst=xd -(x0+dT*J_cst*q_dot);
         }
+        printf("asodifj\n");
     }
 
 
 public:
     /************************************************************************/
-    iKin_NLP(iKinChain &c, yarp::sig::Vector &_xd,
+    react_NLP(iKinChain &c, yarp::sig::Vector &_xd,
              double &_dT, iKinLinIneqConstr &_LIC) :
              chain(c), dT(_dT), xd(_xd), LIC(_LIC)
     {
@@ -119,17 +126,9 @@ public:
         x0=H.subcol(0,3,3);
 
         dim=chain.getDOF();
-        q_dot_d.resize(dim);
-
-        unsigned int n=q_dot0.length();
-        n=n>dim ? dim : n;
-
-        unsigned int i;
-        for (i=0; i<n; i++)
-            q_dot_d[i]=q_dot0[i];
-
-        for (; i<dim; i++)
-            q_dot_d[i]=0.0;
+        q_dot.resize(dim,0.0);
+        q_dot_0.resize(dim,0.0);
+        q_dot_d.resize(dim,0.0);
 
         e_cst.resize(3,0.0);
         J_cst.resize(3,dim); J_cst.zero();
@@ -167,7 +166,7 @@ public:
                       IndexStyleEnum& index_style)
     {
         n=dim;
-        m=1;
+        m=0;
         nnz_jac_g=dim;
 
         if (LIC.isActive())
@@ -216,6 +215,12 @@ public:
             }
         }
 
+        if (m==0)
+        {
+            g_l=NULL;
+            g_u=NULL;
+        }
+
         return true;
     }
     
@@ -224,8 +229,13 @@ public:
                             Number* z_L, Number* z_U, Index m, bool init_lambda,
                             Number* lambda)
     {
+        assert(init_x == true);
+        assert(init_z == false);
+        assert(init_lambda == false);
+
+        printf("get starting point n %i\n",n);
         for (Index i=0; i<n; i++)
-            x[i]=q_dot0[i];
+            x[i]=q_dot_0[i];
 
         return true;
     }
@@ -233,6 +243,7 @@ public:
     /************************************************************************/
     bool eval_f(Index n, const Number* x, bool new_x, Number& obj_value)
     {
+        printf("evaling f\n");
         computeQuantities(x);
 
         obj_value=norm2(e_cst);
@@ -243,6 +254,7 @@ public:
     /************************************************************************/
     bool eval_grad_f(Index n, const Number* x, bool new_x, Number* grad_f)
     {
+        printf("evaling grad f\n");
         computeQuantities(x);
 
         // yarp::sig::Vector grad=-2.0*(J_1st->transposed() * *e_1st);
@@ -256,6 +268,7 @@ public:
     /************************************************************************/
     bool eval_g(Index n, const Number* x, bool new_x, Index m, Number* g)
     {
+        printf("evaling g\n");
         computeQuantities(x);
 
         // Index offs=0;
@@ -279,21 +292,22 @@ public:
                     Index* iRow, Index *jCol, Number* values)
     {
         // Empty for now
-        computeQuantities(x);
+        printf("evaling jac g\n");
+        // computeQuantities(x);
 
         return true;
     }
     
     /************************************************************************/
-    bool eval_h(Index n, const Number* x, bool new_x, Number obj_factor,
-                Index m, const Number* lambda, bool new_lambda,
-                Index nele_hess, Index* iRow, Index* jCol, Number* values)
-    {
-        // Empty for now
-        computeQuantities(x);
+    // bool eval_h(Index n, const Number* x, bool new_x, Number obj_factor,
+    //             Index m, const Number* lambda, bool new_lambda,
+    //             Index nele_hess, Index* iRow, Index* jCol, Number* values)
+    // {
+    //     // Empty for now
+    //     computeQuantities(x);
 
-        return true;
-    }
+    //     return true;
+    // }
 
     /************************************************************************/
     bool get_scaling_parameters(Number& obj_scaling, bool& use_x_scaling, Index n,
@@ -324,7 +338,7 @@ public:
     }
 
     /************************************************************************/
-    virtual ~iKin_NLP() { }
+    virtual ~react_NLP() { }
 };
 
 
@@ -345,6 +359,10 @@ reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
     CAST_IPOPTAPP(App)->Options()->SetStringValue("mu_strategy","adaptive");
     CAST_IPOPTAPP(App)->Options()->SetIntegerValue("print_level",verbose);
 
+    CAST_IPOPTAPP(App)->Options()->SetStringValue("nlp_scaling_method","none");
+    CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","none");
+    CAST_IPOPTAPP(App)->Options()->SetStringValue("hessian_approximation","limited-memory");
+
     getBoundsInf(lowerBoundInf,upperBoundInf);
 
     if (max_iter>0)
@@ -355,7 +373,10 @@ reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
     if (!useHessian)
         CAST_IPOPTAPP(App)->Options()->SetStringValue("hessian_approximation","limited-memory");
 
-    CAST_IPOPTAPP(App)->Initialize();
+    Ipopt::ApplicationReturnStatus status = CAST_IPOPTAPP(App)->Initialize();
+    if (status != Ipopt::Solve_Succeeded) {
+        printf("\n\n*** Error during initialization!\n");
+    }
 }
 
 /************************************************************************/
@@ -479,7 +500,7 @@ void reactIpOpt::setBoundsInf(const double lower, const double upper)
 /************************************************************************/
 yarp::sig::Vector reactIpOpt::solve(yarp::sig::Vector &xd, double &dt, int *exit_code)
 {
-    SmartPtr<iKin_NLP> nlp=new iKin_NLP(chain,xd,dt,*pLIC);
+    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,dt,*pLIC);
     
     nlp->set_scaling(obj_scaling,x_scaling,g_scaling);
     nlp->set_bound_inf(lowerBoundInf,upperBoundInf);

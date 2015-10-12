@@ -72,7 +72,10 @@ protected:
     // INTERNAL VARIABLES:
     int    step;            // Flag to know in which step the thread is in
     bool isTask;            // Flag to know if there is a task to solve
-    yarp::sig::Vector xD;   // Vector that stores the new target
+    yarp::sig::Vector x_d;  // Vector that stores the new target
+    yarp::sig::Vector x_t;  // Current end-effector position
+    yarp::sig::Vector x_0;  // Initial end-effector position
+    yarp::sig::Matrix H;    // End-effector pose
 
 
     // Driver for "classical" interfaces
@@ -106,7 +109,7 @@ protected:
     /**
     * Solves the Inverse Kinematic task
     */
-    void solveIK();
+    yarp::sig::Vector solveIK();
 
     /**
     * Toggles the internal state to the active state
