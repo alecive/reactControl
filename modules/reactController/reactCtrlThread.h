@@ -44,8 +44,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-YARP_DECLARE_DEVICES(icubmod)
-
 using namespace yarp::dev;
 
 using namespace std;

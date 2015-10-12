@@ -49,24 +49,17 @@ protected:
     iCub::iKin::iKinLinIneqConstr  noLIC;
     iCub::iKin::iKinLinIneqConstr *pLIC;
 
-    unsigned int ctrlPose;    
-
     double obj_scaling;
     double x_scaling;
     double g_scaling;
     double lowerBoundInf;
     double upperBoundInf;
-    std::string posePriority;
 
 public:
     /**
     * Constructor. 
     * @param c is the Chain object on which the control operates. Do 
     *          not change Chain DOF from this point onwards!!
-    * @param _ctrlPose one of the following: 
-    *  IKINCTRL_POSE_FULL => complete pose control.
-    *  IKINCTRL_POSE_XYZ  => translational part of pose controlled.
-    *  IKINCTRL_POSE_ANG  => rotational part of pose controlled. 
     * @param tol exits if 0.5*norm(xd-x)^2<tol.
     * @param max_iter exits if iter>=max_iter (max_iter<0 disables
     *                 this check, IKINCTRL_DISABLED(==-1) by
@@ -82,35 +75,6 @@ public:
     reactIpOpt(iCub::iKin::iKinChain &c,
                const double tol, const int max_iter=IKINCTRL_DISABLED,
                const unsigned int verbose=0, bool useHessian=true);
-
-    /**
-    * Sets the state of Pose control settings.
-    * @param _ctrlPose one of the following: 
-    *  IKINCTRL_POSE_FULL => complete pose control.
-    *  IKINCTRL_POSE_XYZ  => translational part of pose controlled.
-    *  IKINCTRL_POSE_ANG  => rotational part of pose controlled.
-    */
-    void set_ctrlPose(const unsigned int _ctrlPose);
-
-    /**
-    * Returns the state of Pose control settings.
-    * @return Pose control settings.
-    */
-    unsigned int get_ctrlPose() const { return ctrlPose; }
-
-    /**
-    * Sets the Pose priority for weighting more either position or 
-    * orientation while reaching in full pose. 
-    * @param priority can be "position" or "orientation". 
-    * @return true/false on success/failure. 
-    */
-    bool set_posePriority(const std::string &priority);
-
-    /**
-    * Returns the Pose priority settings.
-    * @return pose priority.
-    */
-    std::string get_posePriority() const { return posePriority; }
 
     /**
     * Attach a iKinLinIneqConstr object in order to impose 
