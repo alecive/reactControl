@@ -29,6 +29,7 @@
 #define CAST_IPOPTAPP(x)             (static_cast<IpoptApplication*>(x))
 
 using namespace std;
+using namespace yarp::os;
 using namespace yarp::sig;
 using namespace yarp::math;
 using namespace iCub::ctrl;
@@ -45,6 +46,10 @@ private:
     react_NLP &operator=(const react_NLP&);
 
 protected:
+    // The name of the class instance (fixed for now to react_NLP)
+    string name;
+    // The verbosity level (fixed for now to 0)
+    int verbosity;
     // The chain that will undergo the task
     iKinChain &chain;
     // The inequality constraints (if available)
@@ -68,7 +73,7 @@ protected:
     yarp::sig::Vector  q_dot;
 
     // The cost function
-    yarp::sig::Vector e_cst;
+    yarp::sig::Vector cost_func;
     // The jacobian associated with the const function
     yarp::sig::Matrix J_cst;
 
@@ -88,13 +93,12 @@ protected:
         yarp::sig::Vector new_q(dim,0.0);
 
         yarp::sig::Vector new_q_dot(dim,0.0);
-        printf("dim %i\n",dim);   
+        printMessage(0,"dim %i\n",dim);   
         for (Index i=0; i<(int)dim; i++)
         {
-            printf("%g\n", x[i]);
             new_q[i]=x[i];
         }
-        printf("asodifj\n");
+        
         if (!(q_dot==new_q_dot) || firstGo)
         {
             firstGo=false;
@@ -103,9 +107,24 @@ protected:
             yarp::sig::Matrix J1=chain.GeoJacobian();
             submatrix(J1,J_cst,0,2,0,dim-1);
 
-            e_cst=xd -(x0+dT*J_cst*q_dot);
+            cost_func=xd -(x0+dT*J_cst*q_dot);
         }
-        printf("asodifj\n");
+    }
+
+    int printMessage(const int l, const char *f, ...) const
+    {
+        if (verbosity>=l)
+        {
+            fprintf(stdout,"[%s] ",name.c_str());
+
+            va_list ap;
+            va_start(ap,f);
+            int ret=vfprintf(stdout,f,ap);
+            va_end(ap);
+            return ret;
+        }
+        else
+            return -1;
     }
 
 
@@ -115,6 +134,9 @@ public:
              double &_dT, iKinLinIneqConstr &_LIC) :
              chain(c), dT(_dT), xd(_xd), LIC(_LIC)
     {
+        name="react_NLP";
+        verbosity=0;
+
         // A time should always be positive
         if (dT<0.0)
         {
@@ -130,7 +152,7 @@ public:
         q_dot_0.resize(dim,0.0);
         q_dot_d.resize(dim,0.0);
 
-        e_cst.resize(3,0.0);
+        cost_func.resize(3,0.0);
         J_cst.resize(3,dim); J_cst.zero();
 
         firstGo=true;
@@ -166,7 +188,7 @@ public:
                       IndexStyleEnum& index_style)
     {
         n=dim;
-        m=0;
+        m=dim+0;
         nnz_jac_g=dim;
 
         if (LIC.isActive())
@@ -195,32 +217,21 @@ public:
     {
         for (Index i=0; i<n; i++)
         {
-            x_l[i]=chain(i).getMin();
-            x_u[i]=chain(i).getMax();
+            // x_l[i]=chain(i).getMin();
+            // x_u[i]=chain(i).getMax();
+            // Let's put these limits to the velocities for the time being
+            x_l[i]=+20.0;
+            x_u[i]=+20.0;
         }
         
-        Index offs=0;
-
         for (Index i=0; i<m; i++)
         {
-            if (i==0)
+            if (i<dim)
             {
-                g_l[0]=g_u[0]=0.0;
-                offs=1;
-            }
-            else
-            {
-                g_l[i]=LIC.getlB()[i-offs];
-                g_u[i]=LIC.getuB()[i-offs];
+                g_l[i]=chain(i).getMin();
+                g_u[i]=chain(i).getMax();
             }
         }
-
-        if (m==0)
-        {
-            g_l=NULL;
-            g_u=NULL;
-        }
-
         return true;
     }
     
@@ -233,7 +244,7 @@ public:
         assert(init_z == false);
         assert(init_lambda == false);
 
-        printf("get starting point n %i\n",n);
+        printMessage(0,"get starting point n %i\n",n);
         for (Index i=0; i<n; i++)
             x[i]=q_dot_0[i];
 
@@ -243,10 +254,10 @@ public:
     /************************************************************************/
     bool eval_f(Index n, const Number* x, bool new_x, Number& obj_value)
     {
-        printf("evaling f\n");
         computeQuantities(x);
 
-        obj_value=norm2(e_cst);
+        obj_value=norm2(cost_func);
+        printMessage(0,"evaling cost_func: %s obj_value %g\n",cost_func.toString().c_str(),obj_value);
 
         return true;
     }
@@ -254,7 +265,7 @@ public:
     /************************************************************************/
     bool eval_grad_f(Index n, const Number* x, bool new_x, Number* grad_f)
     {
-        printf("evaling grad f\n");
+        printMessage(0,"evaling grad f\n");
         computeQuantities(x);
 
         // yarp::sig::Vector grad=-2.0*(J_1st->transposed() * *e_1st);
@@ -268,21 +279,17 @@ public:
     /************************************************************************/
     bool eval_g(Index n, const Number* x, bool new_x, Index m, Number* g)
     {
-        printf("evaling g\n");
+        yarp::sig::Vector q=chain.getAng();
+        printMessage(0,"evaling g. Q: %s\n",q.toString().c_str());
         computeQuantities(x);
 
-        // Index offs=0;
-
-        // for (Index i=0; i<m; i++)
-        // {
-        //     if (i==0)
-        //     {
-        //         g[0]=norm2(*e_cst);
-        //         offs=1;
-        //     }
-        //     else
-        //         g[i]=linC[i-offs];
-        // }
+        for (Index i=0; i<m; i++)
+        {
+            if (i<dim)
+            {
+                g[i]=q(i);
+            }
+        }
 
         return true;
     }
@@ -292,7 +299,7 @@ public:
                     Index* iRow, Index *jCol, Number* values)
     {
         // Empty for now
-        printf("evaling jac g\n");
+        printMessage(0,"evaling jac g\n");
         // computeQuantities(x);
 
         return true;
@@ -361,7 +368,6 @@ reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
 
     CAST_IPOPTAPP(App)->Options()->SetStringValue("nlp_scaling_method","none");
     CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","none");
-    CAST_IPOPTAPP(App)->Options()->SetStringValue("hessian_approximation","limited-memory");
 
     getBoundsInf(lowerBoundInf,upperBoundInf);
 
@@ -375,7 +381,7 @@ reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
 
     Ipopt::ApplicationReturnStatus status = CAST_IPOPTAPP(App)->Initialize();
     if (status != Ipopt::Solve_Succeeded) {
-        printf("\n\n*** Error during initialization!\n");
+        yError("Error during initialization!");
     }
 }
 

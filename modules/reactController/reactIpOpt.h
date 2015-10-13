@@ -23,6 +23,8 @@
 #include <yarp/sig/Vector.h>
 #include <yarp/sig/Matrix.h>
 
+#include <yarp/os/Log.h>
+
 #include <iCub/iKin/iKinFwd.h>
 #include <iCub/iKin/iKinIpOpt.h>
 
