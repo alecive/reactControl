@@ -18,6 +18,7 @@
 */
 
 #include <limits>
+#include <sstream>
 
 #include <IpTNLP.hpp>
 #include <IpIpoptApplication.hpp>
@@ -74,6 +75,8 @@ protected:
 
     // The cost function
     yarp::sig::Vector cost_func;
+    // The gradient of the cost function
+    yarp::sig::Vector grad_cost_func;
     // The jacobian associated with the const function
     yarp::sig::Matrix J_cst;
 
@@ -90,13 +93,11 @@ protected:
     /************************************************************************/
     virtual void computeQuantities(const Number *x)
     {
-        yarp::sig::Vector new_q(dim,0.0);
-
         yarp::sig::Vector new_q_dot(dim,0.0);
-        printMessage(0,"dim %i\n",dim);   
+        printMessage(0,"[computeQuantities] x %s\n",x_toString(x).c_str());
         for (Index i=0; i<(int)dim; i++)
         {
-            new_q[i]=x[i];
+            new_q_dot[i]=x[i];
         }
         
         if (!(q_dot==new_q_dot) || firstGo)
@@ -108,9 +109,22 @@ protected:
             submatrix(J1,J_cst,0,2,0,dim-1);
 
             cost_func=xd -(x0+dT*J_cst*q_dot);
+            grad_cost_func=2*cost_func*(-dT*J_cst);
         }
     }
 
+    /************************************************************************/
+    string x_toString(const Number* x)
+    {
+        std::ostringstream ss;
+        for (Index i=0; i<dim; i++)
+        {
+            ss << x[i] << " ";
+        }
+        return ss.str();
+    }
+
+    /************************************************************************/
     int printMessage(const int l, const char *f, ...) const
     {
         if (verbosity>=l)
@@ -131,8 +145,8 @@ protected:
 public:
     /************************************************************************/
     react_NLP(iKinChain &c, yarp::sig::Vector &_xd,
-             double &_dT, iKinLinIneqConstr &_LIC) :
-             chain(c), dT(_dT), xd(_xd), LIC(_LIC)
+             double &_dT, iKinLinIneqConstr &_LIC, int _verbosity) :
+             chain(c), dT(_dT), xd(_xd), LIC(_LIC), verbosity(_verbosity)
     {
         name="react_NLP";
         verbosity=0;
@@ -174,6 +188,7 @@ public:
         __obj_scaling=_obj_scaling;
         __x_scaling  =_x_scaling;
         __g_scaling  =_g_scaling;
+        printMessage(0,"[set_scaling] OK\n");
     }
 
     /************************************************************************/
@@ -181,6 +196,7 @@ public:
     {
         lowerBoundInf=lower;
         upperBoundInf=upper;
+        printMessage(0,"[set_bound_inf] OK\n");
     }
 
     /************************************************************************/
@@ -207,6 +223,7 @@ public:
         
         nnz_h_lag=(dim*(dim+1))>>1;
         index_style=TNLP::C_STYLE;
+        printMessage(0,"[get_nlp_info] OK\n");
         
         return true;
     }
@@ -220,8 +237,8 @@ public:
             // x_l[i]=chain(i).getMin();
             // x_u[i]=chain(i).getMax();
             // Let's put these limits to the velocities for the time being
-            x_l[i]=+20.0;
-            x_u[i]=+20.0;
+            x_l[i]=-1.0;
+            x_u[i]=+1.0;
         }
         
         for (Index i=0; i<m; i++)
@@ -233,6 +250,7 @@ public:
             }
         }
         return true;
+        printMessage(0,"[get_bounds_info] OK\n");
     }
     
     /************************************************************************/
@@ -244,9 +262,10 @@ public:
         assert(init_z == false);
         assert(init_lambda == false);
 
-        printMessage(0,"get starting point n %i\n",n);
         for (Index i=0; i<n; i++)
             x[i]=q_dot_0[i];
+
+        printMessage(0,"[get_starting_point] OK n %i x_0 %s\n",n,x_toString(x).c_str());
 
         return true;
     }
@@ -254,10 +273,12 @@ public:
     /************************************************************************/
     bool eval_f(Index n, const Number* x, bool new_x, Number& obj_value)
     {
+        printMessage(0,"[eval_f] START\n");
         computeQuantities(x);
 
         obj_value=norm2(cost_func);
-        printMessage(0,"evaling cost_func: %s obj_value %g\n",cost_func.toString().c_str(),obj_value);
+        printMessage(0,"cost_func: %s obj_value %g\n",cost_func.toString().c_str(),obj_value);
+        printMessage(0,"[eval_f] OK\n");
 
         return true;
     }
@@ -265,14 +286,12 @@ public:
     /************************************************************************/
     bool eval_grad_f(Index n, const Number* x, bool new_x, Number* grad_f)
     {
-        printMessage(0,"evaling grad f\n");
         computeQuantities(x);
 
-        // yarp::sig::Vector grad=-2.0*(J_1st->transposed() * *e_1st);
+        for (Index i=0; i<n; i++)
+            grad_f[i]=grad_cost_func[i];
 
-        // for (Index i=0; i<n; i++)
-        //     grad_f[i]=grad[i];
-
+        printMessage(0,"[eval_grad_f] OK\n");
         return true;
     }
     
@@ -280,7 +299,8 @@ public:
     bool eval_g(Index n, const Number* x, bool new_x, Index m, Number* g)
     {
         yarp::sig::Vector q=chain.getAng();
-        printMessage(0,"evaling g. Q: %s\n",q.toString().c_str());
+        printMessage(0,"[eval_g] Q: %s\n",(q*CTRL_RAD2DEG).toString().c_str());
+        printMessage(0,"[eval_g] x: %s\n",x_toString(x).c_str());
         computeQuantities(x);
 
         for (Index i=0; i<m; i++)
@@ -289,7 +309,7 @@ public:
             {
                 g[i]=q(i);
             }
-        }
+        }printMessage(0,"[eval_g] OK\n");
 
         return true;
     }
@@ -299,7 +319,7 @@ public:
                     Index* iRow, Index *jCol, Number* values)
     {
         // Empty for now
-        printMessage(0,"evaling jac g\n");
+        printMessage(0,"[eval_jac_g] OK\n");
         // computeQuantities(x);
 
         return true;
@@ -321,6 +341,7 @@ public:
                                 Number* x_scaling, bool& use_g_scaling, Index m,
                                 Number* g_scaling)
     {
+        printMessage(0,"[get_scaling_parameters]");
         obj_scaling=__obj_scaling;
 
         for (Index i=0; i<n; i++)
@@ -331,6 +352,8 @@ public:
 
         use_x_scaling=use_g_scaling=true;
 
+        printMessage(0,"[get_scaling_parameters] END\n");
+
         return true;
     }
 
@@ -340,6 +363,7 @@ public:
                            const Number* g, const Number* lambda, Number obj_value,
                            const IpoptData* ip_data, IpoptCalculatedQuantities* ip_cq)
     {
+        printMessage(0,"[finalize_solution]\n");
         for (Index i=0; i<n; i++)
             q_dot_d[i]=x[i];
     }
@@ -352,7 +376,7 @@ public:
 /************************************************************************/
 reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
                        const int max_iter, const unsigned int verbose, bool useHessian) :
-                       chain(c)
+                       chain(c), verbosity(verbose)
 {
     pLIC=&noLIC;
 
@@ -435,18 +459,6 @@ void reactIpOpt::setVerbosity(const unsigned int verbose)
 
 
 /************************************************************************/
-void reactIpOpt::setHessianOpt(const bool useHessian)
-{
-    if (useHessian)
-        CAST_IPOPTAPP(App)->Options()->SetStringValue("hessian_approximation","exact");
-    else
-        CAST_IPOPTAPP(App)->Options()->SetStringValue("hessian_approximation","limited-memory");
-
-    CAST_IPOPTAPP(App)->Initialize();
-}
-
-
-/************************************************************************/
 void reactIpOpt::setUserScaling(const bool useUserScaling, const double _obj_scaling,
                                   const double _x_scaling, const double _g_scaling)
 {
@@ -460,25 +472,6 @@ void reactIpOpt::setUserScaling(const bool useUserScaling, const double _obj_sca
     }
     else
         CAST_IPOPTAPP(App)->Options()->SetStringValue("nlp_scaling_method","gradient-based");
-
-    CAST_IPOPTAPP(App)->Initialize();
-}
-
-
-/************************************************************************/
-void reactIpOpt::setDerivativeTest(const bool enableTest, const bool enable2ndDer)
-{
-    if (enableTest)
-    {
-        if (enable2ndDer)
-            CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","second-order");
-        else
-            CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","first-order");
-
-        CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test_print_all","yes");
-    }
-    else
-        CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","none");
 
     CAST_IPOPTAPP(App)->Initialize();
 }
@@ -506,7 +499,7 @@ void reactIpOpt::setBoundsInf(const double lower, const double upper)
 /************************************************************************/
 yarp::sig::Vector reactIpOpt::solve(yarp::sig::Vector &xd, double &dt, int *exit_code)
 {
-    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,dt,*pLIC);
+    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,dt,*pLIC,verbosity);
     
     nlp->set_scaling(obj_scaling,x_scaling,g_scaling);
     nlp->set_bound_inf(lowerBoundInf,upperBoundInf);

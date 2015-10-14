@@ -17,6 +17,7 @@
  * Public License for more details.
 */
 
+#include <yarp/os/Time.h>
 #include "reactCtrlThread.h"
 #include <fstream>
 #include <sstream>
@@ -95,6 +96,7 @@ bool reactCtrlThread::threadInit()
 
 void reactCtrlThread::run()
 {
+    yarp::os::Time::delay(2.0);
     updateArmChain();
     
     if (isTask)
@@ -109,14 +111,17 @@ void reactCtrlThread::updateArmChain()
 {
     iencs->getEncoders(encs->data());
     Vector q=encs->subVector(0,9);
+    // printMessage(0,"[update_arm_chain] Q: %s\n",q.toString().c_str());
     arm->setAng(q*CTRL_DEG2RAD);
+    Vector qq=arm->getAng();
+    // printMessage(0,"[update_arm_chain]. Q: %s\n",(qq*CTRL_RAD2DEG).toString().c_str());
     H=arm->getH();
     x_t=H.subcol(0,3,3);
 }
 
 Vector reactCtrlThread::solveIK()
 {
-    slv=new reactIpOpt(*arm->asChain(),1e-3,100,10,false);
+    slv=new reactIpOpt(*arm->asChain(),1e-3,100,6,false);
     // Next step will be provided iteratively:
     double dT=getRate()/1000.0;
     int exit_code;

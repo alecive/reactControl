@@ -57,6 +57,8 @@ protected:
     double lowerBoundInf;
     double upperBoundInf;
 
+    int verbosity;
+
 public:
     /**
     * Constructor. 
@@ -129,14 +131,6 @@ public:
     void setVerbosity(const unsigned int verbose);
 
     /**
-    * Selects whether to rely on exact Hessian computation or enable
-    * Quasi-Newton approximation (Hessian is enabled at start-up by 
-    * default). 
-    * @param useHessian true if Hessian computation is enabled.
-    */
-    void setHessianOpt(const bool useHessian);
-
-    /**
     * Enables/disables user scaling factors.
     * @param useUserScaling true if user scaling is enabled. 
     * @param obj_scaling user scaling factor for the objective 
@@ -146,16 +140,6 @@ public:
     */
     void setUserScaling(const bool useUserScaling, const double _obj_scaling,
                         const double _x_scaling, const double _g_scaling);
-
-    /**
-    * Enable\disable derivative test at each call to solve method 
-    * (disabled at start-up by default). Useful to check the 
-    * derivatives implementation of NLP. 
-    * @param enableTest true if derivative test shall be enabled. 
-    * @param enable2ndDer true to enable second derivative test as 
-    *                     well (false by default).
-    */
-    void setDerivativeTest(const bool enableTest, const bool enable2ndDer=false);
 
     /**
     * Returns the lower and upper bounds to represent -inf and +inf.
