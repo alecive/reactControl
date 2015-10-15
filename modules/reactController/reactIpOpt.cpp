@@ -96,26 +96,25 @@ protected:
     /************************************************************************/
     virtual void computeQuantities(const Number *x)
     {
+        printMessage(9,"[computeQuantities] START\n");
         yarp::sig::Vector new_q_dot(dim,0.0);
         printMessage(7,"[computeQuantities] x %s\n",IPOPT_Number_toString(x).c_str());
         for (Index i=0; i<(int)dim; i++)
         {
             new_q_dot[i]=x[i];
         }
-        
         if (!(q_dot==new_q_dot) || firstGo)
         {
             firstGo=false;
             q_dot=new_q_dot;
-
             yarp::sig::Matrix J1=chain.GeoJacobian();
             submatrix(J1,J_cst,0,2,0,dim-1);
 
             q_t = chain.getAng();
-
             cost_func=xd -(x0+dT*J_cst*q_dot);
             grad_cost_func=2*cost_func*(-dT*J_cst);
         }
+        printMessage(9,"[computeQuantities] OK\n");
     }
 
     /************************************************************************/
@@ -278,7 +277,7 @@ public:
     /************************************************************************/
     bool eval_f(Index n, const Number* x, bool new_x, Number& obj_value)
     {
-        printMessage(7,"[eval_f] START\n");
+        printMessage(9,"[eval_f] START\n");
         computeQuantities(x);
 
         obj_value=norm2(cost_func);
@@ -290,6 +289,7 @@ public:
     /************************************************************************/
     bool eval_grad_f(Index n, const Number* x, bool new_x, Number* grad_f)
     {
+        printMessage(9,"[eval_grad_f] START\n");
         computeQuantities(x);
 
         for (Index i=0; i<n; i++)
@@ -302,7 +302,7 @@ public:
     /************************************************************************/
     bool eval_g(Index n, const Number* x, bool new_x, Index m, Number* g)
     {
-        printMessage(7,"[eval_g] q(t): %s\n",(q_t*CTRL_RAD2DEG).toString(3,3).c_str());
+        printMessage(9,"[eval_g] q(t): %s\n",(q_t*CTRL_RAD2DEG).toString(3,3).c_str());
         computeQuantities(x);
 
         for (Index i=0; i<m; i++)
@@ -321,6 +321,7 @@ public:
     bool eval_jac_g(Index n, const Number* x, bool new_x, Index m, Index nele_jac,
                     Index* iRow, Index *jCol, Number* values)
     {
+        printMessage(9,"[eval_jac_g] START %i n\n");
         computeQuantities(x);
 
         if (m>=n) // if there are at least the joint bounds as constraint
@@ -357,7 +358,7 @@ public:
                                 Number* x_scaling, bool& use_g_scaling, Index m,
                                 Number* g_scaling)
     {
-        printMessage(7,"[get_scaling_parameters]");
+        printMessage(9,"[get_scaling_parameters] START");
         obj_scaling=__obj_scaling;
 
         for (Index i=0; i<n; i++)
