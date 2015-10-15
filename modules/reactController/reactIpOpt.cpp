@@ -67,11 +67,14 @@ protected:
     double &dT;
 
     // The desired final joint velocities
-    yarp::sig::Vector  q_dot_d;
+    yarp::sig::Vector q_dot_d;
     // The initial joint velocities
-    yarp::sig::Vector  q_dot_0;
+    yarp::sig::Vector q_dot_0;
     // The current joint velocities
-    yarp::sig::Vector  q_dot;
+    yarp::sig::Vector q_dot;
+
+    // The current joint configuration
+    yarp::sig::Vector q_t;
 
     // The cost function
     yarp::sig::Vector cost_func;
@@ -94,7 +97,7 @@ protected:
     virtual void computeQuantities(const Number *x)
     {
         yarp::sig::Vector new_q_dot(dim,0.0);
-        printMessage(0,"[computeQuantities] x %s\n",x_toString(x).c_str());
+        printMessage(7,"[computeQuantities] x %s\n",IPOPT_Number_toString(x).c_str());
         for (Index i=0; i<(int)dim; i++)
         {
             new_q_dot[i]=x[i];
@@ -108,13 +111,15 @@ protected:
             yarp::sig::Matrix J1=chain.GeoJacobian();
             submatrix(J1,J_cst,0,2,0,dim-1);
 
+            q_t = chain.getAng();
+
             cost_func=xd -(x0+dT*J_cst*q_dot);
             grad_cost_func=2*cost_func*(-dT*J_cst);
         }
     }
 
     /************************************************************************/
-    string x_toString(const Number* x)
+    string IPOPT_Number_toString(const Number* x)
     {
         std::ostringstream ss;
         for (Index i=0; i<dim; i++)
@@ -149,7 +154,6 @@ public:
              chain(c), dT(_dT), xd(_xd), LIC(_LIC), verbosity(_verbosity)
     {
         name="react_NLP";
-        verbosity=0;
 
         // A time should always be positive
         if (dT<0.0)
@@ -188,7 +192,7 @@ public:
         __obj_scaling=_obj_scaling;
         __x_scaling  =_x_scaling;
         __g_scaling  =_g_scaling;
-        printMessage(0,"[set_scaling] OK\n");
+        printMessage(7,"[set_scaling] OK\n");
     }
 
     /************************************************************************/
@@ -196,7 +200,7 @@ public:
     {
         lowerBoundInf=lower;
         upperBoundInf=upper;
-        printMessage(0,"[set_bound_inf] OK\n");
+        printMessage(7,"[set_bound_inf] OK\n");
     }
 
     /************************************************************************/
@@ -205,7 +209,7 @@ public:
     {
         n=dim;
         m=dim+0;
-        nnz_jac_g=dim;
+        nnz_jac_g=dim; // the jacobian has dim non zero entries (the diagonal)
 
         if (LIC.isActive())
         {
@@ -221,9 +225,10 @@ public:
                 LIC.setActive(false);
         }
         
-        nnz_h_lag=(dim*(dim+1))>>1;
+        // nnz_h_lag=(dim*(dim+1))>>1;
+        nnz_h_lag=0;
         index_style=TNLP::C_STYLE;
-        printMessage(0,"[get_nlp_info] OK\n");
+        printMessage(7,"[get_nlp_info] OK\n");
         
         return true;
     }
@@ -250,7 +255,7 @@ public:
             }
         }
         return true;
-        printMessage(0,"[get_bounds_info] OK\n");
+        printMessage(7,"[get_bounds_info] OK\n");
     }
     
     /************************************************************************/
@@ -265,7 +270,7 @@ public:
         for (Index i=0; i<n; i++)
             x[i]=q_dot_0[i];
 
-        printMessage(0,"[get_starting_point] OK n %i x_0 %s\n",n,x_toString(x).c_str());
+        printMessage(7,"[get_starting_point] OK n: %i x_0: %s\n",n,IPOPT_Number_toString(x).c_str());
 
         return true;
     }
@@ -273,12 +278,11 @@ public:
     /************************************************************************/
     bool eval_f(Index n, const Number* x, bool new_x, Number& obj_value)
     {
-        printMessage(0,"[eval_f] START\n");
+        printMessage(7,"[eval_f] START\n");
         computeQuantities(x);
 
         obj_value=norm2(cost_func);
-        printMessage(0,"cost_func: %s obj_value %g\n",cost_func.toString().c_str(),obj_value);
-        printMessage(0,"[eval_f] OK\n");
+        printMessage(7,"[eval_f] OK\t\tcost_func: %s\tobj_value %g\n",cost_func.toString().c_str(),obj_value);
 
         return true;
     }
@@ -291,25 +295,24 @@ public:
         for (Index i=0; i<n; i++)
             grad_f[i]=grad_cost_func[i];
 
-        printMessage(0,"[eval_grad_f] OK\n");
+        printMessage(7,"[eval_grad_f] OK\n");
         return true;
     }
     
     /************************************************************************/
     bool eval_g(Index n, const Number* x, bool new_x, Index m, Number* g)
     {
-        yarp::sig::Vector q=chain.getAng();
-        printMessage(0,"[eval_g] Q: %s\n",(q*CTRL_RAD2DEG).toString().c_str());
-        printMessage(0,"[eval_g] x: %s\n",x_toString(x).c_str());
+        printMessage(7,"[eval_g] q(t): %s\n",(q_t*CTRL_RAD2DEG).toString(3,3).c_str());
         computeQuantities(x);
 
         for (Index i=0; i<m; i++)
         {
             if (i<dim)
             {
-                g[i]=q(i);
+                g[i]=q_t(i) + dT * q_dot(i);
             }
-        }printMessage(0,"[eval_g] OK\n");
+        }
+        printMessage(7,"[eval_g] OK q(t+1): %s\n",IPOPT_Number_toString(g).c_str());
 
         return true;
     }
@@ -318,10 +321,23 @@ public:
     bool eval_jac_g(Index n, const Number* x, bool new_x, Index m, Index nele_jac,
                     Index* iRow, Index *jCol, Number* values)
     {
-        // Empty for now
-        printMessage(0,"[eval_jac_g] OK\n");
-        // computeQuantities(x);
+        computeQuantities(x);
 
+        if (m>=n) // if there are at least the joint bounds as constraint
+        {
+            Index idx=0;
+
+            // Let's populate the diagonal matrix with dT
+            for (Index i=0; i<m; i++)
+            {
+                iRow[idx]=i;
+                jCol[idx]=i;
+                values[idx]=dT;
+                idx++;
+            }
+        }
+
+        printMessage(7,"[eval_jac_g] OK\n");
         return true;
     }
     
@@ -341,7 +357,7 @@ public:
                                 Number* x_scaling, bool& use_g_scaling, Index m,
                                 Number* g_scaling)
     {
-        printMessage(0,"[get_scaling_parameters]");
+        printMessage(7,"[get_scaling_parameters]");
         obj_scaling=__obj_scaling;
 
         for (Index i=0; i<n; i++)
@@ -352,7 +368,7 @@ public:
 
         use_x_scaling=use_g_scaling=true;
 
-        printMessage(0,"[get_scaling_parameters] END\n");
+        printMessage(7,"[get_scaling_parameters] END\n");
 
         return true;
     }
@@ -363,7 +379,7 @@ public:
                            const Number* g, const Number* lambda, Number obj_value,
                            const IpoptData* ip_data, IpoptCalculatedQuantities* ip_cq)
     {
-        printMessage(0,"[finalize_solution]\n");
+        printMessage(7,"[finalize_solution]\n");
         for (Index i=0; i<n; i++)
             q_dot_d[i]=x[i];
     }
@@ -390,8 +406,11 @@ reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
     CAST_IPOPTAPP(App)->Options()->SetStringValue("mu_strategy","adaptive");
     CAST_IPOPTAPP(App)->Options()->SetIntegerValue("print_level",verbose);
 
-    CAST_IPOPTAPP(App)->Options()->SetStringValue("nlp_scaling_method","none");
-    CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","none");
+    // CAST_IPOPTAPP(App)->Options()->SetStringValue("jacobian_approximation","finite-difference-values");
+    CAST_IPOPTAPP(App)->Options()->SetStringValue("nlp_scaling_method","gradient-based");
+    // CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","none");
+    CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","first-order");
+    CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test_print_all","yes");
 
     getBoundsInf(lowerBoundInf,upperBoundInf);
 

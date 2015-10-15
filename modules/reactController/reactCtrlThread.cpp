@@ -96,7 +96,7 @@ bool reactCtrlThread::threadInit()
 
 void reactCtrlThread::run()
 {
-    yarp::os::Time::delay(2.0);
+    yarp::os::Time::delay(1.0);
     updateArmChain();
     
     if (isTask)
@@ -121,7 +121,7 @@ void reactCtrlThread::updateArmChain()
 
 Vector reactCtrlThread::solveIK()
 {
-    slv=new reactIpOpt(*arm->asChain(),1e-3,100,6,false);
+    slv=new reactIpOpt(*arm->asChain(),1e-3,100,verbosity,false);
     // Next step will be provided iteratively:
     double dT=getRate()/1000.0;
     int exit_code;
