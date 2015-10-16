@@ -6,18 +6,28 @@ project(reactController)
 
 find_package(IPOPT REQUIRED)
 
-include_directories(${YARP_INCLUDE_DIRS})
-include_directories(${IPOPT_INCLUDE_DIRS})
+include(YarpIDL)
 
-file(GLOB source *.cpp)
-file(GLOB header *.h)
+set(header_files    ${CMAKE_CURRENT_SOURCE_DIR}/include/${PROJECT_NAME}_IDL.h
+                    ${CMAKE_CURRENT_SOURCE_DIR}/include/reactIpOpt.h
+                    ${CMAKE_CURRENT_SOURCE_DIR}/include/reactCtrlThread.h)
+set(source_files    ${CMAKE_CURRENT_SOURCE_DIR}/src/${PROJECT_NAME}_IDL.cpp
+                    ${CMAKE_CURRENT_SOURCE_DIR}/src/reactIpOpt.cpp
+                    ${CMAKE_CURRENT_SOURCE_DIR}/src/reactCtrlThread.cpp
+                    ${CMAKE_CURRENT_SOURCE_DIR}/src/reactController.cpp)
+set(idl_files       ${PROJECT_NAME}.thrift)
 
-source_group("Source Files" FILES ${source})
-source_group("Header Files" FILES ${header})
+yarp_idl_to_dir(${idl_files} ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(${PROJECT_NAME} ${source} ${header} )
+source_group("Header Files" FILES ${header_files})
+source_group("Source Files" FILES ${source_files})
+source_group("IDL Files"    FILES ${idl_files})
 
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include
+                    ${YARP_INCLUDE_DIRS}
+                    ${IPOPT_INCLUDE_DIRS})
+
+add_executable(${PROJECT_NAME} ${header_files} ${source_files} ${idl_files})
 target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES} iKin ${IPOPT_LIBRARIES})
-
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 
