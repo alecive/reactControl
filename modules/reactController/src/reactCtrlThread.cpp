@@ -31,7 +31,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
                                  verbosity(_verbosity), autoconnect(_autoconnect), trajTime(_trajTime)
 {
-    step     = 0;
+    step = 0;
 
     if (part=="left_arm")
     {
@@ -101,10 +101,58 @@ void reactCtrlThread::run()
     
     if (isTask)
     {
-        setNewTarget(Vector(3,0.0));
+        Vector x_d(3,0.0);
+        x_d    =x_t;
+        x_d[2]+=0.2;
+
+        setNewTarget(x_d);
+
         solveIK();
         isTask=false;
     }
+}
+
+Vector reactCtrlThread::solveIK()
+{
+    slv=new reactIpOpt(*arm->asChain(),1e-4,100,verbosity,false);
+    // Next step will be provided iteratively:
+    double dT=getRate()/1000.0;
+    int exit_code;
+    
+    // Vector x_next = x_t + (x_d - x_t)/norm(x_d -x_t) * dT ;
+
+    // The equation is x_next = x_0 + (x_d - x_0) * (t/T)
+    // 
+    Vector x_next(3,0.0);
+    x_next = x_0 + (x_d-x_0) * (dT/t_d);
+    
+    Vector result = slv->solve(x_next,dT,&exit_code) * CTRL_RAD2DEG;
+
+    printMessage(0,"x_t:    %s\tdT %g\n",x_t.toString().c_str(),dT);
+    printMessage(0,"x_next: %s\tnorm(x_next-x_t): %g\n",x_next.toString().c_str(),
+                                                      norm(x_next-x_t));
+    printMessage(0,"Result: %s\n",result.toString().c_str());
+    delete slv;
+
+    return result;
+}
+
+bool reactCtrlThread::setNewTarget(const Vector& _x_d)
+{
+    toggleTask(true);
+    if (_x_d.size()==3)
+    {
+        x_0=x_t;
+        x_d=_x_d;
+        t_0=yarp::os::Time::now();
+        t_d=trajTime;
+        yInfo("[reactCtrlThread] got new target. x_d: %s",x_d.toString().c_str());
+        yInfo("[reactCtrlThread]                 x_0: %s",x_0.toString().c_str());
+        yInfo("[reactCtrlThread]                 t_d: %g",t_d);
+
+        return true;
+    }
+    return false;
 }
 
 void reactCtrlThread::updateArmChain()
@@ -117,35 +165,6 @@ void reactCtrlThread::updateArmChain()
     // printMessage(0,"[update_arm_chain]. Q: %s\n",(qq*CTRL_RAD2DEG).toString().c_str());
     H=arm->getH();
     x_t=H.subcol(0,3,3);
-}
-
-Vector reactCtrlThread::solveIK()
-{
-    slv=new reactIpOpt(*arm->asChain(),1e-3,100,verbosity,false);
-    // Next step will be provided iteratively:
-    double dT=getRate()/1000.0;
-    int exit_code;
-    
-    Vector x_next = x_t + (x_d - x_t)/norm(x_d -x_t) * dT ;
-    
-    Vector result = slv->solve(x_next,dT,&exit_code) * CTRL_RAD2DEG;
-
-    printMessage(0,"x_t    %s dT %g\n",x_t.toString().c_str(),dT);
-    printMessage(0,"x_next %s \n",x_next.toString().c_str());
-    printMessage(0,"Result is %s\n",result.toString().c_str());
-    delete slv;
-}
-
-bool reactCtrlThread::setNewTarget(const Vector& _x_d)
-{
-    toggleTask(true);
-    if (_x_d.size()==3)
-    {
-        x_0=x_t;
-        x_d=_x_d;
-        return true;
-    }
-    return false;
 }
 
 bool reactCtrlThread::alignJointsBounds()

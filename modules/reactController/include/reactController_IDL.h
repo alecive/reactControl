@@ -6,6 +6,7 @@
 
 #include <yarp/os/Wire.h>
 #include <yarp/os/idl/WireTypes.h>
+#include <yarp/sig/Vector.h>
 
 class reactController_IDL;
 
@@ -21,7 +22,7 @@ public:
    * Starts the blinking behavior (if it was not started before).
    * @return true/false on success/failure.
    */
-  virtual bool set_xd();
+  virtual bool set_xd(const yarp::sig::Vector& _xd);
   virtual bool read(yarp::os::ConnectionReader& connection);
   virtual std::vector<std::string> help(const std::string& functionName="--all");
 };

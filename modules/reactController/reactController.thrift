@@ -22,5 +22,5 @@ service reactController_IDL
   * Starts the blinking behavior (if it was not started before).
   * @return true/false on success/failure.
   */
-  bool set_xd();
+  bool set_xd(1:Vector _xd);
 }

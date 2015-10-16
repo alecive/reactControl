@@ -107,106 +107,22 @@ public:
         part      = "left_arm";
 
         verbosity =    0;    // verbosity
-        rate      =  100;    // rate of the reactCtrlThread
+        rate      =   20;    // rate of the reactCtrlThread
 
         autoconnect = false;
 
         trajTime = 3.0;
     }
 
-    bool set_xd()
+    bool set_xd(const yarp::sig::Vector& _xd)
     {
-        return true;
+        if (_xd.size()>=3)
+        {
+            yInfo("[reactController] received new x_d: %s", _xd.toString().c_str());
+            return rctCtrlThrd->setNewTarget(_xd);
+        }
+        return false;
     }
-
-    // bool respond(const Bottle &command, Bottle &reply)
-    // {
-    //     int ack =Vocab::encode("ack");
-    //     int nack=Vocab::encode("nack");
-
-    //     if (command.size()>0)
-    //     {
-    //         switch (command.get(0).asVocab())
-    //         {
-    //             //-----------------
-    //             case VOCAB4('c','o','n','n'):
-    //             {
-    //                 yarp::os::Network yarpNetwork;
-    //                 if (yarpNetwork.connect("/skinManager/skin_events:o",("/"+name+"/contacts:i").c_str()))
-    //                     reply.addVocab(ack);
-    //                 else
-    //                     reply.addVocab(nack);
-    //                 return true;
-    //             }
-
-    //             //-----------------
-    //             case VOCAB4('s','t','a','r'):
-    //             {
-    //                 reply.addVocab(nack);
-    //                 return true;
-    //             }
-
-    //             //-----------------
-    //             case VOCAB4('d','i','s','c'):
-    //             {
-    //                 yarp::os::Network yarpNetwork;
-    //                 if (yarpNetwork.disconnect("/skinManager/skin_events:o",("/"+name+"/contacts:i").c_str()))
-    //                     reply.addVocab(ack);
-    //                 else
-    //                     reply.addVocab(nack);
-    //                 return true;
-    //             }
-
-    //             //-----------------
-    //             case VOCAB4('s','t','o','p'):
-    //             {
-    //                 if (rctCtrlThrd)
-    //                 {
-    //                     yInfo("REACT CONTROLLER: Stopping threads..");
-    //                     rctCtrlThrd->stop();
-    //                     delete rctCtrlThrd;
-    //                     rctCtrlThrd=0;
-    //                 }
-    //                 reply.addVocab(ack);
-    //                 return true;
-    //             }
-
-    //             //-----------------
-    //             case VOCAB3('s','e','t'):
-    //             {
-    //                 if (command.get(1).asString() == "xd")
-    //                 {
-    //                     yarp::sig::Vector xd(3,0.0);
-    //                     if (command.size()>=5)
-    //                     {
-    //                         for (int i = 0; i < 3; i++)
-    //                         {
-    //                             xd[i] = command.get(2+i).asDouble();
-    //                         }
-    //                         if (rctCtrlThrd->setNewTarget(xd))
-    //                         {
-    //                             reply.addVocab(ack);
-    //                         }
-    //                         else
-    //                         {
-    //                             reply.addVocab(nack);
-    //                         }
-    //                     }
-    //                     else
-    //                         reply.addVocab(nack);
-    //                 }
-    //                 return true;
-    //             }
-
-    //             //-----------------
-    //             default:
-    //                 return RFModule::respond(command,reply);
-    //         }
-    //     }
-
-    //     reply.addVocab(nack);
-    //     return true;
-    // }
 
     bool configure(ResourceFinder &rf)
     {

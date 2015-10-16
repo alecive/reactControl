@@ -299,7 +299,7 @@ public:
 
         for (Index i=0; i<n; i++)
             grad_f[i]=grad_cost_func[i];
-
+            
         printMessage(7,"[eval_grad_f] OK\n");
         return true;
     }
@@ -401,7 +401,17 @@ public:
                            const Number* g, const Number* lambda, Number obj_value,
                            const IpoptData* ip_data, IpoptCalculatedQuantities* ip_cq)
     {
-        printMessage(7,"[finalize_solution]\n");
+        // Let's write the solution to the console
+        printMessage(4,"[finalize_solution] Solution of the primal variables, x: %s\n",
+                                        IPOPT_Number_toString(x,CTRL_RAD2DEG).c_str());
+        printMessage(4,"[finalize_solution] Solution of the bound multipliers: z_L and z_U\n");
+        printMessage(4,"[finalize_solution] z_L: %s\n",
+                        IPOPT_Number_toString(z_L,CTRL_RAD2DEG).c_str());
+        printMessage(4,"[finalize_solution] z_U: %s\n",
+                        IPOPT_Number_toString(z_U,CTRL_RAD2DEG).c_str());
+        printMessage(4,"[finalize_solution] q(t+1): %s\n",
+                        IPOPT_Number_toString(g,CTRL_RAD2DEG).c_str());
+        printMessage(4,"[finalize_solution] Objective value f(x*) = %e\n", obj_value);
         for (Index i=0; i<n; i++)
             q_dot_d[i]=x[i];
     }
@@ -430,8 +440,8 @@ reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
 
     // CAST_IPOPTAPP(App)->Options()->SetStringValue("jacobian_approximation","finite-difference-values");
     CAST_IPOPTAPP(App)->Options()->SetStringValue("nlp_scaling_method","gradient-based");
-    // CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","none");
-    CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","first-order");
+    CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","none");
+    // CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","first-order");
     CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test_print_all","yes");
 
     getBoundsInf(lowerBoundInf,upperBoundInf);

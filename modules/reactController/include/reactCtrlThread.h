@@ -73,6 +73,8 @@ protected:
     int        step;        // Flag to know in which step the thread is in
     bool     isTask;        // Flag to know if there is a task to solve
     double trajTime;        // Trajectory time (default 3.0)
+    double      t_0;        // Time at which the trajectory starts
+    double      t_d;        // Time at which the trajectory should end
     yarp::sig::Vector x_d;  // Vector that stores the new target
     yarp::sig::Vector x_t;  // Current end-effector position
     yarp::sig::Vector x_0;  // Initial end-effector position

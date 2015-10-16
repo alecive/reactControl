@@ -8,16 +8,18 @@
 
 class reactController_IDL_set_xd : public yarp::os::Portable {
 public:
+  yarp::sig::Vector _xd;
   bool _return;
-  void init();
+  void init(const yarp::sig::Vector& _xd);
   virtual bool write(yarp::os::ConnectionWriter& connection);
   virtual bool read(yarp::os::ConnectionReader& connection);
 };
 
 bool reactController_IDL_set_xd::write(yarp::os::ConnectionWriter& connection) {
   yarp::os::idl::WireWriter writer(connection);
-  if (!writer.writeListHeader(2)) return false;
+  if (!writer.writeListHeader(3)) return false;
   if (!writer.writeTag("set_xd",1,2)) return false;
+  if (!writer.write(_xd)) return false;
   return true;
 }
 
@@ -31,19 +33,20 @@ bool reactController_IDL_set_xd::read(yarp::os::ConnectionReader& connection) {
   return true;
 }
 
-void reactController_IDL_set_xd::init() {
+void reactController_IDL_set_xd::init(const yarp::sig::Vector& _xd) {
   _return = false;
+  this->_xd = _xd;
 }
 
 reactController_IDL::reactController_IDL() {
   yarp().setOwner(*this);
 }
-bool reactController_IDL::set_xd() {
+bool reactController_IDL::set_xd(const yarp::sig::Vector& _xd) {
   bool _return = false;
   reactController_IDL_set_xd helper;
-  helper.init();
+  helper.init(_xd);
   if (!yarp().canWrite()) {
-    yError("Missing server method '%s'?","bool reactController_IDL::set_xd()");
+    yError("Missing server method '%s'?","bool reactController_IDL::set_xd(const yarp::sig::Vector& _xd)");
   }
   bool ok = yarp().write(helper,helper);
   return ok?helper._return:_return;
@@ -59,8 +62,13 @@ bool reactController_IDL::read(yarp::os::ConnectionReader& connection) {
   while (!reader.isError()) {
     // TODO: use quick lookup, this is just a test
     if (tag == "set_xd") {
+      yarp::sig::Vector _xd;
+      if (!reader.read(_xd)) {
+        reader.fail();
+        return false;
+      }
       bool _return;
-      _return = set_xd();
+      _return = set_xd(_xd);
       yarp::os::idl::WireWriter writer(reader);
       if (!writer.isNull()) {
         if (!writer.writeListHeader(1)) return false;
@@ -108,7 +116,7 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
   }
   else {
     if (functionName=="set_xd") {
-      helpString.push_back("bool set_xd() ");
+      helpString.push_back("bool set_xd(const yarp::sig::Vector& _xd) ");
       helpString.push_back("Starts the blinking behavior (if it was not started before). ");
       helpString.push_back("@return true/false on success/failure. ");
     }
