@@ -27,9 +27,9 @@ using namespace yarp::sig;
 using namespace yarp::math;
 
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,
-                                 const string &_part, int _verbosity, bool _autoconnect) :
+                                 const string &_part, int _verbosity, bool _autoconnect, double _trajTime) :
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
-                                 verbosity(_verbosity), autoconnect(_autoconnect)
+                                 verbosity(_verbosity), autoconnect(_autoconnect), trajTime(_trajTime)
 {
     step     = 0;
 
@@ -126,11 +126,12 @@ Vector reactCtrlThread::solveIK()
     double dT=getRate()/1000.0;
     int exit_code;
     
-    Vector x_next = x_t + (x_d - x_t)/norm(x_d -x_t) * dT;
+    Vector x_next = x_t + (x_d - x_t)/norm(x_d -x_t) * dT ;
     
-    Vector result = slv->solve(x_next,dT,&exit_code);
+    Vector result = slv->solve(x_next,dT,&exit_code) * CTRL_RAD2DEG;
 
-    printMessage(0,"x_t %s x_next %s dT %g\n",x_t.toString().c_str(),x_next.toString().c_str(),dT);
+    printMessage(0,"x_t    %s dT %g\n",x_t.toString().c_str(),dT);
+    printMessage(0,"x_next %s \n",x_next.toString().c_str());
     printMessage(0,"Result is %s\n",result.toString().c_str());
     delete slv;
 }

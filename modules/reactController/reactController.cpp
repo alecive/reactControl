@@ -95,6 +95,8 @@ private:
 
     bool autoconnect;
 
+    double trajTime;
+
 public:
     reactController()
     {
@@ -108,6 +110,8 @@ public:
         rate      =  100;    // rate of the reactCtrlThread
 
         autoconnect = false;
+
+        trajTime = 3.0;
     }
 
     bool respond(const Bottle &command, Bottle &reply)
@@ -263,8 +267,16 @@ public:
             }
             else yInfo("[reactController] Could not find rate in the config file; using %i as default",rate);
 
+        //****************** rate ******************
+            if (rf.check("trajTime"))
+            {
+                trajTime = rf.find("trajTime").asInt();
+                yInfo("[reactController] trajTimeThread working at %g ms.",trajTime);
+            }
+            else yInfo("[reactController] Could not find trajTime in the config file; using %g as default",trajTime);
+
         //************* THREAD *************
-        rctCtrlThrd = new reactCtrlThread(rate, name, robot, part, verbosity, autoconnect);
+        rctCtrlThrd = new reactCtrlThread(rate, name, robot, part, verbosity, autoconnect, trajTime);
         bool strt = rctCtrlThrd -> start();
         if (!strt)
         {

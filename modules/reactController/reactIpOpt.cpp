@@ -96,9 +96,9 @@ protected:
     /************************************************************************/
     virtual void computeQuantities(const Number *x)
     {
-        printMessage(9,"[computeQuantities] START\n");
+        printMessage(9,"[computeQuantities] START dim: %i \n", dim);
         yarp::sig::Vector new_q_dot(dim,0.0);
-        printMessage(7,"[computeQuantities] x %s\n",IPOPT_Number_toString(x).c_str());
+
         for (Index i=0; i<(int)dim; i++)
         {
             new_q_dot[i]=x[i];
@@ -114,16 +114,16 @@ protected:
             cost_func=xd -(x0+dT*J_cst*q_dot);
             grad_cost_func=2*cost_func*(-dT*J_cst);
         }
-        printMessage(9,"[computeQuantities] OK\n");
+        printMessage(9,"[computeQuantities] OK x: %s\n",IPOPT_Number_toString(x,CTRL_RAD2DEG).c_str());
     }
 
     /************************************************************************/
-    string IPOPT_Number_toString(const Number* x)
+    string IPOPT_Number_toString(const Number* x, const double multiplier=1)
     {
         std::ostringstream ss;
         for (Index i=0; i<dim; i++)
         {
-            ss << x[i] << " ";
+            ss << x[i]*multiplier << " ";
         }
         return ss.str();
     }
@@ -227,34 +227,9 @@ public:
         // nnz_h_lag=(dim*(dim+1))>>1;
         nnz_h_lag=0;
         index_style=TNLP::C_STYLE;
-        printMessage(7,"[get_nlp_info] OK\n");
+        printMessage(7,"[get_nlp_info]\tn: %i m: %i nnz_jac_g: %i\n",n,m,nnz_jac_g);
         
         return true;
-    }
-
-    /************************************************************************/
-    bool get_bounds_info(Index n, Number* x_l, Number* x_u, Index m, Number* g_l,
-                         Number* g_u)
-    {
-        for (Index i=0; i<n; i++)
-        {
-            // x_l[i]=chain(i).getMin();
-            // x_u[i]=chain(i).getMax();
-            // Let's put these limits to the velocities for the time being
-            x_l[i]=-1.0;
-            x_u[i]=+1.0;
-        }
-        
-        for (Index i=0; i<m; i++)
-        {
-            if (i<dim)
-            {
-                g_l[i]=chain(i).getMin();
-                g_u[i]=chain(i).getMax();
-            }
-        }
-        return true;
-        printMessage(7,"[get_bounds_info] OK\n");
     }
     
     /************************************************************************/
@@ -269,15 +244,45 @@ public:
         for (Index i=0; i<n; i++)
             x[i]=q_dot_0[i];
 
-        printMessage(7,"[get_starting_point] OK n: %i x_0: %s\n",n,IPOPT_Number_toString(x).c_str());
+        printMessage(7,"[get_starting_pnt]  OK n: %i x_0: %s\n",n,IPOPT_Number_toString(x).c_str());
 
+        return true;
+    }
+
+    /************************************************************************/
+    bool get_bounds_info(Index n, Number* x_l, Number* x_u, Index m, Number* g_l,
+                         Number* g_u)
+    {
+        for (Index i=0; i<n; i++)
+        {
+            // x_l[i]=chain(i).getMin();
+            // x_u[i]=chain(i).getMax();
+            // Let's put these limits to the velocities for the time being
+            x_l[i]=-10.0*CTRL_DEG2RAD;
+            x_u[i]=+10.0*CTRL_DEG2RAD;
+        }
+        
+        for (Index i=0; i<m; i++)
+        {
+            if (i<dim)
+            {
+                g_l[i]=chain(i).getMin();
+                g_u[i]=chain(i).getMax();
+            }
+        }
+        
+        printMessage(7,"[get_bounds_info]   n: %i m: %i\n",n,m);
+        printMessage(9,"[get_bounds_info]   x_l: %s\n", IPOPT_Number_toString(x_l).c_str());
+        printMessage(9,"[get_bounds_info]   x_u: %s\n", IPOPT_Number_toString(x_u).c_str());
+        printMessage(9,"[get_bounds_info]   g_l: %s\n", IPOPT_Number_toString(g_l).c_str());
+        printMessage(9,"[get_bounds_info]   g_u: %s\n", IPOPT_Number_toString(g_u).c_str());
         return true;
     }
     
     /************************************************************************/
     bool eval_f(Index n, const Number* x, bool new_x, Number& obj_value)
     {
-        printMessage(9,"[eval_f] START\n");
+        printMessage(9,"[eval_f] START\tn: %i\n",n);
         computeQuantities(x);
 
         obj_value=norm2(cost_func);
@@ -289,7 +294,7 @@ public:
     /************************************************************************/
     bool eval_grad_f(Index n, const Number* x, bool new_x, Number* grad_f)
     {
-        printMessage(9,"[eval_grad_f] START\n");
+        printMessage(9,"[eval_grad_f] START\tn: %i\n",n);
         computeQuantities(x);
 
         for (Index i=0; i<n; i++)
@@ -302,7 +307,7 @@ public:
     /************************************************************************/
     bool eval_g(Index n, const Number* x, bool new_x, Index m, Number* g)
     {
-        printMessage(9,"[eval_g] q(t): %s\n",(q_t*CTRL_RAD2DEG).toString(3,3).c_str());
+        printMessage(9,"[eval_g]\t\tq(t): %s\n",(q_t*CTRL_RAD2DEG).toString(3,3).c_str());
         computeQuantities(x);
 
         for (Index i=0; i<m; i++)
@@ -312,7 +317,7 @@ public:
                 g[i]=q_t(i) + dT * q_dot(i);
             }
         }
-        printMessage(7,"[eval_g] OK q(t+1): %s\n",IPOPT_Number_toString(g).c_str());
+        printMessage(7,"[eval_g] OK\t\tq(t+1): %s\n",IPOPT_Number_toString(g,CTRL_RAD2DEG).c_str());
 
         return true;
     }
@@ -321,20 +326,36 @@ public:
     bool eval_jac_g(Index n, const Number* x, bool new_x, Index m, Index nele_jac,
                     Index* iRow, Index *jCol, Number* values)
     {
-        printMessage(9,"[eval_jac_g] START %i n\n");
-        computeQuantities(x);
+        printMessage(9,"[eval_jac_g] START\tn: %i m: %i\n",n,m);
+        // printMessage(9,"[eval_jac_g] START\tx: %i\n",IPOPT_Number_toString(x,CTRL_RAD2DEG).c_str());
+        // computeQuantities(x);
 
         if (m>=n) // if there are at least the joint bounds as constraint
         {
-            Index idx=0;
-
-            // Let's populate the diagonal matrix with dT
-            for (Index i=0; i<m; i++)
+            if (values==NULL)
             {
-                iRow[idx]=i;
-                jCol[idx]=i;
-                values[idx]=dT;
-                idx++;
+                Index idx=0;
+                
+                // Let's populate the diagonal matrix with dT
+                for (Index i=0; i<m; i++)
+                {
+                    iRow[idx]=i;
+                    jCol[idx]=i;
+                    idx++;
+                }
+            }
+            else
+            {
+                computeQuantities(x);
+
+                Index idx=0;
+                
+                // Let's populate the diagonal matrix with dT
+                for (Index i=0; i<m; i++)
+                {
+                    values[idx]=dT;
+                    idx++;
+                }
             }
         }
 

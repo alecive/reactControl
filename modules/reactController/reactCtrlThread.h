@@ -70,13 +70,13 @@ protected:
 
     /***************************************************************************/
     // INTERNAL VARIABLES:
-    int    step;            // Flag to know in which step the thread is in
-    bool isTask;            // Flag to know if there is a task to solve
+    int        step;        // Flag to know in which step the thread is in
+    bool     isTask;        // Flag to know if there is a task to solve
+    double trajTime;        // Trajectory time (default 3.0)
     yarp::sig::Vector x_d;  // Vector that stores the new target
     yarp::sig::Vector x_t;  // Current end-effector position
     yarp::sig::Vector x_0;  // Initial end-effector position
     yarp::sig::Matrix H;    // End-effector pose
-
 
     // Driver for "classical" interfaces
     PolyDriver       dd;
@@ -128,7 +128,7 @@ protected:
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & ,
-                    const string &_ , int , bool  );
+                    const string &_ , int , bool , double );
     // INIT
     virtual bool threadInit();
     // RUN
@@ -138,6 +138,9 @@ public:
 
     // Sets the new target
     bool setNewTarget(const yarp::sig::Vector&);
+
+    // Sets the trajectory time 
+    bool setTrajTime(const double &);
 };
 
 #endif
