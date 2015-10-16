@@ -23,13 +23,17 @@
 #include <sstream>
 #include <iomanip>
 
+#include <IpIpoptApplication.hpp>
+
 using namespace yarp::sig;
 using namespace yarp::math;
 
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,
-                                 const string &_part, int _verbosity, bool _autoconnect, double _trajTime) :
+                                 const string &_part, int _verbosity, bool _autoconnect,
+                                 double _trajTime, double _tol) :
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
-                                 verbosity(_verbosity), autoconnect(_autoconnect), trajTime(_trajTime)
+                                 verbosity(_verbosity), autoconnect(_autoconnect),
+                                 trajTime(_trajTime), tol(_tol)
 {
     step = 0;
 
@@ -42,6 +46,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
         part_short="right";
     }
     arm = new iCub::iKin::iCubArm(part_short.c_str());
+    q_0.resize(arm->getDOF(),0.0);
 
     // Block torso links
     for (int i = 0; i < 3; i++)
@@ -76,9 +81,8 @@ bool reactCtrlThread::threadInit()
     if (dd.isValid())
     {
         ok = ok && dd.view(iencs);
-        ok = ok && dd.view(ipos);
-        ok = ok && dd.view(imode);
-        ok = ok && dd.view(iimp);
+        ok = ok && dd.view(ivel);
+        ok = ok && dd.view(imod);
         ok = ok && dd.view(ilim);
     }
     iencs->getAxes(&jnts);
@@ -91,30 +95,54 @@ bool reactCtrlThread::threadInit()
     }
     isTask=true;
 
+    yarp::os::Time::delay(0.2);
+
     return true;
 }
 
 void reactCtrlThread::run()
 {
-    yarp::os::Time::delay(1.0);
     updateArmChain();
     
-    if (isTask)
+    switch (step)
     {
-        Vector x_d(3,0.0);
-        x_d    =x_t;
-        x_d[2]+=0.2;
+        case 0:
+        {
+            Vector x_d(3,0.0);
+            x_d    =x_t;
+            x_d[2]+=0.2;
+            setNewTarget(x_d);
+            break;
+        }
+        case 1:
+        {
+            int exit_code;
+            Vector q_dot = solveIK(&exit_code);
 
-        setNewTarget(x_d);
+            if (exit_code==Ipopt::Solve_Succeeded)
+            {
+                q_0 = q_dot;
+                controlArm(q_dot);
+            }
 
-        solveIK();
-        isTask=false;
+            if (yarp::os::Time::now()>t_d)
+            {
+                step++;
+            }
+            break;
+        }
+        case 2:
+            break;
+        default:
+            yError("[reactCtrlThread] reactCtrlThread should never be here!!! Step: %d",step);
+            yarp::os::Time::delay(2.0);
+            break;
     }
 }
 
-Vector reactCtrlThread::solveIK()
+Vector reactCtrlThread::solveIK(int *_exit_code)
 {
-    slv=new reactIpOpt(*arm->asChain(),1e-4,100,verbosity,false);
+    slv=new reactIpOpt(*arm->asChain(),tol,100,verbosity,false);
     // Next step will be provided iteratively:
     double dT=getRate()/1000.0;
     int exit_code;
@@ -126,15 +154,54 @@ Vector reactCtrlThread::solveIK()
     Vector x_next(3,0.0);
     x_next = x_0 + (x_d-x_0) * (dT/t_d);
     
-    Vector result = slv->solve(x_next,dT,&exit_code) * CTRL_RAD2DEG;
+    Vector result = slv->solve(x_next,q_0,dT,&exit_code) * CTRL_RAD2DEG;
 
     printMessage(0,"x_t:    %s\tdT %g\n",x_t.toString().c_str(),dT);
-    printMessage(0,"x_next: %s\tnorm(x_next-x_t): %g\n",x_next.toString().c_str(),
-                                                      norm(x_next-x_t));
+    printMessage(0,"x_next: %s\n",x_next.toString().c_str());
+    printMessage(0,"norm(x_next-x_t): %g\tnorm(x_d-x_next): %g\n",norm(x_next-x_t),
+                                                                  norm(x_d-x_next));
     printMessage(0,"Result: %s\n",result.toString().c_str());
     delete slv;
 
     return result;
+}
+
+bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
+{   
+    printf("asdfjiafoiaj\n");
+    VectorOf<int> jointsToSet;
+    if (!areJointsHealthyAndSet(jointsToSet,"velocity"))
+    {
+        stopControl();
+        return false;
+    }
+    else
+    {
+        printf("asdfjiafoiaj\n");
+        setCtrlModes(jointsToSet,"velocity");
+    }
+
+    ivel->velocityMove(_vels.data());
+
+    return true;
+}
+
+bool reactCtrlThread::stopControl()
+{
+    return ivel->stop();
+}
+
+bool reactCtrlThread::setTol(const double _tol)
+{
+    return tol=_tol;
+}
+
+bool reactCtrlThread::setTrajTime(const double _traj_time)
+{
+    if (_traj_time>=0.0)
+    {
+        return trajTime=_traj_time;
+    }
 }
 
 bool reactCtrlThread::setNewTarget(const Vector& _x_d)
@@ -142,13 +209,15 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d)
     toggleTask(true);
     if (_x_d.size()==3)
     {
+        q_0.resize(arm->getDOF(),0.0);
         x_0=x_t;
         x_d=_x_d;
         t_0=yarp::os::Time::now();
-        t_d=trajTime;
-        yInfo("[reactCtrlThread] got new target. x_d: %s",x_d.toString().c_str());
-        yInfo("[reactCtrlThread]                 x_0: %s",x_0.toString().c_str());
+        t_d=t_0+trajTime;
+        yInfo("[reactCtrlThread] got new target. x_0: %s",x_0.toString().c_str());
+        yInfo("[reactCtrlThread]                 x_d: %s",x_d.toString().c_str());
         yInfo("[reactCtrlThread]                 t_d: %g",t_d);
+        step = 1;
 
         return true;
     }
@@ -178,6 +247,60 @@ bool reactCtrlThread::alignJointsBounds()
 
     // lim.pop_front();
     // if (slv->probl->index.alignJointsBounds(lim) == 0) return false;
+
+    return true;
+}
+
+bool reactCtrlThread::areJointsHealthyAndSet(VectorOf<int> &jointsToSet,const string &_s)
+{
+    VectorOf<int> modes(encs->size());
+    imod->getControlModes(modes.getFirst());
+
+    for (size_t i=0; i<modes.size(); i++)
+    {
+        if ((modes[i]==VOCAB_CM_HW_FAULT) || (modes[i]==VOCAB_CM_IDLE))
+            return false;
+
+        if (_s=="velocity")
+        {
+            if (modes[i]!=VOCAB_CM_MIXED || modes[i]!=VOCAB_CM_VELOCITY)
+                jointsToSet.push_back(i);
+        }
+        else if (_s=="position")
+        {
+            if (modes[i]!=VOCAB_CM_MIXED || modes[i]!=VOCAB_CM_POSITION)
+                jointsToSet.push_back(i);
+        }
+
+    }
+
+    return true;
+}
+
+bool reactCtrlThread::setCtrlModes(const VectorOf<int> &jointsToSet,const string &_s)
+{
+    if (_s!="position" || _s!="velocity")
+        return false;
+
+    if (jointsToSet.size()==0)
+        return true;
+
+    VectorOf<int> modes;
+    for (size_t i=0; i<jointsToSet.size(); i++)
+    {
+        if (_s=="position")
+        {
+            modes.push_back(VOCAB_CM_POSITION);
+        }
+        else if (_s=="velocity")
+        {
+            modes.push_back(VOCAB_CM_VELOCITY);
+        }
+    }
+
+    imod->setControlModes(jointsToSet.size(),
+                           jointsToSet.getFirst(),
+                           modes.getFirst());
 
     return true;
 }

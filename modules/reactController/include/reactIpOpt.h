@@ -157,8 +157,9 @@ public:
 
     /**
     * Executes the IpOpt algorithm trying to converge on target. 
-    * @param xd is the End-Effector target Pose to be attained. 
-    * @param dt is the time step to use in order to solve the task. 
+    * @param xd        is the End-Effector target Pose to be attained. 
+    * @param q_dot_0   are the initial joint velocities of the chain.
+    * @param dt        is the time step to use in order to solve the task. 
     * @param exit_code stores the exit code (NULL by default). Test 
     *                  for one of this:
     *                   SUCCESS
@@ -176,7 +177,8 @@ public:
     *                   INTERNAL_ERROR
     * @return estimated joint velocities.
     */
-    virtual yarp::sig::Vector solve(yarp::sig::Vector &xd, double &dt, int *exit_code=NULL);
+    virtual yarp::sig::Vector solve(yarp::sig::Vector &xd, yarp::sig::Vector q_dot_0,
+                                    double &dt, int *exit_code);
 
     /**
     * Default destructor.

@@ -19,10 +19,24 @@ class reactController_IDL : public yarp::os::Wire {
 public:
   reactController_IDL();
   /**
-   * Starts the blinking behavior (if it was not started before).
+   * Sets a new 3D Cartesian target
+   * @param _xd Vector that specifies the new target
+   *            (put it between brackets if asking for it through rpc).
    * @return true/false on success/failure.
    */
   virtual bool set_xd(const yarp::sig::Vector& _xd);
+  /**
+   * Sets tolerance.
+   * @param _tol the solver exits if norm(x_d-x)<tol.
+   * @return true/false on success/failure.
+   */
+  virtual bool set_tol(const double _tol);
+  /**
+   * Sets Trajectory Time.
+   * @param _traj_time  the time within which the solver has to solve the global task
+   * @return true/false on success/failure.
+   */
+  virtual bool set_traj_time(const double _traj_time);
   virtual bool read(yarp::os::ConnectionReader& connection);
   virtual std::vector<std::string> help(const std::string& functionName="--all");
 };

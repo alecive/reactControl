@@ -33,16 +33,14 @@
 #include <yarp/dev/PolyDriver.h>
 #include <yarp/dev/CartesianControl.h>
 #include <yarp/dev/Drivers.h>
-#include <yarp/dev/all.h>
 
 #include <iCub/iKin/iKinFwd.h>
-
-#include <gsl/gsl_math.h>
 
 #include <iostream>
 #include <string>
 #include <stdio.h>
 #include <stdarg.h>
+#include <vector>
 
 #include "reactIpOpt.h"
 
@@ -78,16 +76,19 @@ protected:
     yarp::sig::Vector x_d;  // Vector that stores the new target
     yarp::sig::Vector x_t;  // Current end-effector position
     yarp::sig::Vector x_0;  // Initial end-effector position
+
+    yarp::sig::Vector q_0;   // Initial arm configuration
     yarp::sig::Matrix H;    // End-effector pose
+
+    double tol;         // Tolerance. The solver exits if norm(x_d-x)<tol.
 
     // Driver for "classical" interfaces
     PolyDriver       dd;
 
-    // "Classical" interfaces - SLAVE ARM
+    // "Classical" interfaces
     IEncoders            *iencs;
-    IPositionControl2     *ipos;
-    IInteractionMode     *imode;
-    IImpedanceControl     *iimp;
+    IVelocityControl2     *ivel;
+    IControlMode2         *imod;
     IControlLimits        *ilim;
     yarp::sig::Vector     *encs;
     iCub::iKin::iCubArm    *arm;
@@ -111,7 +112,32 @@ protected:
     /**
     * Solves the Inverse Kinematic task
     */
-    yarp::sig::Vector solveIK();
+    yarp::sig::Vector solveIK(int *);
+
+    /**
+    * Sends the computed velocities to the robot
+    */
+    bool controlArm(const yarp::sig::Vector &);
+
+    /**
+    * Sends the computed velocities to the robot
+    */
+    bool stopControl();
+
+    /**
+     * Check the state of each joint to be controlled
+     * @param  jointsToSet vector of integers that defines the joints to be set
+     * @param  _s mode to set. It can be either "position" or "velocity"
+     * @return             true/false if success/failure
+     */
+    bool areJointsHealthyAndSet(yarp::sig::VectorOf<int> &jointsToSet,const string &_s);
+
+    /**
+     * Changes the control modes of the torso to either position or velocity
+     * @param  _s mode to set. It can be either "position" or "velocity"
+     * @return    true/false if success/failure
+     */
+    bool setCtrlModes(const yarp::sig::VectorOf<int> &jointsToSet,const string &_s);
 
     /**
     * Toggles the internal state to the active state
@@ -130,7 +156,7 @@ protected:
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & ,
-                    const string &_ , int , bool , double );
+                    const string &_ , int , bool , double , double);
     // INIT
     virtual bool threadInit();
     // RUN
@@ -141,8 +167,11 @@ public:
     // Sets the new target
     bool setNewTarget(const yarp::sig::Vector&);
 
+    // Sets the tolerance
+    bool setTol(const double );
+
     // Sets the trajectory time 
-    bool setTrajTime(const double &);
+    bool setTrajTime(const double );
 };
 
 #endif

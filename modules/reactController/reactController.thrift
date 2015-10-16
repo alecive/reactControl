@@ -19,8 +19,24 @@ struct Vector {
 service reactController_IDL
 {
   /**
-  * Starts the blinking behavior (if it was not started before).
+  * Sets a new 3D Cartesian target
+  * @param _xd Vector that specifies the new target
+  *            (put it between brackets if asking for it through rpc).
   * @return true/false on success/failure.
   */
   bool set_xd(1:Vector _xd);
+
+  /**
+  * Sets tolerance.
+  * @param _tol the solver exits if norm(x_d-x)<tol.
+  * @return true/false on success/failure.
+  */
+  bool set_tol(1:double _tol);
+
+  /**
+  * Sets Trajectory Time.
+  * @param _traj_time  the time within which the solver has to solve the global task
+  * @return true/false on success/failure.
+  */
+  bool set_traj_time(1:double _traj_time);
 }

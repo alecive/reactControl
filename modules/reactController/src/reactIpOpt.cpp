@@ -148,9 +148,9 @@ protected:
 
 public:
     /************************************************************************/
-    react_NLP(iKinChain &c, yarp::sig::Vector &_xd,
-             double &_dT, iKinLinIneqConstr &_LIC, int _verbosity) :
-             chain(c), dT(_dT), xd(_xd), LIC(_LIC), verbosity(_verbosity)
+    react_NLP(iKinChain &c, yarp::sig::Vector &_xd, yarp::sig::Vector &_q_dot_0,
+             double &_dT, iKinLinIneqConstr &_LIC, int _verbosity) : chain(c),
+             q_dot_0(_q_dot_0), dT(_dT), xd(_xd), LIC(_LIC), verbosity(_verbosity)
     {
         name="react_NLP";
 
@@ -166,7 +166,6 @@ public:
 
         dim=chain.getDOF();
         q_dot.resize(dim,0.0);
-        q_dot_0.resize(dim,0.0);
         q_dot_d.resize(dim,0.0);
 
         cost_func.resize(3,0.0);
@@ -548,9 +547,10 @@ void reactIpOpt::setBoundsInf(const double lower, const double upper)
 
 
 /************************************************************************/
-yarp::sig::Vector reactIpOpt::solve(yarp::sig::Vector &xd, double &dt, int *exit_code)
+yarp::sig::Vector reactIpOpt::solve(yarp::sig::Vector &xd, yarp::sig::Vector q_dot_0,
+                                    double &dt, int *exit_code)
 {
-    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,dt,*pLIC,verbosity);
+    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,*pLIC,verbosity);
     
     nlp->set_scaling(obj_scaling,x_scaling,g_scaling);
     nlp->set_bound_inf(lowerBoundInf,upperBoundInf);

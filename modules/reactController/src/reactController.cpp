@@ -96,6 +96,7 @@ private:
     bool autoconnect;
 
     double trajTime;
+    double      tol;
 
 public:
     reactController()
@@ -112,6 +113,7 @@ public:
         autoconnect = false;
 
         trajTime = 3.0;
+        tol      = 1e-3;
     }
 
     bool set_xd(const yarp::sig::Vector& _xd)
@@ -122,6 +124,16 @@ public:
             return rctCtrlThrd->setNewTarget(_xd);
         }
         return false;
+    }
+
+    bool set_tol(const double _tol)
+    {
+        return rctCtrlThrd->setTol(_tol);
+    }
+
+    bool set_traj_time(const double _traj_time)
+    {
+        return rctCtrlThrd->setTrajTime(_traj_time);
     }
 
     bool configure(ResourceFinder &rf)
@@ -191,13 +203,21 @@ public:
         //****************** rate ******************
             if (rf.check("trajTime"))
             {
-                trajTime = rf.find("trajTime").asInt();
-                yInfo("[reactController] trajTimeThread working at %g ms.",trajTime);
+                trajTime = rf.find("trajTime").asDouble();
+                yInfo("[reactController] trajTime set to %g s.",trajTime);
             }
             else yInfo("[reactController] Could not find trajTime in the config file; using %g as default",trajTime);
 
+        //****************** rate ******************
+            if (rf.check("tol"))
+            {
+                tol = rf.find("tol").asDouble();
+                yInfo("[reactController] tol set to %g m.",tol);
+            }
+            else yInfo("[reactController] Could not find tol in the config file; using %g as default",trajTime);
+
         //************* THREAD *************
-        rctCtrlThrd = new reactCtrlThread(rate, name, robot, part, verbosity, autoconnect, trajTime);
+        rctCtrlThrd = new reactCtrlThread(rate, name, robot, part, verbosity, autoconnect, trajTime, tol);
         bool strt = rctCtrlThrd -> start();
         if (!strt)
         {

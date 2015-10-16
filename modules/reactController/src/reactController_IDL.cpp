@@ -15,6 +15,24 @@ public:
   virtual bool read(yarp::os::ConnectionReader& connection);
 };
 
+class reactController_IDL_set_tol : public yarp::os::Portable {
+public:
+  double _tol;
+  bool _return;
+  void init(const double _tol);
+  virtual bool write(yarp::os::ConnectionWriter& connection);
+  virtual bool read(yarp::os::ConnectionReader& connection);
+};
+
+class reactController_IDL_set_traj_time : public yarp::os::Portable {
+public:
+  double _traj_time;
+  bool _return;
+  void init(const double _traj_time);
+  virtual bool write(yarp::os::ConnectionWriter& connection);
+  virtual bool read(yarp::os::ConnectionReader& connection);
+};
+
 bool reactController_IDL_set_xd::write(yarp::os::ConnectionWriter& connection) {
   yarp::os::idl::WireWriter writer(connection);
   if (!writer.writeListHeader(3)) return false;
@@ -38,6 +56,52 @@ void reactController_IDL_set_xd::init(const yarp::sig::Vector& _xd) {
   this->_xd = _xd;
 }
 
+bool reactController_IDL_set_tol::write(yarp::os::ConnectionWriter& connection) {
+  yarp::os::idl::WireWriter writer(connection);
+  if (!writer.writeListHeader(3)) return false;
+  if (!writer.writeTag("set_tol",1,2)) return false;
+  if (!writer.writeDouble(_tol)) return false;
+  return true;
+}
+
+bool reactController_IDL_set_tol::read(yarp::os::ConnectionReader& connection) {
+  yarp::os::idl::WireReader reader(connection);
+  if (!reader.readListReturn()) return false;
+  if (!reader.readBool(_return)) {
+    reader.fail();
+    return false;
+  }
+  return true;
+}
+
+void reactController_IDL_set_tol::init(const double _tol) {
+  _return = false;
+  this->_tol = _tol;
+}
+
+bool reactController_IDL_set_traj_time::write(yarp::os::ConnectionWriter& connection) {
+  yarp::os::idl::WireWriter writer(connection);
+  if (!writer.writeListHeader(4)) return false;
+  if (!writer.writeTag("set_traj_time",1,3)) return false;
+  if (!writer.writeDouble(_traj_time)) return false;
+  return true;
+}
+
+bool reactController_IDL_set_traj_time::read(yarp::os::ConnectionReader& connection) {
+  yarp::os::idl::WireReader reader(connection);
+  if (!reader.readListReturn()) return false;
+  if (!reader.readBool(_return)) {
+    reader.fail();
+    return false;
+  }
+  return true;
+}
+
+void reactController_IDL_set_traj_time::init(const double _traj_time) {
+  _return = false;
+  this->_traj_time = _traj_time;
+}
+
 reactController_IDL::reactController_IDL() {
   yarp().setOwner(*this);
 }
@@ -47,6 +111,26 @@ bool reactController_IDL::set_xd(const yarp::sig::Vector& _xd) {
   helper.init(_xd);
   if (!yarp().canWrite()) {
     yError("Missing server method '%s'?","bool reactController_IDL::set_xd(const yarp::sig::Vector& _xd)");
+  }
+  bool ok = yarp().write(helper,helper);
+  return ok?helper._return:_return;
+}
+bool reactController_IDL::set_tol(const double _tol) {
+  bool _return = false;
+  reactController_IDL_set_tol helper;
+  helper.init(_tol);
+  if (!yarp().canWrite()) {
+    yError("Missing server method '%s'?","bool reactController_IDL::set_tol(const double _tol)");
+  }
+  bool ok = yarp().write(helper,helper);
+  return ok?helper._return:_return;
+}
+bool reactController_IDL::set_traj_time(const double _traj_time) {
+  bool _return = false;
+  reactController_IDL_set_traj_time helper;
+  helper.init(_traj_time);
+  if (!yarp().canWrite()) {
+    yError("Missing server method '%s'?","bool reactController_IDL::set_traj_time(const double _traj_time)");
   }
   bool ok = yarp().write(helper,helper);
   return ok?helper._return:_return;
@@ -69,6 +153,38 @@ bool reactController_IDL::read(yarp::os::ConnectionReader& connection) {
       }
       bool _return;
       _return = set_xd(_xd);
+      yarp::os::idl::WireWriter writer(reader);
+      if (!writer.isNull()) {
+        if (!writer.writeListHeader(1)) return false;
+        if (!writer.writeBool(_return)) return false;
+      }
+      reader.accept();
+      return true;
+    }
+    if (tag == "set_tol") {
+      double _tol;
+      if (!reader.readDouble(_tol)) {
+        reader.fail();
+        return false;
+      }
+      bool _return;
+      _return = set_tol(_tol);
+      yarp::os::idl::WireWriter writer(reader);
+      if (!writer.isNull()) {
+        if (!writer.writeListHeader(1)) return false;
+        if (!writer.writeBool(_return)) return false;
+      }
+      reader.accept();
+      return true;
+    }
+    if (tag == "set_traj_time") {
+      double _traj_time;
+      if (!reader.readDouble(_traj_time)) {
+        reader.fail();
+        return false;
+      }
+      bool _return;
+      _return = set_traj_time(_traj_time);
       yarp::os::idl::WireWriter writer(reader);
       if (!writer.isNull()) {
         if (!writer.writeListHeader(1)) return false;
@@ -112,12 +228,28 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
   if(showAll) {
     helpString.push_back("*** Available commands:");
     helpString.push_back("set_xd");
+    helpString.push_back("set_tol");
+    helpString.push_back("set_traj_time");
     helpString.push_back("help");
   }
   else {
     if (functionName=="set_xd") {
       helpString.push_back("bool set_xd(const yarp::sig::Vector& _xd) ");
-      helpString.push_back("Starts the blinking behavior (if it was not started before). ");
+      helpString.push_back("Sets a new 3D Cartesian target ");
+      helpString.push_back("@param _xd Vector that specifies the new target ");
+      helpString.push_back("           (put it between brackets if asking for it through rpc). ");
+      helpString.push_back("@return true/false on success/failure. ");
+    }
+    if (functionName=="set_tol") {
+      helpString.push_back("bool set_tol(const double _tol) ");
+      helpString.push_back("Sets tolerance. ");
+      helpString.push_back("@param _tol the solver exits if norm(x_d-x)<tol. ");
+      helpString.push_back("@return true/false on success/failure. ");
+    }
+    if (functionName=="set_traj_time") {
+      helpString.push_back("bool set_traj_time(const double _traj_time) ");
+      helpString.push_back("Sets Trajectory Time. ");
+      helpString.push_back("@param _traj_time  the time within which the solver has to solve the global task ");
       helpString.push_back("@return true/false on success/failure. ");
     }
     if (functionName=="help") {
