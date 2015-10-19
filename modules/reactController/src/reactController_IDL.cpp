@@ -42,6 +42,15 @@ public:
   virtual bool read(yarp::os::ConnectionReader& connection);
 };
 
+class reactController_IDL_set_verbosity : public yarp::os::Portable {
+public:
+  int16_t _verbosity;
+  bool _return;
+  void init(const int16_t _verbosity);
+  virtual bool write(yarp::os::ConnectionWriter& connection);
+  virtual bool read(yarp::os::ConnectionReader& connection);
+};
+
 bool reactController_IDL_set_xd::write(yarp::os::ConnectionWriter& connection) {
   yarp::os::idl::WireWriter writer(connection);
   if (!writer.writeListHeader(3)) return false;
@@ -134,6 +143,29 @@ void reactController_IDL_set_traj_time::init(const double _traj_time) {
   this->_traj_time = _traj_time;
 }
 
+bool reactController_IDL_set_verbosity::write(yarp::os::ConnectionWriter& connection) {
+  yarp::os::idl::WireWriter writer(connection);
+  if (!writer.writeListHeader(3)) return false;
+  if (!writer.writeTag("set_verbosity",1,2)) return false;
+  if (!writer.writeI16(_verbosity)) return false;
+  return true;
+}
+
+bool reactController_IDL_set_verbosity::read(yarp::os::ConnectionReader& connection) {
+  yarp::os::idl::WireReader reader(connection);
+  if (!reader.readListReturn()) return false;
+  if (!reader.readBool(_return)) {
+    reader.fail();
+    return false;
+  }
+  return true;
+}
+
+void reactController_IDL_set_verbosity::init(const int16_t _verbosity) {
+  _return = false;
+  this->_verbosity = _verbosity;
+}
+
 reactController_IDL::reactController_IDL() {
   yarp().setOwner(*this);
 }
@@ -173,6 +205,16 @@ bool reactController_IDL::set_traj_time(const double _traj_time) {
   helper.init(_traj_time);
   if (!yarp().canWrite()) {
     yError("Missing server method '%s'?","bool reactController_IDL::set_traj_time(const double _traj_time)");
+  }
+  bool ok = yarp().write(helper,helper);
+  return ok?helper._return:_return;
+}
+bool reactController_IDL::set_verbosity(const int16_t _verbosity) {
+  bool _return = false;
+  reactController_IDL_set_verbosity helper;
+  helper.init(_verbosity);
+  if (!yarp().canWrite()) {
+    yError("Missing server method '%s'?","bool reactController_IDL::set_verbosity(const int16_t _verbosity)");
   }
   bool ok = yarp().write(helper,helper);
   return ok?helper._return:_return;
@@ -251,6 +293,22 @@ bool reactController_IDL::read(yarp::os::ConnectionReader& connection) {
       reader.accept();
       return true;
     }
+    if (tag == "set_verbosity") {
+      int16_t _verbosity;
+      if (!reader.readI16(_verbosity)) {
+        reader.fail();
+        return false;
+      }
+      bool _return;
+      _return = set_verbosity(_verbosity);
+      yarp::os::idl::WireWriter writer(reader);
+      if (!writer.isNull()) {
+        if (!writer.writeListHeader(1)) return false;
+        if (!writer.writeBool(_return)) return false;
+      }
+      reader.accept();
+      return true;
+    }
     if (tag == "help") {
       std::string functionName;
       if (!reader.readString(functionName)) {
@@ -289,6 +347,7 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
     helpString.push_back("set_relative_xd");
     helpString.push_back("set_tol");
     helpString.push_back("set_traj_time");
+    helpString.push_back("set_verbosity");
     helpString.push_back("help");
   }
   else {
@@ -318,6 +377,12 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
       helpString.push_back("bool set_traj_time(const double _traj_time) ");
       helpString.push_back("Sets Trajectory Time. ");
       helpString.push_back("@param _traj_time  the time within which the solver has to solve the global task ");
+      helpString.push_back("@return true/false on success/failure. ");
+    }
+    if (functionName=="set_verbosity") {
+      helpString.push_back("bool set_verbosity(const int16_t _verbosity) ");
+      helpString.push_back("Sets verbosity. ");
+      helpString.push_back("@param _verbosity  the verbosity of the controller ");
       helpString.push_back("@return true/false on success/failure. ");
     }
     if (functionName=="help") {

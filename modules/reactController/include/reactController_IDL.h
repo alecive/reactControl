@@ -46,6 +46,12 @@ public:
    * @return true/false on success/failure.
    */
   virtual bool set_traj_time(const double _traj_time);
+  /**
+   * Sets verbosity.
+   * @param _verbosity  the verbosity of the controller
+   * @return true/false on success/failure.
+   */
+  virtual bool set_verbosity(const int16_t _verbosity);
   virtual bool read(yarp::os::ConnectionReader& connection);
   virtual std::vector<std::string> help(const std::string& functionName="--all");
 };

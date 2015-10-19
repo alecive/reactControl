@@ -118,8 +118,13 @@ void reactCtrlThread::run()
         {
             int exit_code;
             Vector q_dot = solveIK(exit_code);
-            if (exit_code==Ipopt::Solve_Succeeded)
+            if (exit_code==Ipopt::Solve_Succeeded ||
+                exit_code==Ipopt::Maximum_CpuTime_Exceeded)
             {
+                if (exit_code==Ipopt::Maximum_CpuTime_Exceeded)
+                {
+                    yWarning("Ipopt cpu time was higher than the rate of the thread!");
+                }
                 q_0 = q_dot;
                 if (!controlArm(q_dot))
                 {
@@ -152,6 +157,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     double dT=getRate()/1000.0;
     double t_t=yarp::os::Time::now();
     int    exit_code=-1;
+    double cpu_time=0.0;
 
     if (t_t>=t_d)
     {
@@ -159,18 +165,19 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     }
 
     Vector x_next(3,0.0);
-    x_next = x_t + (x_d-x_t) * (dT/(t_d-t_t));
+    // x_next = x_t + (x_d-x_t) * (dT/(t_d-t_t));
+    x_next = x_0 + (x_d-x_0) * ((t_t+dT-t_0)/(t_d-t_0));
     
-    Vector result = slv->solve(x_next,q_0,dT,&exit_code) * CTRL_RAD2DEG;
+    Vector result = slv->solve(x_next,q_0,dT,&cpu_time,&exit_code) * CTRL_RAD2DEG;
 
     printf("\n");
     printMessage(0,"t_d %g t_t %g\n",t_d-t_0, t_t-t_0);
-    printMessage(0,"x_d     %s\n",x_d.toString(3,3).c_str());
+    printMessage(0,"x_d:    %s\n",x_d.toString(3,3).c_str());
     printMessage(0,"x_t:    %s\n",x_t.toString(3,3).c_str());
     printMessage(0,"x_next: %s\tdT %g\n",x_next.toString(3,3).c_str(),dT);
     printMessage(0,"norm(x_next-x_t): %g\tnorm(x_d-x_next): %g\n",norm(x_next-x_t),
                                                                   norm(x_d-x_next));
-    printMessage(0,"Result: %s\n",result.toString().c_str());
+    printMessage(0,"Result: %s\tTime spent: %g\n",result.toString().c_str(),cpu_time);
     _exit_code=exit_code;
     delete slv;
 
@@ -204,6 +211,7 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
 
 bool reactCtrlThread::stopControl()
 {
+    yInfo("[reactController] Stopping control.\n");
     return ivel->stop();
 }
 
@@ -218,6 +226,11 @@ bool reactCtrlThread::setTrajTime(const double _traj_time)
     {
         return trajTime=_traj_time;
     }
+}
+
+bool reactCtrlThread::setTrajTime(const int _verbosity)
+{
+    return _verbosity>=0?verbosity=_verbosity:verbosity=0;
 }
 
 bool reactCtrlThread::setNewTarget(const Vector& _x_d)

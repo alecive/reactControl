@@ -257,8 +257,8 @@ public:
             // x_l[i]=chain(i).getMin();
             // x_u[i]=chain(i).getMax();
             // Let's put these limits to the velocities for the time being
-            x_l[i]=-20.0*CTRL_DEG2RAD;
-            x_u[i]=+20.0*CTRL_DEG2RAD;
+            x_l[i]=-30.0*CTRL_DEG2RAD;
+            x_u[i]=+30.0*CTRL_DEG2RAD;
         }
         
         for (Index i=0; i<m; i++)
@@ -442,6 +442,8 @@ reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
     CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","none");
     // CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","first-order");
     CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test_print_all","yes");
+    // CAST_IPOPTAPP(App)->Options()->SetStringValue("print_timing_statistics","yes");
+    // CAST_IPOPTAPP(App)->Options()->SetStringValue("print_options_documentation","no");
 
     getBoundsInf(lowerBoundInf,upperBoundInf);
 
@@ -548,17 +550,21 @@ void reactIpOpt::setBoundsInf(const double lower, const double upper)
 
 /************************************************************************/
 yarp::sig::Vector reactIpOpt::solve(yarp::sig::Vector &xd, yarp::sig::Vector q_dot_0,
-                                    double &dt, int *exit_code)
+                                    double &dt, double *cpu_time,int *exit_code)
 {
     SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,*pLIC,verbosity);
     
     nlp->set_scaling(obj_scaling,x_scaling,g_scaling);
     nlp->set_bound_inf(lowerBoundInf,upperBoundInf);
 
+    CAST_IPOPTAPP(App)->Options()->SetNumericValue("max_cpu_time",dt);
     ApplicationReturnStatus status=CAST_IPOPTAPP(App)->OptimizeTNLP(GetRawPtr(nlp));
 
     if (exit_code!=NULL)
         *exit_code=status;
+
+    // if (cpu_time!=NULL)
+    //     *cpu_time=
 
     return nlp->get_q_dot_d();
 }

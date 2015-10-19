@@ -49,4 +49,11 @@ service reactController_IDL
   * @return true/false on success/failure.
   */
   bool set_traj_time(1:double _traj_time);
+
+  /**
+  * Sets verbosity.
+  * @param _verbosity  the verbosity of the controller
+  * @return true/false on success/failure.
+  */
+  bool set_verbosity(1:i16 _verbosity);  
 }

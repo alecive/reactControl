@@ -93,7 +93,7 @@ private:
 
     int verbosity,rate,record;
 
-    bool autoconnect;
+    bool autoConnect;
 
     double trajTime;
     double      tol;
@@ -103,24 +103,22 @@ public:
     {
         rctCtrlThrd=0;
 
-        robot     = "icubSim";
-        name      = "reactController";
-        part      = "left_arm";
+        robot =         "icubSim";
+        name  = "reactController";
+        part  =        "left_arm";
 
-        verbosity =    0;    // verbosity
-        rate      =   20;    // rate of the reactCtrlThread
-
-        autoconnect = false;
-
-        trajTime = 3.0;
-        tol      = 1e-3;
+        verbosity   =     0;    // verbosity
+        rate        =  20.0;    // rate of the reactCtrlThread
+        autoConnect = false;
+        trajTime    =   3.0;
+        tol         =  1e-3;
     }
 
     bool set_xd(const yarp::sig::Vector& _xd)
     {
         if (_xd.size()>=3)
         {
-            yInfo("[reactController] received new x_d: %s", _xd.toString().c_str());
+            yInfo("[reactController] received new x_d: %s", _xd.toString(3,3).c_str());
             return rctCtrlThrd->setNewTarget(_xd);
         }
         return false;
@@ -130,7 +128,7 @@ public:
     {
         if (_rel_xd.size()>=3)
         {
-            yInfo("[reactController] received new relative x_d: %s", _rel_xd.toString().c_str());
+            yInfo("[reactController] received new relative x_d: %s", _rel_xd.toString(3,3).c_str());
             return rctCtrlThrd->setNewRelativeTarget(_rel_xd);
         }
         return false;
@@ -146,15 +144,20 @@ public:
         return rctCtrlThrd->setTrajTime(_traj_time);
     }
 
+    bool set_verbosity(const int _verbosity)
+    {
+        return rctCtrlThrd->setTrajTime(_verbosity);
+    }
+
     bool configure(ResourceFinder &rf)
     {
         //******************************************************
         //********************** CONFIGS ***********************
-            autoconnect    = rf.check("autoconnect");
+            autoConnect    = rf.check("autoConnect");
 
-            if (autoconnect)
+            if (autoConnect)
             {
-                yInfo("[reactController] Autoconnect flag set to ON");
+                yInfo("[reactController] autoConnect flag set to ON");
             }
         //******************* NAME ******************
             if (rf.check("name"))
@@ -227,7 +230,7 @@ public:
             else yInfo("[reactController] Could not find tol in the config file; using %g as default",trajTime);
 
         //************* THREAD *************
-        rctCtrlThrd = new reactCtrlThread(rate, name, robot, part, verbosity, autoconnect, trajTime, tol);
+        rctCtrlThrd = new reactCtrlThread(rate, name, robot, part, verbosity, autoConnect, trajTime, tol);
         bool strt = rctCtrlThrd -> start();
         if (!strt)
         {

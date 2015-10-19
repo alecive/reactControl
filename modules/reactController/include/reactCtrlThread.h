@@ -175,6 +175,9 @@ public:
 
     // Sets the trajectory time 
     bool setTrajTime(const double );
+
+    // Sets the verbosity
+    bool setTrajTime(const int _verbosity);
 };
 
 #endif
