@@ -63,8 +63,8 @@ protected:
     string part;
     // Which arm to use (short version): either left or right
     string part_short;
-    // Flag used to know if the doubleTouch should automatically connect to the skinManager
-    bool autoconnect;
+    // Flag to know if the torso shall be used or not
+    bool useTorso;
 
     /***************************************************************************/
     // INTERNAL VARIABLES:
@@ -83,20 +83,28 @@ protected:
     double tol;         // Tolerance. The solver exits if norm(x_d-x)<tol.
 
     // Driver for "classical" interfaces
-    PolyDriver       dd;
+    PolyDriver       ddA;
+    PolyDriver       ddT;
 
-    // "Classical" interfaces
-    IEncoders            *iencs;
-    IVelocityControl2     *ivel;
-    IControlMode2         *imod;
-    IControlLimits        *ilim;
-    yarp::sig::Vector     *encs;
-    iCub::iKin::iCubArm    *arm;
-    int jnts;
+    // "Classical" interfaces for the arm
+    IEncoders            *iencsA;
+    IVelocityControl2     *ivelA;
+    IControlMode2         *imodA;
+    IControlLimits        *ilimA;
+    yarp::sig::Vector     *encsA;
+    iCub::iKin::iCubArm     *arm;
+    int jntsA;
+
+    // "Classical" interfaces for the torso
+    IEncoders            *iencsT;
+    IVelocityControl2     *ivelT;
+    IControlMode2         *imodT;
+    IControlLimits        *ilimT;
+    yarp::sig::Vector     *encsT;
+    int jntsT;
 
     // IPOPT STUFF
     reactIpOpt    *slv;    // solver
-    yarp::sig::Vector solution;
     int nDOF;
 
     /**
@@ -127,17 +135,21 @@ protected:
     /**
      * Check the state of each joint to be controlled
      * @param  jointsToSet vector of integers that defines the joints to be set
+     * @param  _p part to set. It can be either "torso" or "arm"
      * @param  _s mode to set. It can be either "position" or "velocity"
      * @return             true/false if success/failure
      */
-    bool areJointsHealthyAndSet(yarp::sig::VectorOf<int> &jointsToSet,const string &_s);
+    bool areJointsHealthyAndSet(yarp::sig::VectorOf<int> &jointsToSet,
+                                const string &_p, const string &_s);
 
     /**
      * Changes the control modes of the torso to either position or velocity
+     * @param  _p part to set. It can be either "torso" or "arm"
      * @param  _s mode to set. It can be either "position" or "velocity"
      * @return    true/false if success/failure
      */
-    bool setCtrlModes(const yarp::sig::VectorOf<int> &jointsToSet,const string &_s);
+    bool setCtrlModes(const yarp::sig::VectorOf<int> &jointsToSet,
+                      const string &_p, const string &_s);
 
     /**
     * Toggles the internal state to the active state

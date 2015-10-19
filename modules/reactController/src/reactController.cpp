@@ -93,7 +93,7 @@ private:
 
     int verbosity,rate,record;
 
-    bool autoConnect;
+    bool disableTorso;
 
     double trajTime;
     double      tol;
@@ -107,11 +107,11 @@ public:
         name  = "reactController";
         part  =        "left_arm";
 
-        verbosity   =     0;    // verbosity
-        rate        =  20.0;    // rate of the reactCtrlThread
-        autoConnect = false;
-        trajTime    =   3.0;
-        tol         =  1e-3;
+        verbosity    =     0;    // verbosity
+        rate         =  20.0;    // rate of the reactCtrlThread
+        disableTorso = false;
+        trajTime     =   3.0;
+        tol          =  1e-3;
     }
 
     bool set_xd(const yarp::sig::Vector& _xd)
@@ -153,11 +153,11 @@ public:
     {
         //******************************************************
         //********************** CONFIGS ***********************
-            autoConnect    = rf.check("autoConnect");
+            disableTorso = rf.check("disableTorso");
 
-            if (autoConnect)
+            if (disableTorso)
             {
-                yInfo("[reactController] autoConnect flag set to ON");
+                yInfo("[reactController] disableTorso flag set to ON");
             }
         //******************* NAME ******************
             if (rf.check("name"))
@@ -230,7 +230,7 @@ public:
             else yInfo("[reactController] Could not find tol in the config file; using %g as default",trajTime);
 
         //************* THREAD *************
-        rctCtrlThrd = new reactCtrlThread(rate, name, robot, part, verbosity, autoConnect, trajTime, tol);
+        rctCtrlThrd = new reactCtrlThread(rate, name, robot, part, verbosity, disableTorso, trajTime, tol);
         bool strt = rctCtrlThrd -> start();
         if (!strt)
         {

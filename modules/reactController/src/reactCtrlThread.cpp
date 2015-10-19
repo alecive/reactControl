@@ -29,10 +29,10 @@ using namespace yarp::sig;
 using namespace yarp::math;
 
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,
-                                 const string &_part, int _verbosity, bool _autoconnect,
+                                 const string &_part, int _verbosity, bool _disableTorso,
                                  double _trajTime, double _tol) :
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
-                                 verbosity(_verbosity), autoconnect(_autoconnect),
+                                 verbosity(_verbosity), useTorso(!_disableTorso),
                                  trajTime(_trajTime), tol(_tol)
 {
     step = 0;
@@ -51,7 +51,14 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
     // Block torso links
     for (int i = 0; i < 3; i++)
     {
-        arm->blockLink(i,0.0);
+        if (useTorso)
+        {
+            arm->releaseLink(i);
+        }
+        else
+        {
+            arm->blockLink(i,0.0);
+        }
     }
 
     slv=NULL;
@@ -64,35 +71,66 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
 
 bool reactCtrlThread::threadInit()
 {
-    yarp::os::Property Opt;
-    Opt.put("robot",  robot.c_str());
-    Opt.put("part",   part.c_str());
-    Opt.put("device", "remote_controlboard");
-    Opt.put("remote",("/"+robot+"/"+part).c_str());
-    Opt.put("local", ("/"+name +"/"+part).c_str());
-    if (!dd.open(Opt))
+    yarp::os::Property OptA;
+    OptA.put("robot",  robot.c_str());
+    OptA.put("part",   part.c_str());
+    OptA.put("device", "remote_controlboard");
+    OptA.put("remote",("/"+robot+"/"+part).c_str());
+    OptA.put("local", ("/"+name +"/"+part).c_str());
+    if (!ddA.open(OptA))
     {
         yError("[reactController] Could not open %s PolyDriver!",part.c_str());
         return false;
     }
 
-    bool ok = 1;
+    bool okA = 1;
     
-    if (dd.isValid())
+    if (ddA.isValid())
     {
-        ok = ok && dd.view(iencs);
-        ok = ok && dd.view(ivel);
-        ok = ok && dd.view(imod);
-        ok = ok && dd.view(ilim);
+        okA = okA && ddA.view(iencsA);
+        okA = okA && ddA.view(ivelA);
+        okA = okA && ddA.view(imodA);
+        okA = okA && ddA.view(ilimA);
     }
-    iencs->getAxes(&jnts);
-    encs = new yarp::sig::Vector(jnts,0.0);
+    iencsA->getAxes(&jntsA);
+    encsA = new yarp::sig::Vector(jntsA,0.0);
 
-    if (!ok)
+    if (!okA)
     {
         yError("[reactController] Problems acquiring %s interfaces!!!!",part.c_str());
         return false;
     }
+
+    yarp::os::Property OptT;
+    OptT.put("robot",  robot.c_str());
+    OptT.put("part",   "torso");
+    OptT.put("device", "remote_controlboard");
+    OptT.put("remote",("/"+robot+"/torso").c_str());
+    OptT.put("local", ("/"+name +"/torso").c_str());
+    if (!ddT.open(OptT))
+    {
+        yError("[reactController] Could not open torso PolyDriver!");
+        return false;
+    }
+
+    bool okT = 1;
+    
+    if (ddT.isValid())
+    {
+        okT = okT && ddT.view(iencsT);
+        okT = okT && ddT.view(ivelT);
+        okT = okT && ddT.view(imodT);
+        okT = okT && ddT.view(ilimT);
+    }
+    iencsT->getAxes(&jntsT);
+    encsT = new yarp::sig::Vector(jntsT,0.0);
+
+    if (!okT)
+    {
+        yError("[reactController] Problems acquiring torso interfaces!!!!");
+        return false;
+    }
+
     isTask=true;
 
     yarp::os::Time::delay(0.2);
@@ -116,8 +154,19 @@ void reactCtrlThread::run()
         }
         case 1:
         {
+            if (yarp::os::Time::now()>t_d)
+            {
+                if (!stopControl())
+                {
+                    yError("Unable to properly stop control of the arm!");
+                }
+                step++;
+                break;
+            }
+
             int exit_code;
             Vector q_dot = solveIK(exit_code);
+
             if (exit_code==Ipopt::Solve_Succeeded ||
                 exit_code==Ipopt::Maximum_CpuTime_Exceeded)
             {
@@ -130,12 +179,6 @@ void reactCtrlThread::run()
                 {
                     yError("I am not able to properly control the arm!");
                 }
-            }
-
-            if (yarp::os::Time::now()>t_d)
-            {
-                stopControl();
-                step++;
             }
             break;
         }
@@ -177,7 +220,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     printMessage(0,"x_next: %s\tdT %g\n",x_next.toString(3,3).c_str(),dT);
     printMessage(0,"norm(x_next-x_t): %g\tnorm(x_d-x_next): %g\n",norm(x_next-x_t),
                                                                   norm(x_d-x_next));
-    printMessage(0,"Result: %s\tTime spent: %g\n",result.toString().c_str(),cpu_time);
+    printMessage(0,"Result: %s\tTime spent: %g\n",result.toString(3,3).c_str(),cpu_time);
     _exit_code=exit_code;
     delete slv;
 
@@ -186,8 +229,10 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
 
 bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
 {   
-    VectorOf<int> jointsToSet;
-    if (!areJointsHealthyAndSet(jointsToSet,"velocity"))
+    VectorOf<int> jointsToSetA;
+    VectorOf<int> jointsToSetT;
+    if (!areJointsHealthyAndSet(jointsToSetA,"arm","velocity") || 
+        !areJointsHealthyAndSet(jointsToSetT,"torso","velocity"))
     {
         yWarning("[reactController] Stopping control because joints are not healthy!");
         stopControl();
@@ -195,16 +240,29 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
     }
     else
     {
-        if (!setCtrlModes(jointsToSet,"velocity"))
+        if (!setCtrlModes(jointsToSetA,"arm","velocity") || 
+            !setCtrlModes(jointsToSetT,"torso","velocity"))
         {
             yError("[reactController] I am not able to set the joints to velocity mode!");
             return false;
-        }
-        
+        }   
     }
 
     printMessage(1,"Moving the robot with velocities: %s\n",_vels.toString(3,3).c_str());
-    ivel->velocityMove(_vels.data());
+    if (useTorso)
+    {
+        Vector velsT(3,0.0);
+        velsT[0] = _vels[2];
+        velsT[1] = _vels[1];
+        velsT[2] = _vels[0];
+        
+        ivelT->velocityMove(velsT.data());
+        ivelA->velocityMove(_vels.subVector(3,9).data());
+    }
+    else
+    {
+        ivelA->velocityMove(_vels.data());
+    }
 
     return true;
 }
@@ -212,7 +270,12 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
 bool reactCtrlThread::stopControl()
 {
     yInfo("[reactController] Stopping control.\n");
-    return ivel->stop();
+    if (useTorso)
+    {
+        return ivelA->stop() && ivelT->stop();
+    }
+
+    return ivelA->stop();
 }
 
 bool reactCtrlThread::setTol(const double _tol)
@@ -261,11 +324,29 @@ bool reactCtrlThread::setNewRelativeTarget(const Vector& _rel_x_d)
 
 void reactCtrlThread::updateArmChain()
 {
-    iencs->getEncoders(encs->data());
-    Vector q=encs->subVector(0,9);
+    iencsA->getEncoders(encsA->data());
+    Vector qA=encsA->subVector(0,6);
+
+    if (useTorso)
+    {
+        iencsT->getEncoders(encsT->data());
+        Vector qT(3,0.0);
+        qT[0]=(*encsT)[2];
+        qT[1]=(*encsT)[1];
+        qT[2]=(*encsT)[0];
+
+        Vector q(10,0.0);
+        q.setSubvector(0,qT);
+        q.setSubvector(3,qA);
+        arm->setAng(q*CTRL_DEG2RAD);
+    }
+    else
+    {
+        arm->setAng(qA*CTRL_DEG2RAD);
+    }
+
     // printMessage(0,"[update_arm_chain] Q: %s\n",q.toString().c_str());
-    arm->setAng(q*CTRL_DEG2RAD);
-    Vector qq=arm->getAng();
+
     // printMessage(0,"[update_arm_chain]. Q: %s\n",(qq*CTRL_RAD2DEG).toString().c_str());
     H=arm->getH();
     x_t=H.subcol(0,3,3);
@@ -286,10 +367,22 @@ bool reactCtrlThread::alignJointsBounds()
     return true;
 }
 
-bool reactCtrlThread::areJointsHealthyAndSet(VectorOf<int> &jointsToSet,const string &_s)
+bool reactCtrlThread::areJointsHealthyAndSet(VectorOf<int> &jointsToSet,
+                                             const string &_p, const string &_s)
 {
-    VectorOf<int> modes(encs->size());
-    imod->getControlModes(modes.getFirst());
+    VectorOf<int> modes;
+    if (_p=="arm")
+    {
+        modes=encsA->size();
+        imodA->getControlModes(modes.getFirst());
+    }
+    else if (_p=="torso")
+    {
+        modes=encsT->size();
+        imodT->getControlModes(modes.getFirst());
+    }
+    else
+        return false;
 
     for (size_t i=0; i<modes.size(); i++)
     {
@@ -312,7 +405,8 @@ bool reactCtrlThread::areJointsHealthyAndSet(VectorOf<int> &jointsToSet,const st
     return true;
 }
 
-bool reactCtrlThread::setCtrlModes(const VectorOf<int> &jointsToSet,const string &_s)
+bool reactCtrlThread::setCtrlModes(const VectorOf<int> &jointsToSet,
+                                   const string &_p, const string &_s)
 {
     if (_s!="position" && _s!="velocity")
         return false;
@@ -333,9 +427,20 @@ bool reactCtrlThread::setCtrlModes(const VectorOf<int> &jointsToSet,const string
         }
     }
 
-    imod->setControlModes(jointsToSet.size(),
-                           jointsToSet.getFirst(),
-                           modes.getFirst());
+    if (_p=="arm")
+    {
+        imodA->setControlModes(jointsToSet.size(),
+                               jointsToSet.getFirst(),
+                               modes.getFirst());
+    }
+    else if (_p=="torso")
+    {
+        imodT->setControlModes(jointsToSet.size(),
+                               jointsToSet.getFirst(),
+                               modes.getFirst());
+    }
+    else
+        return false;
 
     return true;
 }
@@ -359,13 +464,15 @@ int reactCtrlThread::printMessage(const int l, const char *f, ...) const
 void reactCtrlThread::threadRelease()
 {
     yInfo("Returning to position mode..");
-        delete encs; encs = NULL;
-        delete  arm;  arm = NULL;
+        delete encsA; encsA = NULL;
+        delete encsT; encsT = NULL;
+        delete   arm;   arm = NULL;
 
     yInfo("Closing ports..");
 
     yInfo("Closing controllers..");
-        dd.close();
+        ddA.close();
+        ddT.close();
 
     yInfo("Closing solver..");
 }
