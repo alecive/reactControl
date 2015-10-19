@@ -131,6 +131,12 @@ bool reactCtrlThread::threadInit()
         return false;
     }
 
+    if (!alignJointsBounds())
+    {
+        yError("[reactController] alignJointsBounds failed!!!\n");
+        return false;
+    }
+
     isTask=true;
 
     yarp::os::Time::delay(0.2);
@@ -208,7 +214,10 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     }
 
     Vector x_next(3,0.0);
+    // First test: the next point will be given w.r.t. the current one
     // x_next = x_t + (x_d-x_t) * (dT/(t_d-t_t));
+    // Second test: the next point will be agnostic of the current 
+    // configuration
     x_next = x_0 + (x_d-x_0) * ((t_t+dT-t_0)/(t_d-t_0));
     
     Vector result = slv->solve(x_next,q_0,dT,&cpu_time,&exit_code) * CTRL_RAD2DEG;
@@ -345,24 +354,17 @@ void reactCtrlThread::updateArmChain()
         arm->setAng(qA*CTRL_DEG2RAD);
     }
 
-    // printMessage(0,"[update_arm_chain] Q: %s\n",q.toString().c_str());
-
-    // printMessage(0,"[update_arm_chain]. Q: %s\n",(qq*CTRL_RAD2DEG).toString().c_str());
     H=arm->getH();
     x_t=H.subcol(0,3,3);
 }
 
 bool reactCtrlThread::alignJointsBounds()
 {
-    // deque<IControlLimits*> lim;
-    // lim.push_back(ilimS);
-    // lim.push_back(ilimM);
+    deque<IControlLimits*> lim;
+    lim.push_back(ilimT);
+    lim.push_back(ilimA);
 
-    // if (testLimb->       alignJointsBounds(lim) == 0) return false;
-    // if (slv->probl->limb.alignJointsBounds(lim) == 0) return false;
-
-    // lim.pop_front();
-    // if (slv->probl->index.alignJointsBounds(lim) == 0) return false;
+    if (arm->alignJointsBounds(lim) == 0) return false;
 
     return true;
 }
