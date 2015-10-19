@@ -113,6 +113,9 @@ protected:
             q_t = chain.getAng();
             cost_func=xd -(x0+dT*J_cst*q_dot);
             grad_cost_func=2*cost_func*(-dT*J_cst);
+
+            if (LIC.isActive())
+                linC=LIC.getC()*q_t;
         }
         printMessage(9,"[computeQuantities] OK x: %s\n",IPOPT_Number_toString(x,CTRL_RAD2DEG).c_str());
     }
@@ -268,6 +271,11 @@ public:
                 g_l[i]=chain(i).getMin();
                 g_u[i]=chain(i).getMax();
             }
+            if (i>=dim)
+            {
+                g_l[i]=LIC.getlB()[i-dim];
+                g_u[i]=LIC.getuB()[i-dim];
+            }
         }
         
         printMessage(7,"[get_bounds_info]   n: %i m: %i\n",n,m);
@@ -314,6 +322,10 @@ public:
             if (i<dim)
             {
                 g[i]=q_t(i) + dT * q_dot(i);
+            }
+            if (i>=dim)
+            {
+                g[i]=linC[i-dim];
             }
         }
         printMessage(7,"[eval_g] OK\t\tq(t+1): %s\n",IPOPT_Number_toString(g,CTRL_RAD2DEG).c_str());
