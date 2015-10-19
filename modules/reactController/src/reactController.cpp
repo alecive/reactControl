@@ -126,6 +126,16 @@ public:
         return false;
     }
 
+    bool set_relative_xd(const yarp::sig::Vector& _rel_xd)
+    {
+        if (_rel_xd.size()>=3)
+        {
+            yInfo("[reactController] received new relative x_d: %s", _rel_xd.toString().c_str());
+            return rctCtrlThrd->setNewRelativeTarget(_rel_xd);
+        }
+        return false;
+    }
+
     bool set_tol(const double _tol)
     {
         return rctCtrlThrd->setTol(_tol);

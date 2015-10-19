@@ -112,7 +112,7 @@ protected:
     /**
     * Solves the Inverse Kinematic task
     */
-    yarp::sig::Vector solveIK(int *);
+    yarp::sig::Vector solveIK(int &);
 
     /**
     * Sends the computed velocities to the robot
@@ -166,6 +166,9 @@ public:
 
     // Sets the new target
     bool setNewTarget(const yarp::sig::Vector&);
+
+    // Sets the new target relative to the current position
+    bool setNewRelativeTarget(const yarp::sig::Vector&);
 
     // Sets the tolerance
     bool setTol(const double );

@@ -108,25 +108,28 @@ void reactCtrlThread::run()
     {
         case 0:
         {
-            Vector x_d(3,0.0);
-            x_d    =x_t;
-            x_d[2]+=0.2;
-            setNewTarget(x_d);
+            // Vector x_d(3,0.0);
+            // x_d    =x_t;
+            // x_d[2]+=0.2;
+            // setNewTarget(x_d);
             break;
         }
         case 1:
         {
             int exit_code;
-            Vector q_dot = solveIK(&exit_code);
-
+            Vector q_dot = solveIK(exit_code);
             if (exit_code==Ipopt::Solve_Succeeded)
             {
                 q_0 = q_dot;
-                controlArm(q_dot);
+                if (!controlArm(q_dot))
+                {
+                    yError("I am not able to properly control the arm!");
+                }
             }
 
             if (yarp::os::Time::now()>t_d)
             {
+                stopControl();
                 step++;
             }
             break;
@@ -140,27 +143,35 @@ void reactCtrlThread::run()
     }
 }
 
-Vector reactCtrlThread::solveIK(int *_exit_code)
+Vector reactCtrlThread::solveIK(int &_exit_code)
 {
     slv=new reactIpOpt(*arm->asChain(),tol,100,verbosity,false);
-    // Next step will be provided iteratively:
+    // Next step will be provided iteratively.
+    // The equation is x(t_next) = x_t + (x_d - x_t) * (t_next - t_now/T-t_now)
+    //                              s.t. t_next = t_now + dT
     double dT=getRate()/1000.0;
-    int exit_code;
-    
-    // Vector x_next = x_t + (x_d - x_t)/norm(x_d -x_t) * dT ;
+    double t_t=yarp::os::Time::now();
+    int    exit_code=-1;
 
-    // The equation is x_next = x_0 + (x_d - x_0) * (t/T)
-    // 
+    if (t_t>=t_d)
+    {
+        return Vector(3,0.0);
+    }
+
     Vector x_next(3,0.0);
-    x_next = x_0 + (x_d-x_0) * (dT/t_d);
+    x_next = x_t + (x_d-x_t) * (dT/(t_d-t_t));
     
     Vector result = slv->solve(x_next,q_0,dT,&exit_code) * CTRL_RAD2DEG;
 
-    printMessage(0,"x_t:    %s\tdT %g\n",x_t.toString().c_str(),dT);
-    printMessage(0,"x_next: %s\n",x_next.toString().c_str());
+    printf("\n");
+    printMessage(0,"t_d %g t_t %g\n",t_d-t_0, t_t-t_0);
+    printMessage(0,"x_d     %s\n",x_d.toString(3,3).c_str());
+    printMessage(0,"x_t:    %s\n",x_t.toString(3,3).c_str());
+    printMessage(0,"x_next: %s\tdT %g\n",x_next.toString(3,3).c_str(),dT);
     printMessage(0,"norm(x_next-x_t): %g\tnorm(x_d-x_next): %g\n",norm(x_next-x_t),
                                                                   norm(x_d-x_next));
     printMessage(0,"Result: %s\n",result.toString().c_str());
+    _exit_code=exit_code;
     delete slv;
 
     return result;
@@ -168,19 +179,24 @@ Vector reactCtrlThread::solveIK(int *_exit_code)
 
 bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
 {   
-    printf("asdfjiafoiaj\n");
     VectorOf<int> jointsToSet;
     if (!areJointsHealthyAndSet(jointsToSet,"velocity"))
     {
+        yWarning("[reactController] Stopping control because joints are not healthy!");
         stopControl();
         return false;
     }
     else
     {
-        printf("asdfjiafoiaj\n");
-        setCtrlModes(jointsToSet,"velocity");
+        if (!setCtrlModes(jointsToSet,"velocity"))
+        {
+            yError("[reactController] I am not able to set the joints to velocity mode!");
+            return false;
+        }
+        
     }
 
+    printMessage(1,"Moving the robot with velocities: %s\n",_vels.toString(3,3).c_str());
     ivel->velocityMove(_vels.data());
 
     return true;
@@ -214,14 +230,20 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d)
         x_d=_x_d;
         t_0=yarp::os::Time::now();
         t_d=t_0+trajTime;
-        yInfo("[reactCtrlThread] got new target. x_0: %s",x_0.toString().c_str());
-        yInfo("[reactCtrlThread]                 x_d: %s",x_d.toString().c_str());
+        yInfo("[reactCtrlThread] got new target. x_0: %s",x_0.toString(3,3).c_str());
+        yInfo("[reactCtrlThread]                 x_d: %s",x_d.toString(3,3).c_str());
         yInfo("[reactCtrlThread]                 t_d: %g",t_d);
         step = 1;
 
         return true;
     }
     return false;
+}
+
+bool reactCtrlThread::setNewRelativeTarget(const Vector& _rel_x_d)
+{
+    Vector x_d = x_t + _rel_x_d;
+    return setNewTarget(x_d);
 }
 
 void reactCtrlThread::updateArmChain()
@@ -279,7 +301,7 @@ bool reactCtrlThread::areJointsHealthyAndSet(VectorOf<int> &jointsToSet,const st
 
 bool reactCtrlThread::setCtrlModes(const VectorOf<int> &jointsToSet,const string &_s)
 {
-    if (_s!="position" || _s!="velocity")
+    if (_s!="position" && _s!="velocity")
         return false;
 
     if (jointsToSet.size()==0)

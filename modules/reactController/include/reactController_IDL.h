@@ -26,6 +26,15 @@ public:
    */
   virtual bool set_xd(const yarp::sig::Vector& _xd);
   /**
+   * Sets a new 3D Cartesian target relative to the current end-effector configuration
+   * @param _rel_xd Vector that specifies the new target relative to the current
+   *                end-effector configuration -- e.g. (0.0 0.0 0.05) should move
+   *                the end effector 5cm up
+   *                (put it between brackets if asking for it through rpc).
+   * @return true/false on success/failure.
+   */
+  virtual bool set_relative_xd(const yarp::sig::Vector& _rel_xd);
+  /**
    * Sets tolerance.
    * @param _tol the solver exits if norm(x_d-x)<tol.
    * @return true/false on success/failure.

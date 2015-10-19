@@ -15,6 +15,15 @@ public:
   virtual bool read(yarp::os::ConnectionReader& connection);
 };
 
+class reactController_IDL_set_relative_xd : public yarp::os::Portable {
+public:
+  yarp::sig::Vector _rel_xd;
+  bool _return;
+  void init(const yarp::sig::Vector& _rel_xd);
+  virtual bool write(yarp::os::ConnectionWriter& connection);
+  virtual bool read(yarp::os::ConnectionReader& connection);
+};
+
 class reactController_IDL_set_tol : public yarp::os::Portable {
 public:
   double _tol;
@@ -54,6 +63,29 @@ bool reactController_IDL_set_xd::read(yarp::os::ConnectionReader& connection) {
 void reactController_IDL_set_xd::init(const yarp::sig::Vector& _xd) {
   _return = false;
   this->_xd = _xd;
+}
+
+bool reactController_IDL_set_relative_xd::write(yarp::os::ConnectionWriter& connection) {
+  yarp::os::idl::WireWriter writer(connection);
+  if (!writer.writeListHeader(4)) return false;
+  if (!writer.writeTag("set_relative_xd",1,3)) return false;
+  if (!writer.write(_rel_xd)) return false;
+  return true;
+}
+
+bool reactController_IDL_set_relative_xd::read(yarp::os::ConnectionReader& connection) {
+  yarp::os::idl::WireReader reader(connection);
+  if (!reader.readListReturn()) return false;
+  if (!reader.readBool(_return)) {
+    reader.fail();
+    return false;
+  }
+  return true;
+}
+
+void reactController_IDL_set_relative_xd::init(const yarp::sig::Vector& _rel_xd) {
+  _return = false;
+  this->_rel_xd = _rel_xd;
 }
 
 bool reactController_IDL_set_tol::write(yarp::os::ConnectionWriter& connection) {
@@ -115,6 +147,16 @@ bool reactController_IDL::set_xd(const yarp::sig::Vector& _xd) {
   bool ok = yarp().write(helper,helper);
   return ok?helper._return:_return;
 }
+bool reactController_IDL::set_relative_xd(const yarp::sig::Vector& _rel_xd) {
+  bool _return = false;
+  reactController_IDL_set_relative_xd helper;
+  helper.init(_rel_xd);
+  if (!yarp().canWrite()) {
+    yError("Missing server method '%s'?","bool reactController_IDL::set_relative_xd(const yarp::sig::Vector& _rel_xd)");
+  }
+  bool ok = yarp().write(helper,helper);
+  return ok?helper._return:_return;
+}
 bool reactController_IDL::set_tol(const double _tol) {
   bool _return = false;
   reactController_IDL_set_tol helper;
@@ -153,6 +195,22 @@ bool reactController_IDL::read(yarp::os::ConnectionReader& connection) {
       }
       bool _return;
       _return = set_xd(_xd);
+      yarp::os::idl::WireWriter writer(reader);
+      if (!writer.isNull()) {
+        if (!writer.writeListHeader(1)) return false;
+        if (!writer.writeBool(_return)) return false;
+      }
+      reader.accept();
+      return true;
+    }
+    if (tag == "set_relative_xd") {
+      yarp::sig::Vector _rel_xd;
+      if (!reader.read(_rel_xd)) {
+        reader.fail();
+        return false;
+      }
+      bool _return;
+      _return = set_relative_xd(_rel_xd);
       yarp::os::idl::WireWriter writer(reader);
       if (!writer.isNull()) {
         if (!writer.writeListHeader(1)) return false;
@@ -228,6 +286,7 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
   if(showAll) {
     helpString.push_back("*** Available commands:");
     helpString.push_back("set_xd");
+    helpString.push_back("set_relative_xd");
     helpString.push_back("set_tol");
     helpString.push_back("set_traj_time");
     helpString.push_back("help");
@@ -238,6 +297,15 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
       helpString.push_back("Sets a new 3D Cartesian target ");
       helpString.push_back("@param _xd Vector that specifies the new target ");
       helpString.push_back("           (put it between brackets if asking for it through rpc). ");
+      helpString.push_back("@return true/false on success/failure. ");
+    }
+    if (functionName=="set_relative_xd") {
+      helpString.push_back("bool set_relative_xd(const yarp::sig::Vector& _rel_xd) ");
+      helpString.push_back("Sets a new 3D Cartesian target relative to the current end-effector configuration ");
+      helpString.push_back("@param _rel_xd Vector that specifies the new target relative to the current ");
+      helpString.push_back("               end-effector configuration -- e.g. (0.0 0.0 0.05) should move ");
+      helpString.push_back("               the end effector 5cm up ");
+      helpString.push_back("               (put it between brackets if asking for it through rpc). ");
       helpString.push_back("@return true/false on success/failure. ");
     }
     if (functionName=="set_tol") {
