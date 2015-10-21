@@ -20,7 +20,7 @@
 #include "particleThread.h"
 
 using namespace yarp::sig;
-using namespace yarp::math;
+using namespace yarp::os;
 using namespace iCub::ctrl;
 
 particleThread::particleThread(int _rate, const string &_name, int _verbosity) :
@@ -30,6 +30,9 @@ particleThread::particleThread(int _rate, const string &_name, int _verbosity) :
     integrator=new Integrator(_rate/1000.0,Vector(3,0.0));
 
     isRunning=false;
+    vel.resize(3,0.0);
+    x_0.resize(3,0.0);
+    x_t.resize(3,0.0);
 }
 
 bool particleThread::threadInit()
@@ -39,7 +42,31 @@ bool particleThread::threadInit()
 
 void particleThread::run()
 {
+    LockGuard lg(mutex);
+    if (isRunning)
+    {
+        x_t=integrator->integrate(vel);
+    }
+}
 
+bool particleThread::setupNewParticle(const yarp::sig::Vector &_x_0, const yarp::sig::Vector &_vel)
+{
+    LockGuard lg(mutex);
+    if (_x_0.size()>=3 && _vel.size()>3)
+    {
+        isRunning=true;
+        x_0=_x_0;
+        vel=_vel;
+        integrator->reset(x_0);
+    }
+    
+    return false;
+}
+
+yarp::sig::Vector particleThread::getParticle()
+{
+    LockGuard lg(mutex);
+    return x_t;
 }
 
 int particleThread::printMessage(const int l, const char *f, ...) const
@@ -60,6 +87,7 @@ int particleThread::printMessage(const int l, const char *f, ...) const
 
 void particleThread::threadRelease()
 {
+    delete integrator; integrator = NULL;
 }
 
 // empty line to make gcc happy

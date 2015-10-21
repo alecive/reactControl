@@ -22,9 +22,9 @@
 
 #include <yarp/os/Time.h>
 #include <yarp/os/RateThread.h>
-#include <yarp/os/BufferedPort.h>
 #include <yarp/os/Log.h>
 #include <yarp/os/Mutex.h>
+#include <yarp/os/LockGuard.h>
 
 #include <yarp/sig/Vector.h>
 #include <yarp/sig/Matrix.h>
@@ -47,8 +47,15 @@ protected:
     int verbosity;
     // Name of the module (to change port names accordingly):
     string name;
+
+    /***************************************************************************/
+    // INTERNAL VARIABLES:
     // Integrator to get the particle trajectory
     iCub::ctrl::Integrator *integrator;
+
+    yarp::sig::Vector x_0;
+    yarp::sig::Vector vel;
+    yarp::sig::Vector x_t;
 
     // Mutex for handling things correctly
     yarp::os::Mutex mutex;
@@ -73,7 +80,16 @@ public:
     // RELEASE
     virtual void threadRelease();
 
+    /**
+     * initializes the integrator to a new particle to track
+     */
     bool setupNewParticle(const yarp::sig::Vector &, const yarp::sig::Vector &);
+
+    /**
+     * gets the current state of the particle
+     * @return [description]
+     */
+    yarp::sig::Vector getParticle();
 };
 
 #endif
