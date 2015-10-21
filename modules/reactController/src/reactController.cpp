@@ -72,7 +72,6 @@ None for now.
 
 using namespace yarp;
 using namespace yarp::os;
-using namespace yarp::sig;
 using namespace yarp::math;
 
 using namespace std;
@@ -158,6 +157,20 @@ public:
     bool set_verbosity(const int32_t _verbosity)
     {
         return rctCtrlThrd->setVerbosity(_verbosity);
+    }
+
+    bool setup_new_particle(const yarp::sig::Vector& _x_0_vel)
+    {
+        yarp::sig::Vector _x_0 = _x_0_vel.subVector(0,2);
+        yarp::sig::Vector _vel = _x_0_vel.subVector(3,5);
+        printf("Setting up new particle.. x_0: %s\tvel: %s\n",
+                _x_0.toString(3,3).c_str(), _vel.toString(3,3).c_str());
+        return prtclThrd->setupNewParticle(_x_0,_vel);
+    }
+
+    yarp::sig::Vector get_particle()
+    {
+        return prtclThrd->getParticle();
     }
 
     bool configure(ResourceFinder &rf)
@@ -255,7 +268,24 @@ public:
         {
             delete rctCtrlThrd;
             rctCtrlThrd = 0;
-            yError("reactCtrlThread wasn't instantiated!!");
+            yError("[reactController] reactCtrlThread wasn't instantiated!!");
+            return false;
+        }
+
+        prtclThrd = new particleThread(rate, name, verbosity);
+        if (!prtclThrd->start())
+        {
+            delete prtclThrd;
+            prtclThrd=0;
+
+            if (rctCtrlThrd)
+            {
+                rctCtrlThrd->stop();
+                delete rctCtrlThrd;
+                rctCtrlThrd=0;
+            }
+
+            yError("[reactController] particleThread wasn't instantiated!!");
             return false;
         }
 

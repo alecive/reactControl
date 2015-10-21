@@ -62,4 +62,11 @@ service reactController_IDL
   * @return the verbosity of the controller
   */
   i32 get_verbosity();  
+
+  /**
+  * Setups a new particle with a given initial position and constant velocity
+  **/
+  bool setup_new_particle(1:Vector _x_0_vel);
+
+  Vector get_particle();
 }

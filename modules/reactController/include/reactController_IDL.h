@@ -57,6 +57,11 @@ public:
    * @return the verbosity of the controller
    */
   virtual int32_t get_verbosity();
+  /**
+   * Setups a new particle with a given initial position and constant velocity
+   */
+  virtual bool setup_new_particle(const yarp::sig::Vector& _x_0_vel);
+  virtual yarp::sig::Vector get_particle();
   virtual bool read(yarp::os::ConnectionReader& connection);
   virtual std::vector<std::string> help(const std::string& functionName="--all");
 };

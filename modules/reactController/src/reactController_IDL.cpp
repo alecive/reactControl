@@ -59,6 +59,23 @@ public:
   virtual bool read(yarp::os::ConnectionReader& connection);
 };
 
+class reactController_IDL_setup_new_particle : public yarp::os::Portable {
+public:
+  yarp::sig::Vector _x_0_vel;
+  bool _return;
+  void init(const yarp::sig::Vector& _x_0_vel);
+  virtual bool write(yarp::os::ConnectionWriter& connection);
+  virtual bool read(yarp::os::ConnectionReader& connection);
+};
+
+class reactController_IDL_get_particle : public yarp::os::Portable {
+public:
+  yarp::sig::Vector _return;
+  void init();
+  virtual bool write(yarp::os::ConnectionWriter& connection);
+  virtual bool read(yarp::os::ConnectionReader& connection);
+};
+
 bool reactController_IDL_set_xd::write(yarp::os::ConnectionWriter& connection) {
   yarp::os::idl::WireWriter writer(connection);
   if (!writer.writeListHeader(3)) return false;
@@ -195,6 +212,49 @@ void reactController_IDL_get_verbosity::init() {
   _return = 0;
 }
 
+bool reactController_IDL_setup_new_particle::write(yarp::os::ConnectionWriter& connection) {
+  yarp::os::idl::WireWriter writer(connection);
+  if (!writer.writeListHeader(4)) return false;
+  if (!writer.writeTag("setup_new_particle",1,3)) return false;
+  if (!writer.write(_x_0_vel)) return false;
+  return true;
+}
+
+bool reactController_IDL_setup_new_particle::read(yarp::os::ConnectionReader& connection) {
+  yarp::os::idl::WireReader reader(connection);
+  if (!reader.readListReturn()) return false;
+  if (!reader.readBool(_return)) {
+    reader.fail();
+    return false;
+  }
+  return true;
+}
+
+void reactController_IDL_setup_new_particle::init(const yarp::sig::Vector& _x_0_vel) {
+  _return = false;
+  this->_x_0_vel = _x_0_vel;
+}
+
+bool reactController_IDL_get_particle::write(yarp::os::ConnectionWriter& connection) {
+  yarp::os::idl::WireWriter writer(connection);
+  if (!writer.writeListHeader(2)) return false;
+  if (!writer.writeTag("get_particle",1,2)) return false;
+  return true;
+}
+
+bool reactController_IDL_get_particle::read(yarp::os::ConnectionReader& connection) {
+  yarp::os::idl::WireReader reader(connection);
+  if (!reader.readListReturn()) return false;
+  if (!reader.read(_return)) {
+    reader.fail();
+    return false;
+  }
+  return true;
+}
+
+void reactController_IDL_get_particle::init() {
+}
+
 reactController_IDL::reactController_IDL() {
   yarp().setOwner(*this);
 }
@@ -254,6 +314,26 @@ int32_t reactController_IDL::get_verbosity() {
   helper.init();
   if (!yarp().canWrite()) {
     yError("Missing server method '%s'?","int32_t reactController_IDL::get_verbosity()");
+  }
+  bool ok = yarp().write(helper,helper);
+  return ok?helper._return:_return;
+}
+bool reactController_IDL::setup_new_particle(const yarp::sig::Vector& _x_0_vel) {
+  bool _return = false;
+  reactController_IDL_setup_new_particle helper;
+  helper.init(_x_0_vel);
+  if (!yarp().canWrite()) {
+    yError("Missing server method '%s'?","bool reactController_IDL::setup_new_particle(const yarp::sig::Vector& _x_0_vel)");
+  }
+  bool ok = yarp().write(helper,helper);
+  return ok?helper._return:_return;
+}
+yarp::sig::Vector reactController_IDL::get_particle() {
+  yarp::sig::Vector _return;
+  reactController_IDL_get_particle helper;
+  helper.init();
+  if (!yarp().canWrite()) {
+    yError("Missing server method '%s'?","yarp::sig::Vector reactController_IDL::get_particle()");
   }
   bool ok = yarp().write(helper,helper);
   return ok?helper._return:_return;
@@ -359,6 +439,33 @@ bool reactController_IDL::read(yarp::os::ConnectionReader& connection) {
       reader.accept();
       return true;
     }
+    if (tag == "setup_new_particle") {
+      yarp::sig::Vector _x_0_vel;
+      if (!reader.read(_x_0_vel)) {
+        reader.fail();
+        return false;
+      }
+      bool _return;
+      _return = setup_new_particle(_x_0_vel);
+      yarp::os::idl::WireWriter writer(reader);
+      if (!writer.isNull()) {
+        if (!writer.writeListHeader(1)) return false;
+        if (!writer.writeBool(_return)) return false;
+      }
+      reader.accept();
+      return true;
+    }
+    if (tag == "get_particle") {
+      yarp::sig::Vector _return;
+      _return = get_particle();
+      yarp::os::idl::WireWriter writer(reader);
+      if (!writer.isNull()) {
+        if (!writer.writeListHeader(1)) return false;
+        if (!writer.write(_return)) return false;
+      }
+      reader.accept();
+      return true;
+    }
     if (tag == "help") {
       std::string functionName;
       if (!reader.readString(functionName)) {
@@ -399,6 +506,8 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
     helpString.push_back("set_traj_time");
     helpString.push_back("set_verbosity");
     helpString.push_back("get_verbosity");
+    helpString.push_back("setup_new_particle");
+    helpString.push_back("get_particle");
     helpString.push_back("help");
   }
   else {
@@ -440,6 +549,13 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
       helpString.push_back("int32_t get_verbosity() ");
       helpString.push_back("Gets verbosity. ");
       helpString.push_back("@return the verbosity of the controller ");
+    }
+    if (functionName=="setup_new_particle") {
+      helpString.push_back("bool setup_new_particle(const yarp::sig::Vector& _x_0_vel) ");
+      helpString.push_back("Setups a new particle with a given initial position and constant velocity ");
+    }
+    if (functionName=="get_particle") {
+      helpString.push_back("yarp::sig::Vector get_particle() ");
     }
     if (functionName=="help") {
       helpString.push_back("std::vector<std::string> help(const std::string& functionName=\"--all\")");

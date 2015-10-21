@@ -52,12 +52,13 @@ void particleThread::run()
 bool particleThread::setupNewParticle(const yarp::sig::Vector &_x_0, const yarp::sig::Vector &_vel)
 {
     LockGuard lg(mutex);
-    if (_x_0.size()>=3 && _vel.size()>3)
+    if (_x_0.size()>=3 && _vel.size()>=3)
     {
         isRunning=true;
         x_0=_x_0;
         vel=_vel;
         integrator->reset(x_0);
+        return true;
     }
     
     return false;
