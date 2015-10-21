@@ -30,12 +30,13 @@ using namespace yarp::math;
 
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,
                                  const string &_part, int _verbosity, bool _disableTorso,
-                                 double _trajTime, double _tol) :
+                                 double _trajSpeed, double _tol, particleThread *_pT) :
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
                                  verbosity(_verbosity), useTorso(!_disableTorso),
-                                 trajTime(_trajTime), tol(_tol)
+                                 trajSpeed(_trajSpeed), tol(_tol)
 {
-    step = 0;
+    prtclThrd=_pT;
+    step=0;
 
     if (part=="left_arm")
     {
@@ -62,10 +63,10 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
     }
 
     slv=NULL;
-    isTask=false;
     x_d.resize(3,0.0);
     x_t.resize(3,0.0);
     x_0.resize(3,0.0);
+    vel.resize(3,0.0);
     H.resize(4,4);
 }
 
@@ -137,8 +138,6 @@ bool reactCtrlThread::threadInit()
         return false;
     }
 
-    isTask=true;
-
     yarp::os::Time::delay(0.2);
 
     return true;
@@ -147,7 +146,6 @@ bool reactCtrlThread::threadInit()
 void reactCtrlThread::run()
 {
     updateArmChain();
-    
     switch (step)
     {
         case 0:
@@ -160,7 +158,8 @@ void reactCtrlThread::run()
         }
         case 1:
         {
-            if (yarp::os::Time::now()>t_d)
+            // if (yarp::os::Time::now()>t_d)
+            if (norm(x_t-x_0) > norm(x_d-x_0))
             {
                 if (!stopControl())
                 {
@@ -209,17 +208,19 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     int    exit_code=-1;
     double cpu_time=0.0;
 
-    if (t_t>=t_d)
-    {
-        return Vector(3,0.0);
-    }
+    // if (t_t>=t_d)
+    // {
+    //     return Vector(3,0.0);
+    // }
 
     Vector x_next(3,0.0);
     // First test: the next point will be given w.r.t. the current one
     // x_next = x_t + (x_d-x_t) * (dT/(t_d-t_t));
     // Second test: the next point will be agnostic of the current 
     // configuration
-    x_next = x_0 + (x_d-x_0) * ((t_t+dT-t_0)/(t_d-t_0));
+    // x_next = x_0 + (x_d-x_0) * ((t_t+dT-t_0)/(t_d-t_0));
+    // Third solution: use the particleThread
+    x_next = prtclThrd->getParticle();
     
     Vector result = slv->solve(x_next,q_0,dT,&cpu_time,&exit_code) * CTRL_RAD2DEG;
 
@@ -290,14 +291,28 @@ bool reactCtrlThread::stopControl()
 
 bool reactCtrlThread::setTol(const double _tol)
 {
-    return tol=_tol;
+    if (_tol>=0.0)
+    {
+        return tol=_tol;
+    }
 }
 
 bool reactCtrlThread::setTrajTime(const double _traj_time)
 {
+    yWarning("[reactController] trajTime is deprecated! Use trajSpeed instead.");
+    return false;
+    
     if (_traj_time>=0.0)
     {
         return trajTime=_traj_time;
+    }
+}
+
+bool reactCtrlThread::setTrajSpeed(const double _traj_speed)
+{
+    if (_traj_speed>=0.0)
+    {
+        return trajSpeed=_traj_speed;
     }
 }
 
@@ -308,20 +323,23 @@ bool reactCtrlThread::setVerbosity(const int _verbosity)
 
 bool reactCtrlThread::setNewTarget(const Vector& _x_d)
 {
-    toggleTask(true);
     if (_x_d.size()==3)
     {
         q_0.resize(arm->getDOF(),0.0);
         x_0=x_t;
         x_d=_x_d;
         t_0=yarp::os::Time::now();
-        t_d=t_0+trajTime;
-        yInfo("[reactCtrlThread] got new target. x_0: %s",x_0.toString(3,3).c_str());
-        yInfo("[reactCtrlThread]                 x_d: %s",x_d.toString(3,3).c_str());
-        yInfo("[reactCtrlThread]                 t_d: %g",t_d);
-        step = 1;
+        vel=trajSpeed * (x_d-x_0) / norm(x_d-x_0);
 
-        return true;
+        if (prtclThrd->setupNewParticle(x_0,vel))
+        {
+            yInfo("[reactCtrlThread] got new target: x_0: %s",x_0.toString(3,3).c_str());
+            yInfo("[reactCtrlThread]                 x_d: %s",x_d.toString(3,3).c_str());
+            yInfo("[reactCtrlThread]                 vel: %s",vel.toString(3,3).c_str());
+            step = 1;
+
+            return true;
+        }
     }
     return false;
 }

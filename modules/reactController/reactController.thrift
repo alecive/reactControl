@@ -44,11 +44,11 @@ service reactController_IDL
   bool set_tol(1:double _tol);
 
   /**
-  * Sets Trajectory Time.
-  * @param _traj_time  the time within which the solver has to solve the global task
+  * Sets Trajectory Speed.
+  * @param _traj_speed  the speed of the trajectory
   * @return true/false on success/failure.
   */
-  bool set_traj_time(1:double _traj_time);
+  bool set_traj_speed(1:double _traj_speed);
 
   /**
   * Sets verbosity.
@@ -65,8 +65,16 @@ service reactController_IDL
 
   /**
   * Setups a new particle with a given initial position and constant velocity
+  * @param _x_0_vel 6D Vector that specifies the new initial position and the
+  *                 velocity. It has not been splitted into two separate vectors
+  *                 because to my knowledge it is not possible
+  *                 (put it between brackets if asking for it through rpc).
+  * @return true/false on success/failure.
   **/
   bool setup_new_particle(1:Vector _x_0_vel);
 
+  /**
+  * Gets the particle state
+  **/
   Vector get_particle();
 }

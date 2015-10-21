@@ -88,18 +88,19 @@ private:
     particleThread    *prtclThrd;
     RpcServer            rpcSrvr;
 
-    string robot;
-    string name;
-    string part;
+    string robot;       // Name of the robot
+    string  name;       // Name of the module
+    string  part;       // Part to use
 
-    int verbosity;
-    int rate;
-    int prtclRate;
+    int     verbosity;  // Verbosity level
+    int   rctCtrlRate;  // rate of the reactCtrlThread
+    int     prtclRate;  // rate of the particleThread
 
-    bool disableTorso;
+    bool disableTorso;  // flag to know if the torso has to be used or not
 
-    double trajTime;
-    double      tol;
+    double   trajTime;  // trajectory time (deprecated)
+    double  trajSpeed;  // trajectory speed
+    double        tol;  // tolerance of the end-effector error to solve the task
 
 public:
     reactController()
@@ -111,11 +112,12 @@ public:
         name  = "reactController";
         part  =        "left_arm";
 
-        verbosity    =     0;    // verbosity
-        rate         =    20;    // rate of the reactCtrlThread
-        prtclRate    =    10;    // rate of the particleThread
+        verbosity    =     0;
+        rctCtrlRate  =    20;    
+        prtclRate    =    10;
         disableTorso = false;
         trajTime     =   3.0;
+        trajSpeed    =   0.1;
         tol          =  1e-3;
     }
 
@@ -123,6 +125,7 @@ public:
     {
         if (_xd.size()>=3)
         {
+            yInfo("");
             yInfo("[reactController] received new x_d: %s", _xd.toString(3,3).c_str());
             return rctCtrlThrd->setNewTarget(_xd);
         }
@@ -133,6 +136,7 @@ public:
     {
         if (_rel_xd.size()>=3)
         {
+            yInfo("");
             yInfo("[reactController] received new relative x_d: %s", _rel_xd.toString(3,3).c_str());
             return rctCtrlThrd->setNewRelativeTarget(_rel_xd);
         }
@@ -144,9 +148,9 @@ public:
         return rctCtrlThrd->setTol(_tol);
     }
 
-    bool set_traj_time(const double _traj_time)
+    bool set_traj_speed(const double _traj_speed)
     {
-        return rctCtrlThrd->setTrajTime(_traj_time);
+        return rctCtrlThrd->setTrajSpeed(_traj_speed);
     }
 
     int get_verbosity()
@@ -229,13 +233,13 @@ public:
             }
             else yInfo("[reactController] Could not find verbosity option in the config file; using %i as default",verbosity);
 
-        //****************** rate ******************
-            if (rf.check("rate"))
+        //****************** rctCtrlRate ******************
+            if (rf.check("rctCtrlRate"))
             {
-                rate = rf.find("rate").asInt();
-                yInfo("[reactController] rateThread working at %i ms.",rate);
+                rctCtrlRate = rf.find("rctCtrlRate").asInt();
+                yInfo("[reactController] rctCTrlThread working at %i ms.",rctCtrlRate);
             }
-            else yInfo("[reactController] Could not find rate in the config file; using %i as default",rate);
+            else yInfo("[reactController] Could not find rctCtrlRate in the config file; using %i as default",rctCtrlRate);
 
         //****************** prtclRate ******************
             if (rf.check("prtclRate"))
@@ -245,13 +249,13 @@ public:
             }
             else yInfo("[reactController] Could not find prtclRate in the config file; using %i as default",prtclRate);
 
-        //****************** trajTime ******************
-            if (rf.check("trajTime"))
+        //****************** trajSpeed ******************
+            if (rf.check("trajSpeed"))
             {
-                trajTime = rf.find("trajTime").asDouble();
-                yInfo("[reactController] trajTime set to %g s.",trajTime);
+                trajSpeed = rf.find("trajSpeed").asDouble();
+                yInfo("[reactController] trajSpeed set to %g s.",trajSpeed);
             }
-            else yInfo("[reactController] Could not find trajTime in the config file; using %g as default",trajTime);
+            else yInfo("[reactController] Could not find trajSpeed in the config file; using %g as default",trajSpeed);
 
         //****************** tol ******************
             if (rf.check("tol"))
@@ -259,33 +263,35 @@ public:
                 tol = rf.find("tol").asDouble();
                 yInfo("[reactController] tol set to %g m.",tol);
             }
-            else yInfo("[reactController] Could not find tol in the config file; using %g as default",trajTime);
+            else yInfo("[reactController] Could not find tol in the config file; using %g as default",tol);
 
         //************* THREAD *************
-        rctCtrlThrd = new reactCtrlThread(rate, name, robot, part, verbosity, disableTorso, trajTime, tol);
-        bool strt = rctCtrlThrd->start();
-        if (!strt)
-        {
-            delete rctCtrlThrd;
-            rctCtrlThrd = 0;
-            yError("[reactController] reactCtrlThread wasn't instantiated!!");
-            return false;
-        }
-
-        prtclThrd = new particleThread(rate, name, verbosity);
+        prtclThrd = new particleThread(prtclRate, name, verbosity);
         if (!prtclThrd->start())
         {
             delete prtclThrd;
             prtclThrd=0;
 
-            if (rctCtrlThrd)
+            yError("[reactController] particleThread wasn't instantiated!!");
+            return false;
+        }
+
+        rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
+                                          disableTorso, trajSpeed, tol, prtclThrd);
+        bool strt = rctCtrlThrd->start();
+        if (!strt)
+        {
+            delete rctCtrlThrd;
+            rctCtrlThrd = 0;
+
+            if (prtclThrd)
             {
-                rctCtrlThrd->stop();
-                delete rctCtrlThrd;
-                rctCtrlThrd=0;
+                prtclThrd->stop();
+                delete prtclThrd;
+                prtclThrd=0;
             }
 
-            yError("[reactController] particleThread wasn't instantiated!!");
+            yError("[reactController] reactCtrlThread wasn't instantiated!!");
             return false;
         }
 

@@ -41,11 +41,11 @@ public:
    */
   virtual bool set_tol(const double _tol);
   /**
-   * Sets Trajectory Time.
-   * @param _traj_time  the time within which the solver has to solve the global task
+   * Sets Trajectory Speed.
+   * @param _traj_speed  the speed of the trajectory
    * @return true/false on success/failure.
    */
-  virtual bool set_traj_time(const double _traj_time);
+  virtual bool set_traj_speed(const double _traj_speed);
   /**
    * Sets verbosity.
    * @param _verbosity  the verbosity of the controller
@@ -59,8 +59,16 @@ public:
   virtual int32_t get_verbosity();
   /**
    * Setups a new particle with a given initial position and constant velocity
+   * @param _x_0_vel 6D Vector that specifies the new initial position and the
+   *                 velocity. It has not been splitted into two separate vectors
+   *                 because to my knowledge it is not possible
+   *                 (put it between brackets if asking for it through rpc).
+   * @return true/false on success/failure.
    */
   virtual bool setup_new_particle(const yarp::sig::Vector& _x_0_vel);
+  /**
+   * Gets the particle state
+   */
   virtual yarp::sig::Vector get_particle();
   virtual bool read(yarp::os::ConnectionReader& connection);
   virtual std::vector<std::string> help(const std::string& functionName="--all");

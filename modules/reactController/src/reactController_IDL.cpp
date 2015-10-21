@@ -33,11 +33,11 @@ public:
   virtual bool read(yarp::os::ConnectionReader& connection);
 };
 
-class reactController_IDL_set_traj_time : public yarp::os::Portable {
+class reactController_IDL_set_traj_speed : public yarp::os::Portable {
 public:
-  double _traj_time;
+  double _traj_speed;
   bool _return;
-  void init(const double _traj_time);
+  void init(const double _traj_speed);
   virtual bool write(yarp::os::ConnectionWriter& connection);
   virtual bool read(yarp::os::ConnectionReader& connection);
 };
@@ -145,15 +145,15 @@ void reactController_IDL_set_tol::init(const double _tol) {
   this->_tol = _tol;
 }
 
-bool reactController_IDL_set_traj_time::write(yarp::os::ConnectionWriter& connection) {
+bool reactController_IDL_set_traj_speed::write(yarp::os::ConnectionWriter& connection) {
   yarp::os::idl::WireWriter writer(connection);
   if (!writer.writeListHeader(4)) return false;
-  if (!writer.writeTag("set_traj_time",1,3)) return false;
-  if (!writer.writeDouble(_traj_time)) return false;
+  if (!writer.writeTag("set_traj_speed",1,3)) return false;
+  if (!writer.writeDouble(_traj_speed)) return false;
   return true;
 }
 
-bool reactController_IDL_set_traj_time::read(yarp::os::ConnectionReader& connection) {
+bool reactController_IDL_set_traj_speed::read(yarp::os::ConnectionReader& connection) {
   yarp::os::idl::WireReader reader(connection);
   if (!reader.readListReturn()) return false;
   if (!reader.readBool(_return)) {
@@ -163,9 +163,9 @@ bool reactController_IDL_set_traj_time::read(yarp::os::ConnectionReader& connect
   return true;
 }
 
-void reactController_IDL_set_traj_time::init(const double _traj_time) {
+void reactController_IDL_set_traj_speed::init(const double _traj_speed) {
   _return = false;
-  this->_traj_time = _traj_time;
+  this->_traj_speed = _traj_speed;
 }
 
 bool reactController_IDL_set_verbosity::write(yarp::os::ConnectionWriter& connection) {
@@ -288,12 +288,12 @@ bool reactController_IDL::set_tol(const double _tol) {
   bool ok = yarp().write(helper,helper);
   return ok?helper._return:_return;
 }
-bool reactController_IDL::set_traj_time(const double _traj_time) {
+bool reactController_IDL::set_traj_speed(const double _traj_speed) {
   bool _return = false;
-  reactController_IDL_set_traj_time helper;
-  helper.init(_traj_time);
+  reactController_IDL_set_traj_speed helper;
+  helper.init(_traj_speed);
   if (!yarp().canWrite()) {
-    yError("Missing server method '%s'?","bool reactController_IDL::set_traj_time(const double _traj_time)");
+    yError("Missing server method '%s'?","bool reactController_IDL::set_traj_speed(const double _traj_speed)");
   }
   bool ok = yarp().write(helper,helper);
   return ok?helper._return:_return;
@@ -396,14 +396,14 @@ bool reactController_IDL::read(yarp::os::ConnectionReader& connection) {
       reader.accept();
       return true;
     }
-    if (tag == "set_traj_time") {
-      double _traj_time;
-      if (!reader.readDouble(_traj_time)) {
+    if (tag == "set_traj_speed") {
+      double _traj_speed;
+      if (!reader.readDouble(_traj_speed)) {
         reader.fail();
         return false;
       }
       bool _return;
-      _return = set_traj_time(_traj_time);
+      _return = set_traj_speed(_traj_speed);
       yarp::os::idl::WireWriter writer(reader);
       if (!writer.isNull()) {
         if (!writer.writeListHeader(1)) return false;
@@ -503,7 +503,7 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
     helpString.push_back("set_xd");
     helpString.push_back("set_relative_xd");
     helpString.push_back("set_tol");
-    helpString.push_back("set_traj_time");
+    helpString.push_back("set_traj_speed");
     helpString.push_back("set_verbosity");
     helpString.push_back("get_verbosity");
     helpString.push_back("setup_new_particle");
@@ -533,10 +533,10 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
       helpString.push_back("@param _tol the solver exits if norm(x_d-x)<tol. ");
       helpString.push_back("@return true/false on success/failure. ");
     }
-    if (functionName=="set_traj_time") {
-      helpString.push_back("bool set_traj_time(const double _traj_time) ");
-      helpString.push_back("Sets Trajectory Time. ");
-      helpString.push_back("@param _traj_time  the time within which the solver has to solve the global task ");
+    if (functionName=="set_traj_speed") {
+      helpString.push_back("bool set_traj_speed(const double _traj_speed) ");
+      helpString.push_back("Sets Trajectory Speed. ");
+      helpString.push_back("@param _traj_speed  the speed of the trajectory ");
       helpString.push_back("@return true/false on success/failure. ");
     }
     if (functionName=="set_verbosity") {
@@ -553,9 +553,15 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
     if (functionName=="setup_new_particle") {
       helpString.push_back("bool setup_new_particle(const yarp::sig::Vector& _x_0_vel) ");
       helpString.push_back("Setups a new particle with a given initial position and constant velocity ");
+      helpString.push_back("@param _x_0_vel 6D Vector that specifies the new initial position and the ");
+      helpString.push_back("                velocity. It has not been splitted into two separate vectors ");
+      helpString.push_back("                because to my knowledge it is not possible ");
+      helpString.push_back("                (put it between brackets if asking for it through rpc). ");
+      helpString.push_back("@return true/false on success/failure. ");
     }
     if (functionName=="get_particle") {
       helpString.push_back("yarp::sig::Vector get_particle() ");
+      helpString.push_back("Gets the particle state ");
     }
     if (functionName=="help") {
       helpString.push_back("std::vector<std::string> help(const std::string& functionName=\"--all\")");

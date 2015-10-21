@@ -43,6 +43,7 @@
 #include <vector>
 
 #include "reactIpOpt.h"
+#include "particleThread.h"
 
 using namespace yarp::dev;
 
@@ -65,17 +66,24 @@ protected:
     string part_short;
     // Flag to know if the torso shall be used or not
     bool useTorso;
+    // [DEPRECATED] Trajectory time (default 3.0 s)
+    double trajTime;
+    // Tracjectory speed (default 0.1 m/s)
+    double trajSpeed;
 
     /***************************************************************************/
     // INTERNAL VARIABLES:
+    particleThread  *prtclThrd;     // Pointer to the particleThread in order to access its data
+
     int        step;        // Flag to know in which step the thread is in
-    bool     isTask;        // Flag to know if there is a task to solve
-    double trajTime;        // Trajectory time (default 3.0)
+    
     double      t_0;        // Time at which the trajectory starts
     double      t_d;        // Time at which the trajectory should end
     yarp::sig::Vector x_d;  // Vector that stores the new target
-    yarp::sig::Vector x_t;  // Current end-effector position
     yarp::sig::Vector x_0;  // Initial end-effector position
+    yarp::sig::Vector x_t;  // Current end-effector position
+
+    yarp::sig::Vector vel;  // 3D velocity vector that describes the trajectory
 
     yarp::sig::Vector q_0;   // Initial arm configuration
     yarp::sig::Matrix H;    // End-effector pose
@@ -152,13 +160,6 @@ protected:
                       const string &_p, const string &_s);
 
     /**
-    * Toggles the internal state to the active state
-    * @param  _task      boolean that is true/false if task is on/off
-    * @return true/false if success/failure
-    **/
-    bool toggleTask(bool _task) { return isTask=_task; }
-
-    /**
     * Prints a message according to the verbosity level:
     * @param l is the level of verbosity: if level > verbosity, something is printed
     * @param f is the text. Please use c standard (like printf)
@@ -167,8 +168,8 @@ protected:
 
 public:
     // CONSTRUCTOR
-    reactCtrlThread(int , const string & , const string & ,
-                    const string &_ , int , bool , double , double);
+    reactCtrlThread(int , const string & , const string & , const string &_ ,
+                    int , bool , double , double , particleThread * );
     // INIT
     virtual bool threadInit();
     // RUN
@@ -185,8 +186,11 @@ public:
     // Sets the tolerance
     bool setTol(const double );
 
-    // Sets the trajectory time 
+    // [DEPRECATED] Sets the trajectory time 
     bool setTrajTime(const double );
+
+    // Sets the trajectory speed
+    bool setTrajSpeed(const double );
 
     // Sets the verbosity
     bool setVerbosity(const int );
