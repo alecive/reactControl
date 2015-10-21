@@ -67,6 +67,7 @@ None for now.
 #include <string.h> 
 
 #include "reactCtrlThread.h"
+#include "particleThread.h"
 #include "reactController_IDL.h"
 
 using namespace yarp;
@@ -85,13 +86,16 @@ class reactController: public RFModule, public reactController_IDL
 {
 private:
     reactCtrlThread *rctCtrlThrd;
+    particleThread    *prtclThrd;
     RpcServer            rpcSrvr;
 
     string robot;
     string name;
     string part;
 
-    int verbosity,rate,record;
+    int verbosity;
+    int rate;
+    int prtclRate;
 
     bool disableTorso;
 
@@ -102,13 +106,15 @@ public:
     reactController()
     {
         rctCtrlThrd=0;
+        prtclThrd=0;
 
         robot =         "icubSim";
         name  = "reactController";
         part  =        "left_arm";
 
         verbosity    =     0;    // verbosity
-        rate         =  20.0;    // rate of the reactCtrlThread
+        rate         =    20;    // rate of the reactCtrlThread
+        prtclRate    =    10;    // rate of the particleThread
         disableTorso = false;
         trajTime     =   3.0;
         tol          =  1e-3;
@@ -218,7 +224,15 @@ public:
             }
             else yInfo("[reactController] Could not find rate in the config file; using %i as default",rate);
 
-        //****************** rate ******************
+        //****************** prtclRate ******************
+            if (rf.check("prtclRate"))
+            {
+                prtclRate = rf.find("prtclRate").asInt();
+                yInfo("[reactController] particleThread working at %i ms.",prtclRate);
+            }
+            else yInfo("[reactController] Could not find prtclRate in the config file; using %i as default",prtclRate);
+
+        //****************** trajTime ******************
             if (rf.check("trajTime"))
             {
                 trajTime = rf.find("trajTime").asDouble();
@@ -226,7 +240,7 @@ public:
             }
             else yInfo("[reactController] Could not find trajTime in the config file; using %g as default",trajTime);
 
-        //****************** rate ******************
+        //****************** tol ******************
             if (rf.check("tol"))
             {
                 tol = rf.find("tol").asDouble();
@@ -236,7 +250,7 @@ public:
 
         //************* THREAD *************
         rctCtrlThrd = new reactCtrlThread(rate, name, robot, part, verbosity, disableTorso, trajTime, tol);
-        bool strt = rctCtrlThrd -> start();
+        bool strt = rctCtrlThrd->start();
         if (!strt)
         {
             delete rctCtrlThrd;
@@ -265,6 +279,12 @@ public:
             rctCtrlThrd->stop();
             delete rctCtrlThrd;
             rctCtrlThrd=0;
+        }
+        if (prtclThrd)
+        {
+            prtclThrd->stop();
+            delete prtclThrd;
+            prtclThrd=0;
         }
         rpcSrvr.close();
 
