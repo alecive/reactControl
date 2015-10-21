@@ -55,5 +55,11 @@ service reactController_IDL
   * @param _verbosity  the verbosity of the controller
   * @return true/false on success/failure.
   */
-  bool set_verbosity(1:i16 _verbosity);  
+  bool set_verbosity(1:i32 _verbosity);  
+
+  /**
+  * Gets verbosity.
+  * @return the verbosity of the controller
+  */
+  i32 get_verbosity();  
 }

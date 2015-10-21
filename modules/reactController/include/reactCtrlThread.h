@@ -189,7 +189,10 @@ public:
     bool setTrajTime(const double );
 
     // Sets the verbosity
-    bool setTrajTime(const int _verbosity);
+    bool setVerbosity(const int );
+
+    // gets the verbosity
+    int getVerbosity() { return verbosity; };
 };
 
 #endif

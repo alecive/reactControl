@@ -51,7 +51,12 @@ public:
    * @param _verbosity  the verbosity of the controller
    * @return true/false on success/failure.
    */
-  virtual bool set_verbosity(const int16_t _verbosity);
+  virtual bool set_verbosity(const int32_t _verbosity);
+  /**
+   * Gets verbosity.
+   * @return the verbosity of the controller
+   */
+  virtual int32_t get_verbosity();
   virtual bool read(yarp::os::ConnectionReader& connection);
   virtual std::vector<std::string> help(const std::string& functionName="--all");
 };

@@ -144,9 +144,14 @@ public:
         return rctCtrlThrd->setTrajTime(_traj_time);
     }
 
-    bool set_verbosity(const int _verbosity)
+    int get_verbosity()
     {
-        return rctCtrlThrd->setTrajTime(_verbosity);
+        return rctCtrlThrd->getVerbosity();
+    }
+
+    bool set_verbosity(const int32_t _verbosity)
+    {
+        return rctCtrlThrd->setVerbosity(_verbosity);
     }
 
     bool configure(ResourceFinder &rf)

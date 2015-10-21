@@ -44,9 +44,17 @@ public:
 
 class reactController_IDL_set_verbosity : public yarp::os::Portable {
 public:
-  int16_t _verbosity;
+  int32_t _verbosity;
   bool _return;
-  void init(const int16_t _verbosity);
+  void init(const int32_t _verbosity);
+  virtual bool write(yarp::os::ConnectionWriter& connection);
+  virtual bool read(yarp::os::ConnectionReader& connection);
+};
+
+class reactController_IDL_get_verbosity : public yarp::os::Portable {
+public:
+  int32_t _return;
+  void init();
   virtual bool write(yarp::os::ConnectionWriter& connection);
   virtual bool read(yarp::os::ConnectionReader& connection);
 };
@@ -147,7 +155,7 @@ bool reactController_IDL_set_verbosity::write(yarp::os::ConnectionWriter& connec
   yarp::os::idl::WireWriter writer(connection);
   if (!writer.writeListHeader(3)) return false;
   if (!writer.writeTag("set_verbosity",1,2)) return false;
-  if (!writer.writeI16(_verbosity)) return false;
+  if (!writer.writeI32(_verbosity)) return false;
   return true;
 }
 
@@ -161,9 +169,30 @@ bool reactController_IDL_set_verbosity::read(yarp::os::ConnectionReader& connect
   return true;
 }
 
-void reactController_IDL_set_verbosity::init(const int16_t _verbosity) {
+void reactController_IDL_set_verbosity::init(const int32_t _verbosity) {
   _return = false;
   this->_verbosity = _verbosity;
+}
+
+bool reactController_IDL_get_verbosity::write(yarp::os::ConnectionWriter& connection) {
+  yarp::os::idl::WireWriter writer(connection);
+  if (!writer.writeListHeader(2)) return false;
+  if (!writer.writeTag("get_verbosity",1,2)) return false;
+  return true;
+}
+
+bool reactController_IDL_get_verbosity::read(yarp::os::ConnectionReader& connection) {
+  yarp::os::idl::WireReader reader(connection);
+  if (!reader.readListReturn()) return false;
+  if (!reader.readI32(_return)) {
+    reader.fail();
+    return false;
+  }
+  return true;
+}
+
+void reactController_IDL_get_verbosity::init() {
+  _return = 0;
 }
 
 reactController_IDL::reactController_IDL() {
@@ -209,12 +238,22 @@ bool reactController_IDL::set_traj_time(const double _traj_time) {
   bool ok = yarp().write(helper,helper);
   return ok?helper._return:_return;
 }
-bool reactController_IDL::set_verbosity(const int16_t _verbosity) {
+bool reactController_IDL::set_verbosity(const int32_t _verbosity) {
   bool _return = false;
   reactController_IDL_set_verbosity helper;
   helper.init(_verbosity);
   if (!yarp().canWrite()) {
-    yError("Missing server method '%s'?","bool reactController_IDL::set_verbosity(const int16_t _verbosity)");
+    yError("Missing server method '%s'?","bool reactController_IDL::set_verbosity(const int32_t _verbosity)");
+  }
+  bool ok = yarp().write(helper,helper);
+  return ok?helper._return:_return;
+}
+int32_t reactController_IDL::get_verbosity() {
+  int32_t _return = 0;
+  reactController_IDL_get_verbosity helper;
+  helper.init();
+  if (!yarp().canWrite()) {
+    yError("Missing server method '%s'?","int32_t reactController_IDL::get_verbosity()");
   }
   bool ok = yarp().write(helper,helper);
   return ok?helper._return:_return;
@@ -294,8 +333,8 @@ bool reactController_IDL::read(yarp::os::ConnectionReader& connection) {
       return true;
     }
     if (tag == "set_verbosity") {
-      int16_t _verbosity;
-      if (!reader.readI16(_verbosity)) {
+      int32_t _verbosity;
+      if (!reader.readI32(_verbosity)) {
         reader.fail();
         return false;
       }
@@ -305,6 +344,17 @@ bool reactController_IDL::read(yarp::os::ConnectionReader& connection) {
       if (!writer.isNull()) {
         if (!writer.writeListHeader(1)) return false;
         if (!writer.writeBool(_return)) return false;
+      }
+      reader.accept();
+      return true;
+    }
+    if (tag == "get_verbosity") {
+      int32_t _return;
+      _return = get_verbosity();
+      yarp::os::idl::WireWriter writer(reader);
+      if (!writer.isNull()) {
+        if (!writer.writeListHeader(1)) return false;
+        if (!writer.writeI32(_return)) return false;
       }
       reader.accept();
       return true;
@@ -348,6 +398,7 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
     helpString.push_back("set_tol");
     helpString.push_back("set_traj_time");
     helpString.push_back("set_verbosity");
+    helpString.push_back("get_verbosity");
     helpString.push_back("help");
   }
   else {
@@ -380,10 +431,15 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
       helpString.push_back("@return true/false on success/failure. ");
     }
     if (functionName=="set_verbosity") {
-      helpString.push_back("bool set_verbosity(const int16_t _verbosity) ");
+      helpString.push_back("bool set_verbosity(const int32_t _verbosity) ");
       helpString.push_back("Sets verbosity. ");
       helpString.push_back("@param _verbosity  the verbosity of the controller ");
       helpString.push_back("@return true/false on success/failure. ");
+    }
+    if (functionName=="get_verbosity") {
+      helpString.push_back("int32_t get_verbosity() ");
+      helpString.push_back("Gets verbosity. ");
+      helpString.push_back("@return the verbosity of the controller ");
     }
     if (functionName=="help") {
       helpString.push_back("std::vector<std::string> help(const std::string& functionName=\"--all\")");

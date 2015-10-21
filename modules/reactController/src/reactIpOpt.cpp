@@ -114,8 +114,8 @@ protected:
             cost_func=xd -(x0+dT*J_cst*q_dot);
             grad_cost_func=2*cost_func*(-dT*J_cst);
 
-            if (LIC.isActive())
-                linC=LIC.getC()*q_t;
+            // if (LIC.isActive())
+            //     linC=LIC.getC()*q_t;
         }
         printMessage(9,"[computeQuantities] OK x: %s\n",IPOPT_Number_toString(x,CTRL_RAD2DEG).c_str());
     }
@@ -212,19 +212,19 @@ public:
         m=dim+0;
         nnz_jac_g=dim; // the jacobian has dim non zero entries (the diagonal)
 
-        if (LIC.isActive())
-        {
-            int lenLower=LIC.getlB().length();
-            int lenUpper=LIC.getuB().length();
+        // if (LIC.isActive())
+        // {
+        //     int lenLower=LIC.getlB().length();
+        //     int lenUpper=LIC.getuB().length();
 
-            if (lenLower && (lenLower==lenUpper) && (LIC.getC().cols()==dim))
-            {
-                m+=lenLower;
-                nnz_jac_g+=lenLower*dim;
-            }
-            else
-                LIC.setActive(false);
-        }
+        //     if (lenLower && (lenLower==lenUpper) && (LIC.getC().cols()==dim))
+        //     {
+        //         m+=lenLower;
+        //         nnz_jac_g+=lenLower*dim;
+        //     }
+        //     else
+        //         LIC.setActive(false);
+        // }
         
         // nnz_h_lag=(dim*(dim+1))>>1;
         nnz_h_lag=0;
@@ -271,11 +271,11 @@ public:
                 g_l[i]=chain(i).getMin();
                 g_u[i]=chain(i).getMax();
             }
-            if (i>=dim)
-            {
-                g_l[i]=LIC.getlB()[i-dim];
-                g_u[i]=LIC.getuB()[i-dim];
-            }
+            // if (i>=dim)
+            // {
+            //     g_l[i]=LIC.getlB()[i-dim];
+            //     g_u[i]=LIC.getuB()[i-dim];
+            // }
         }
         
         printMessage(7,"[get_bounds_info]   n: %i m: %i\n",n,m);
@@ -289,7 +289,6 @@ public:
     /************************************************************************/
     bool eval_f(Index n, const Number* x, bool new_x, Number& obj_value)
     {
-        printMessage(9,"[eval_f] START\tn: %i\n",n);
         computeQuantities(x);
 
         obj_value=norm2(cost_func);
@@ -301,7 +300,6 @@ public:
     /************************************************************************/
     bool eval_grad_f(Index n, const Number* x, bool new_x, Number* grad_f)
     {
-        printMessage(9,"[eval_grad_f] START\tn: %i\n",n);
         computeQuantities(x);
 
         for (Index i=0; i<n; i++)
@@ -337,7 +335,6 @@ public:
     bool eval_jac_g(Index n, const Number* x, bool new_x, Index m, Index nele_jac,
                     Index* iRow, Index *jCol, Number* values)
     {
-        printMessage(9,"[eval_jac_g] START\tn: %i m: %i\n",n,m);
         // printMessage(9,"[eval_jac_g] START\tx: %i\n",IPOPT_Number_toString(x,CTRL_RAD2DEG).c_str());
         // computeQuantities(x);
 

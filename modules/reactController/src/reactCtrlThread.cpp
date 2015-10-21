@@ -164,7 +164,7 @@ void reactCtrlThread::run()
             {
                 if (!stopControl())
                 {
-                    yError("Unable to properly stop control of the arm!");
+                    yError("Unable to properly stop the control of the arm!");
                 }
                 step++;
                 break;
@@ -172,6 +172,7 @@ void reactCtrlThread::run()
 
             int exit_code;
             Vector q_dot = solveIK(exit_code);
+            // step++; // This is for testing purposes. To be removed!
 
             if (exit_code==Ipopt::Solve_Succeeded ||
                 exit_code==Ipopt::Maximum_CpuTime_Exceeded)
@@ -300,7 +301,7 @@ bool reactCtrlThread::setTrajTime(const double _traj_time)
     }
 }
 
-bool reactCtrlThread::setTrajTime(const int _verbosity)
+bool reactCtrlThread::setVerbosity(const int _verbosity)
 {
     return _verbosity>=0?verbosity=_verbosity:verbosity=0;
 }
