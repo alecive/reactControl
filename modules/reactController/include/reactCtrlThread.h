@@ -169,7 +169,7 @@ protected:
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & , const string &_ ,
-                    int , bool , double , double , particleThread * );
+                    int , bool , double , double , double , particleThread * );
     // INIT
     virtual bool threadInit();
     // RUN

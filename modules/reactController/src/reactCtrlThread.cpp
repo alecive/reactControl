@@ -30,10 +30,10 @@ using namespace yarp::math;
 
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,
                                  const string &_part, int _verbosity, bool _disableTorso,
-                                 double _trajSpeed, double _tol, particleThread *_pT) :
+                                 double _trajSpeed, double _trajTime, double _tol, particleThread *_pT) :
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
                                  verbosity(_verbosity), useTorso(!_disableTorso),
-                                 trajSpeed(_trajSpeed), tol(_tol)
+                                 trajSpeed(_trajSpeed), trajTime(_trajTime), tol(_tol)
 {
     prtclThrd=_pT;
     step=0;
@@ -158,8 +158,8 @@ void reactCtrlThread::run()
         }
         case 1:
         {
-            // if (yarp::os::Time::now()>t_d)
-            if (norm(x_t-x_0) > norm(x_d-x_0))
+            if (yarp::os::Time::now()>t_d)
+            // if (norm(x_t-x_0) > norm(x_d-x_0))
             {
                 if (!stopControl())
                 {
@@ -218,9 +218,9 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // x_next = x_t + (x_d-x_t) * (dT/(t_d-t_t));
     // Second test: the next point will be agnostic of the current 
     // configuration
-    // x_next = x_0 + (x_d-x_0) * ((t_t+dT-t_0)/(t_d-t_0));
+    x_next = x_0 + (x_d-x_0) * ((t_t+dT-t_0)/(t_d-t_0));
     // Third solution: use the particleThread
-    x_next = prtclThrd->getParticle();
+    // x_next = prtclThrd->getParticle();
     
     Vector result = slv->solve(x_next,q_0,dT,&cpu_time,&exit_code) * CTRL_RAD2DEG;
 
@@ -229,9 +229,9 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     printMessage(0,"x_d:    %s\n",x_d.toString(3,3).c_str());
     printMessage(0,"x_t:    %s\n",x_t.toString(3,3).c_str());
     printMessage(0,"x_next: %s\tdT %g\n",x_next.toString(3,3).c_str(),dT);
-    printMessage(0,"norm(x_next-x_t): %g\tnorm(x_d-x_next): %g\n",norm(x_next-x_t),
-                                                                  norm(x_d-x_next));
-    printMessage(0,"Result: %s\tTime spent: %g\n",result.toString(3,3).c_str(),cpu_time);
+    printMessage(0,"norm(x_next-x_t): %g\tnorm(x_d-x_next): %g\tnorm(x_d-x_t): %g\n",
+                    norm(x_next-x_t), norm(x_d-x_next), norm(x_d-x_t));
+    printMessage(0,"Result: %s\n",result.toString(3,3).c_str());
     _exit_code=exit_code;
     delete slv;
 
@@ -300,7 +300,6 @@ bool reactCtrlThread::setTol(const double _tol)
 bool reactCtrlThread::setTrajTime(const double _traj_time)
 {
     yWarning("[reactController] trajTime is deprecated! Use trajSpeed instead.");
-    return false;
     
     if (_traj_time>=0.0)
     {
@@ -330,6 +329,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d)
         x_d=_x_d;
         t_0=yarp::os::Time::now();
         vel=trajSpeed * (x_d-x_0) / norm(x_d-x_0);
+        t_d=t_0+trajTime;
 
         if (prtclThrd->setupNewParticle(x_0,vel))
         {

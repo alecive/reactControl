@@ -42,9 +42,9 @@ bool particleThread::threadInit()
 
 void particleThread::run()
 {
-    LockGuard lg(mutex);
     if (isRunning)
     {
+        LockGuard lg(mutex);
         x_t=integrator->integrate(vel);
     }
 }

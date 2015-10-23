@@ -160,6 +160,7 @@ public:
 
     bool set_verbosity(const int32_t _verbosity)
     {
+        yInfo("[reactController] Setting verbosity to %i",_verbosity);
         return rctCtrlThrd->setVerbosity(_verbosity);
     }
 
@@ -167,7 +168,7 @@ public:
     {
         yarp::sig::Vector _x_0 = _x_0_vel.subVector(0,2);
         yarp::sig::Vector _vel = _x_0_vel.subVector(3,5);
-        printf("Setting up new particle.. x_0: %s\tvel: %s\n",
+        yInfo("[reactController] Setting up new particle.. x_0: %s\tvel: %s\n",
                 _x_0.toString(3,3).c_str(), _vel.toString(3,3).c_str());
         return prtclThrd->setupNewParticle(_x_0,_vel);
     }
@@ -277,7 +278,7 @@ public:
         }
 
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
-                                          disableTorso, trajSpeed, tol, prtclThrd);
+                                          disableTorso, trajSpeed, trajTime, tol, prtclThrd);
         bool strt = rctCtrlThrd->start();
         if (!strt)
         {

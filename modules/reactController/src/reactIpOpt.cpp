@@ -260,8 +260,8 @@ public:
             // x_l[i]=chain(i).getMin();
             // x_u[i]=chain(i).getMax();
             // Let's put these limits to the velocities for the time being
-            x_l[i]=-50.0*CTRL_DEG2RAD;
-            x_u[i]=+50.0*CTRL_DEG2RAD;
+            x_l[i]=-70.0*CTRL_DEG2RAD;
+            x_u[i]=+70.0*CTRL_DEG2RAD;
         }
         
         for (Index i=0; i<m; i++)
@@ -453,6 +453,7 @@ reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
     CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test_print_all","yes");
     // CAST_IPOPTAPP(App)->Options()->SetStringValue("print_timing_statistics","yes");
     // CAST_IPOPTAPP(App)->Options()->SetStringValue("print_options_documentation","no");
+    // CAST_IPOPTAPP(App)->Options()->SetStringValue("skip_finalize_solution_call","yes");
 
     getBoundsInf(lowerBoundInf,upperBoundInf);
 
