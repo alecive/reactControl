@@ -379,13 +379,39 @@ void reactCtrlThread::updateArmChain()
 
 bool reactCtrlThread::alignJointsBounds()
 {
+    yDebug("[reactCtrlThread][alignJointsBounds] pre alignment:");
+    printJointsBounds();
+
     deque<IControlLimits*> lim;
     lim.push_back(ilimT);
     lim.push_back(ilimA);
 
-    if (arm->alignJointsBounds(lim) == 0) return false;
+    bool result=arm->alignJointsBounds(lim);
+    // bool result=true;
+    if (result==false) return result;
 
-    return true;
+    iCub::iKin::iKinChain chain=*arm->asChain();
+    chain(0).setMin(-22.0*CTRL_DEG2RAD);    chain(0).setMin(-84.0*CTRL_DEG2RAD);
+    chain(1).setMin(-39.0*CTRL_DEG2RAD);    chain(0).setMin(-39.0*CTRL_DEG2RAD);
+    chain(2).setMin(-59.0*CTRL_DEG2RAD);    chain(0).setMin(-59.0*CTRL_DEG2RAD);
+
+    yDebug("[reactCtrlThread][alignJointsBounds] post alignment:");
+    printJointsBounds();
+
+    return result;
+}
+
+void reactCtrlThread::printJointsBounds()
+{
+    double min, max;
+    iCub::iKin::iKinChain chain=*arm->asChain();
+
+    for (int i = 0; i < arm->getDOF(); i++)
+    {
+        min=chain(i).getMin()*CTRL_RAD2DEG;
+        max=chain(i).getMax()*CTRL_RAD2DEG;
+        yDebug("[jointsBounds] i: %i\tmin: %g\tmax %g",i,min,max);
+    }
 }
 
 bool reactCtrlThread::areJointsHealthyAndSet(VectorOf<int> &jointsToSet,
