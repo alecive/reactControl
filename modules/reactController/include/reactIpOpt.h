@@ -160,6 +160,7 @@ public:
     * @param xd        is the End-Effector target Pose to be attained. 
     * @param q_dot_0   are the initial joint velocities of the chain.
     * @param dt        is the time step to use in order to solve the task. 
+    * @param vm        is the max velocity allowed to the joints.
     * @param cup_time  is the total time spent by IPOPT to solve the task.
     * @param exit_code stores the exit code (NULL by default). It is one of these:
     *                   SUCCESS
@@ -179,7 +180,7 @@ public:
     * @return estimated joint velocities.
     */
     virtual yarp::sig::Vector solve(yarp::sig::Vector &xd, yarp::sig::Vector q_dot_0,
-                                    double &dt, double *cpu_time, int *exit_code);
+                                    double &dt, double &vm, double *cpu_time, int *exit_code);
 
     /**
     * Default destructor.

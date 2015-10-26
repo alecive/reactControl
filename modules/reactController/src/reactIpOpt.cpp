@@ -66,6 +66,9 @@ protected:
     // The delta T with which ipopt needs to solve the task
     double &dT;
 
+    // The maximum allowed speed at the joints
+    double V_max;
+
     // The desired final joint velocities
     yarp::sig::Vector q_dot_d;
     // The initial joint velocities
@@ -152,8 +155,8 @@ protected:
 public:
     /************************************************************************/
     react_NLP(iKinChain &c, yarp::sig::Vector &_xd, yarp::sig::Vector &_q_dot_0,
-             double &_dT, iKinLinIneqConstr &_LIC, int _verbosity) : chain(c),
-             q_dot_0(_q_dot_0), dT(_dT), xd(_xd), LIC(_LIC), verbosity(_verbosity)
+             double &_dT, double &_vM, iKinLinIneqConstr &_LIC, int _verbosity) : chain(c),
+             q_dot_0(_q_dot_0), dT(_dT), xd(_xd), LIC(_LIC), verbosity(_verbosity), V_max(_vM)
     {
         name="react_NLP";
 
@@ -260,8 +263,8 @@ public:
             // x_l[i]=chain(i).getMin();
             // x_u[i]=chain(i).getMax();
             // Let's put these limits to the velocities for the time being
-            x_l[i]=-30.0*CTRL_DEG2RAD;
-            x_u[i]=+30.0*CTRL_DEG2RAD;
+            x_l[i]=-V_max*CTRL_DEG2RAD;
+            x_u[i]=+V_max*CTRL_DEG2RAD;
         }
         
         for (Index i=0; i<m; i++)
@@ -560,9 +563,9 @@ void reactIpOpt::setBoundsInf(const double lower, const double upper)
 
 /************************************************************************/
 yarp::sig::Vector reactIpOpt::solve(yarp::sig::Vector &xd, yarp::sig::Vector q_dot_0,
-                                    double &dt, double *cpu_time,int *exit_code)
+                                    double &dt, double &vm, double *cpu_time,int *exit_code)
 {
-    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,*pLIC,verbosity);
+    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,vm,*pLIC,verbosity);
     
     nlp->set_scaling(obj_scaling,x_scaling,g_scaling);
     nlp->set_bound_inf(lowerBoundInf,upperBoundInf);
