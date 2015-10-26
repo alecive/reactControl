@@ -19,6 +19,7 @@
 
 #include <limits>
 #include <sstream>
+#include <cmath>
 
 #include <IpTNLP.hpp>
 #include <IpIpoptApplication.hpp>
@@ -86,6 +87,16 @@ protected:
     // The jacobian associated with the const function
     yarp::sig::Matrix J_cst;
 
+    // Weights set to the joint limits
+    yarp::sig::Matrix W;
+
+    double gamma;
+    double guardRatio;
+
+    yarp::sig::Vector qGuard;
+    yarp::sig::Vector qGuardMinInt, qGuardMinExt, qGuardMinCOG;
+    yarp::sig::Vector qGuardMaxInt, qGuardMaxExt, qGuardMaxCOG;
+
     yarp::sig::Vector linC;
 
     double __obj_scaling;
@@ -135,6 +146,41 @@ protected:
     }
 
     /************************************************************************/
+    bool computeWeight(const yarp::sig::Vector &q)
+    {
+        for (unsigned int i=0; i<dim; i++)
+        {
+            if ((q[i]>=qGuardMinInt[i]) && (q[i]<=qGuardMaxInt[i]))
+                W(i,i)=gamma;
+            else if ((q[i]<=qGuardMinExt[i]) || (q[i]>=qGuardMaxExt[i]))
+                W(i,i)=0.0;
+            else if (q[i]<qGuardMinInt[i])
+                W(i,i)=0.5*gamma*(1.0+tanh(+10.0*(q[i]-qGuardMinCOG[i])/qGuard[i]));
+            else
+                W(i,i)=0.5*gamma*(1.0+tanh(-10.0*(q[i]-qGuardMaxCOG[i])/qGuard[i]));
+        }
+        printf("weight matrix: \n%s\n", W.toString(3,3).c_str());
+        return true;
+    }
+
+    /************************************************************************/
+    bool computeGuard()
+    {
+        for (unsigned int i=0; i<dim; i++)
+        {
+            qGuard[i]=0.25*guardRatio*(chain(i).getMax()-chain(i).getMin());
+
+            qGuardMinExt[i]=chain(i).getMin()+qGuard[i];
+            qGuardMinInt[i]=qGuardMinExt[i]  +qGuard[i];
+            qGuardMinCOG[i]=0.5*(qGuardMinExt[i]+qGuardMinInt[i]);
+
+            qGuardMaxExt[i]=chain(i).getMax()-qGuard[i];
+            qGuardMaxInt[i]=qGuardMaxExt[i]  -qGuard[i];
+            qGuardMaxCOG[i]=0.5*(qGuardMaxExt[i]+qGuardMaxInt[i]);
+        }
+    }
+
+    /************************************************************************/
     int printMessage(const int l, const char *f, ...) const
     {
         if (verbosity>=l)
@@ -176,6 +222,19 @@ public:
 
         cost_func.resize(3,0.0);
         J_cst.resize(3,dim); J_cst.zero();
+
+        W=eye(dim,dim);
+
+        gamma=0.05;
+        guardRatio=0.1;
+
+        qGuard.resize(dim,0.0);
+        qGuardMinInt.resize(dim,0.0);
+        qGuardMinExt.resize(dim,0.0);
+        qGuardMaxInt.resize(dim,0.0);
+        qGuardMaxExt.resize(dim,0.0);
+        qGuardMinCOG.resize(dim,0.0);
+        qGuardMaxCOG.resize(dim,0.0);
 
         firstGo=true;
 
@@ -317,18 +376,21 @@ public:
     {
         printMessage(9,"[eval_g]\t\tq(t): %s\n",(q_t*CTRL_RAD2DEG).toString(3,3).c_str());
         computeQuantities(x);
+        yarp::sig::Vector q(dim,0.0);
 
         for (Index i=0; i<m; i++)
         {
             if (i<dim)
             {
                 g[i]=q_t(i) + dT * q_dot(i);
+                q[i]=g[i];
             }
             // if (i>=dim)
             // {
             //     g[i]=linC[i-dim];
             // }
         }
+        computeWeight(q);
         printMessage(7,"[eval_g] OK\t\tq(t+1): %s\n",IPOPT_Number_toString(g,CTRL_RAD2DEG).c_str());
 
         return true;
@@ -559,7 +621,6 @@ void reactIpOpt::setBoundsInf(const double lower, const double upper)
     lowerBoundInf=lower;
     upperBoundInf=upper;
 }
-
 
 /************************************************************************/
 yarp::sig::Vector reactIpOpt::solve(yarp::sig::Vector &xd, yarp::sig::Vector q_dot_0,
