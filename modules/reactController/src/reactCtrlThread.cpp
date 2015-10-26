@@ -199,6 +199,7 @@ void reactCtrlThread::run()
 
 Vector reactCtrlThread::solveIK(int &_exit_code)
 {
+    yarp::os::LockGuard lg(mutex);
     slv=new reactIpOpt(*arm->asChain(),tol,100,verbosity,false);
     // Next step will be provided iteratively.
     // The equation is x(t_next) = x_t + (x_d - x_t) * (t_next - t_now/T-t_now)
@@ -241,6 +242,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
 
 bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
 {   
+    yarp::os::LockGuard lg(mutex);
     VectorOf<int> jointsToSetA;
     VectorOf<int> jointsToSetT;
     if (!areJointsHealthyAndSet(jointsToSetA,"arm","velocity") || 
@@ -281,6 +283,7 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
 
 bool reactCtrlThread::stopControl()
 {
+    yarp::os::LockGuard lg(mutex);
     yInfo("[reactController] Stopping control.\n");
     if (useTorso)
     {
@@ -288,6 +291,26 @@ bool reactCtrlThread::stopControl()
     }
 
     return ivelA->stop();
+}
+
+bool reactCtrlThread::enableTorso()
+{
+    useTorso=true;
+    for (int i = 0; i < 3; i++)
+    {
+        arm->releaseLink(i);
+    }
+    return true;
+}
+
+bool reactCtrlThread::disableTorso()
+{
+    useTorso=false;
+    for (int i = 0; i < 3; i++)
+    {
+        arm->blockLink(i,0.0);
+    }
+    return true;
 }
 
 bool reactCtrlThread::setTol(const double _tol)
@@ -353,6 +376,7 @@ bool reactCtrlThread::setNewRelativeTarget(const Vector& _rel_x_d)
 
 void reactCtrlThread::updateArmChain()
 {
+    yarp::os::LockGuard lg(mutex);
     iencsA->getEncoders(encsA->data());
     Vector qA=encsA->subVector(0,6);
 

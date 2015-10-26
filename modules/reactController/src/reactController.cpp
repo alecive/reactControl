@@ -178,6 +178,16 @@ public:
         return prtclThrd->getParticle();
     }
 
+    bool enable_torso()
+    {
+        return rctCtrlThrd->enableTorso();
+    }
+
+    bool disable_torso()
+    {
+        return rctCtrlThrd->disableTorso();
+    }
+
     bool configure(ResourceFinder &rf)
     {
         //******************************************************

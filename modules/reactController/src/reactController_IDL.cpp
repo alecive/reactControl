@@ -76,6 +76,22 @@ public:
   virtual bool read(yarp::os::ConnectionReader& connection);
 };
 
+class reactController_IDL_enable_torso : public yarp::os::Portable {
+public:
+  bool _return;
+  void init();
+  virtual bool write(yarp::os::ConnectionWriter& connection);
+  virtual bool read(yarp::os::ConnectionReader& connection);
+};
+
+class reactController_IDL_disable_torso : public yarp::os::Portable {
+public:
+  bool _return;
+  void init();
+  virtual bool write(yarp::os::ConnectionWriter& connection);
+  virtual bool read(yarp::os::ConnectionReader& connection);
+};
+
 bool reactController_IDL_set_xd::write(yarp::os::ConnectionWriter& connection) {
   yarp::os::idl::WireWriter writer(connection);
   if (!writer.writeListHeader(3)) return false;
@@ -255,6 +271,48 @@ bool reactController_IDL_get_particle::read(yarp::os::ConnectionReader& connecti
 void reactController_IDL_get_particle::init() {
 }
 
+bool reactController_IDL_enable_torso::write(yarp::os::ConnectionWriter& connection) {
+  yarp::os::idl::WireWriter writer(connection);
+  if (!writer.writeListHeader(2)) return false;
+  if (!writer.writeTag("enable_torso",1,2)) return false;
+  return true;
+}
+
+bool reactController_IDL_enable_torso::read(yarp::os::ConnectionReader& connection) {
+  yarp::os::idl::WireReader reader(connection);
+  if (!reader.readListReturn()) return false;
+  if (!reader.readBool(_return)) {
+    reader.fail();
+    return false;
+  }
+  return true;
+}
+
+void reactController_IDL_enable_torso::init() {
+  _return = false;
+}
+
+bool reactController_IDL_disable_torso::write(yarp::os::ConnectionWriter& connection) {
+  yarp::os::idl::WireWriter writer(connection);
+  if (!writer.writeListHeader(2)) return false;
+  if (!writer.writeTag("disable_torso",1,2)) return false;
+  return true;
+}
+
+bool reactController_IDL_disable_torso::read(yarp::os::ConnectionReader& connection) {
+  yarp::os::idl::WireReader reader(connection);
+  if (!reader.readListReturn()) return false;
+  if (!reader.readBool(_return)) {
+    reader.fail();
+    return false;
+  }
+  return true;
+}
+
+void reactController_IDL_disable_torso::init() {
+  _return = false;
+}
+
 reactController_IDL::reactController_IDL() {
   yarp().setOwner(*this);
 }
@@ -334,6 +392,26 @@ yarp::sig::Vector reactController_IDL::get_particle() {
   helper.init();
   if (!yarp().canWrite()) {
     yError("Missing server method '%s'?","yarp::sig::Vector reactController_IDL::get_particle()");
+  }
+  bool ok = yarp().write(helper,helper);
+  return ok?helper._return:_return;
+}
+bool reactController_IDL::enable_torso() {
+  bool _return = false;
+  reactController_IDL_enable_torso helper;
+  helper.init();
+  if (!yarp().canWrite()) {
+    yError("Missing server method '%s'?","bool reactController_IDL::enable_torso()");
+  }
+  bool ok = yarp().write(helper,helper);
+  return ok?helper._return:_return;
+}
+bool reactController_IDL::disable_torso() {
+  bool _return = false;
+  reactController_IDL_disable_torso helper;
+  helper.init();
+  if (!yarp().canWrite()) {
+    yError("Missing server method '%s'?","bool reactController_IDL::disable_torso()");
   }
   bool ok = yarp().write(helper,helper);
   return ok?helper._return:_return;
@@ -466,6 +544,28 @@ bool reactController_IDL::read(yarp::os::ConnectionReader& connection) {
       reader.accept();
       return true;
     }
+    if (tag == "enable_torso") {
+      bool _return;
+      _return = enable_torso();
+      yarp::os::idl::WireWriter writer(reader);
+      if (!writer.isNull()) {
+        if (!writer.writeListHeader(1)) return false;
+        if (!writer.writeBool(_return)) return false;
+      }
+      reader.accept();
+      return true;
+    }
+    if (tag == "disable_torso") {
+      bool _return;
+      _return = disable_torso();
+      yarp::os::idl::WireWriter writer(reader);
+      if (!writer.isNull()) {
+        if (!writer.writeListHeader(1)) return false;
+        if (!writer.writeBool(_return)) return false;
+      }
+      reader.accept();
+      return true;
+    }
     if (tag == "help") {
       std::string functionName;
       if (!reader.readString(functionName)) {
@@ -508,6 +608,8 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
     helpString.push_back("get_verbosity");
     helpString.push_back("setup_new_particle");
     helpString.push_back("get_particle");
+    helpString.push_back("enable_torso");
+    helpString.push_back("disable_torso");
     helpString.push_back("help");
   }
   else {
@@ -562,6 +664,16 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
     if (functionName=="get_particle") {
       helpString.push_back("yarp::sig::Vector get_particle() ");
       helpString.push_back("Gets the particle state ");
+    }
+    if (functionName=="enable_torso") {
+      helpString.push_back("bool enable_torso() ");
+      helpString.push_back("Enables the torso ");
+      helpString.push_back("@return true/false on success/failure. ");
+    }
+    if (functionName=="disable_torso") {
+      helpString.push_back("bool disable_torso() ");
+      helpString.push_back("Disables the torso ");
+      helpString.push_back("@return true/false on success/failure. ");
     }
     if (functionName=="help") {
       helpString.push_back("std::vector<std::string> help(const std::string& functionName=\"--all\")");

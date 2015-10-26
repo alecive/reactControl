@@ -22,8 +22,9 @@
 
 #include <yarp/os/Time.h>
 #include <yarp/os/RateThread.h>
-#include <yarp/os/BufferedPort.h>
 #include <yarp/os/Log.h>
+#include <yarp/os/Mutex.h>
+#include <yarp/os/LockGuard.h>
 
 #include <yarp/sig/Vector.h>
 #include <yarp/sig/Matrix.h>
@@ -115,6 +116,9 @@ protected:
     reactIpOpt    *slv;    // solver
     int nDOF;
 
+    // Mutex for handling things correctly
+    yarp::os::Mutex mutex;
+
     /**
     * Aligns joint bounds according to the actual limits of the robot
     */
@@ -181,6 +185,12 @@ public:
     virtual void run();
     // RELEASE
     virtual void threadRelease();
+
+    // Enables the torso
+    bool enableTorso();
+
+    // Disables the torso
+    bool disableTorso();
 
     // Sets the new target
     bool setNewTarget(const yarp::sig::Vector&);

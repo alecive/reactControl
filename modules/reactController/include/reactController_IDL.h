@@ -70,6 +70,16 @@ public:
    * Gets the particle state
    */
   virtual yarp::sig::Vector get_particle();
+  /**
+   * Enables the torso
+   * @return true/false on success/failure.
+   */
+  virtual bool enable_torso();
+  /**
+   * Disables the torso
+   * @return true/false on success/failure.
+   */
+  virtual bool disable_torso();
   virtual bool read(yarp::os::ConnectionReader& connection);
   virtual std::vector<std::string> help(const std::string& functionName="--all");
 };

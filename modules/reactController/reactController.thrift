@@ -77,4 +77,16 @@ service reactController_IDL
   * Gets the particle state
   **/
   Vector get_particle();
+
+  /**
+  * Enables the torso
+  * @return true/false on success/failure.
+  **/
+  bool enable_torso();
+
+  /**
+  * Disables the torso
+  * @return true/false on success/failure.
+  **/
+  bool disable_torso();
 }
