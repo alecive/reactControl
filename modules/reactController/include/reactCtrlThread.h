@@ -113,6 +113,11 @@ protected:
     bool alignJointsBounds();
 
     /**
+    * Prints the joints bounds from the iCubArm
+    */
+    void printJointsBounds();
+
+    /**
     * Updates the arm's kinematic chain with the encoders from the robot
     **/
     void updateArmChain();

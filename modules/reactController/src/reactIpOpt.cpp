@@ -321,10 +321,10 @@ public:
             {
                 g[i]=q_t(i) + dT * q_dot(i);
             }
-            if (i>=dim)
-            {
-                g[i]=linC[i-dim];
-            }
+            // if (i>=dim)
+            // {
+            //     g[i]=linC[i-dim];
+            // }
         }
         printMessage(7,"[eval_g] OK\t\tq(t+1): %s\n",IPOPT_Number_toString(g,CTRL_RAD2DEG).c_str());
 
