@@ -88,9 +88,12 @@ protected:
     yarp::sig::Matrix J_cst;
 
     // Weights set to the joint limits
-    yarp::sig::Matrix W;
+    yarp::sig::Vector W;
 
-    double gamma;
+    // The maximum weight given to the joint limits bound function
+    double W_min;
+    double W_gamma;
+
     double guardRatio;
 
     yarp::sig::Vector qGuard;
@@ -150,16 +153,26 @@ protected:
     {
         for (unsigned int i=0; i<dim; i++)
         {
+            bool print=false;
             if ((q[i]>=qGuardMinInt[i]) && (q[i]<=qGuardMaxInt[i]))
-                W(i,i)=gamma;
+                W(i)=W_min;
             else if ((q[i]<=qGuardMinExt[i]) || (q[i]>=qGuardMaxExt[i]))
-                W(i,i)=0.0;
+                W(i)=W_min+W_gamma;
             else if (q[i]<qGuardMinInt[i])
-                W(i,i)=0.5*gamma*(1.0+tanh(+10.0*(q[i]-qGuardMinCOG[i])/qGuard[i]));
+            {
+                W(i)=0.5*W_gamma*(1.0+tanh(-6.0*(q[i]-qGuardMinCOG[i])/qGuard[i]))+W_min;
+            }
             else
-                W(i,i)=0.5*gamma*(1.0+tanh(-10.0*(q[i]-qGuardMaxCOG[i])/qGuard[i]));
+            {
+                W(i)=0.5*W_gamma*(1.0+tanh( 6.0*(q[i]-qGuardMaxCOG[i])/qGuard[i]))+W_min;
+            }
+
+            if (print)
+            {
+                printf("weight vector: %s\n", W.toString(3,3).c_str());
+            }
         }
-        printf("weight matrix: \n%s\n", W.toString(3,3).c_str());
+        
         return true;
     }
 
@@ -178,6 +191,14 @@ protected:
             qGuardMaxInt[i]=qGuardMaxExt[i]  -qGuard[i];
             qGuardMaxCOG[i]=0.5*(qGuardMaxExt[i]+qGuardMaxInt[i]);
         }
+
+        printMessage(7,"qGuard       %s\n",(CTRL_RAD2DEG*qGuard).toString(3,3).c_str());
+        printMessage(7,"qGuardMinExt %s\n",(CTRL_RAD2DEG*qGuardMinExt).toString(3,3).c_str());
+        printMessage(7,"qGuardMinCOG %s\n",(CTRL_RAD2DEG*qGuardMinCOG).toString(3,3).c_str());
+        printMessage(7,"qGuardMinInt %s\n",(CTRL_RAD2DEG*qGuardMinInt).toString(3,3).c_str());
+        printMessage(7,"qGuardMaxInt %s\n",(CTRL_RAD2DEG*qGuardMaxInt).toString(3,3).c_str());
+        printMessage(7,"qGuardMaxCOG %s\n",(CTRL_RAD2DEG*qGuardMaxCOG).toString(3,3).c_str());
+        printMessage(7,"qGuardMaxExt %s\n",(CTRL_RAD2DEG*qGuardMaxExt).toString(3,3).c_str());
     }
 
     /************************************************************************/
@@ -223,9 +244,9 @@ public:
         cost_func.resize(3,0.0);
         J_cst.resize(3,dim); J_cst.zero();
 
-        W=eye(dim,dim);
-
-        gamma=0.05;
+        W.resize(dim,0.0);
+        W_min=1.0;
+        W_gamma=1.0;
         guardRatio=0.1;
 
         qGuard.resize(dim,0.0);
@@ -235,6 +256,8 @@ public:
         qGuardMaxExt.resize(dim,0.0);
         qGuardMinCOG.resize(dim,0.0);
         qGuardMaxCOG.resize(dim,0.0);
+
+        computeGuard();
 
         firstGo=true;
 
@@ -382,15 +405,23 @@ public:
         {
             if (i<dim)
             {
-                g[i]=q_t(i) + dT * q_dot(i);
-                q[i]=g[i];
+                q[i]=q_t(i) + dT * q_dot(i);
+            }
+        }
+        computeWeight(q);
+
+        for (Index i=0; i<m; i++)
+        {
+            if (i<dim)
+            {
+                g[i]=W[i]*q[i];
             }
             // if (i>=dim)
             // {
             //     g[i]=linC[i-dim];
             // }
         }
-        computeWeight(q);
+
         printMessage(7,"[eval_g] OK\t\tq(t+1): %s\n",IPOPT_Number_toString(g,CTRL_RAD2DEG).c_str());
 
         return true;
@@ -511,10 +542,10 @@ reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
     CAST_IPOPTAPP(App)->Options()->SetStringValue("mu_strategy","adaptive");
     CAST_IPOPTAPP(App)->Options()->SetIntegerValue("print_level",verbose);
 
-    // CAST_IPOPTAPP(App)->Options()->SetStringValue("jacobian_approximation","finite-difference-values");
+    CAST_IPOPTAPP(App)->Options()->SetStringValue("jacobian_approximation","finite-difference-values");
     CAST_IPOPTAPP(App)->Options()->SetStringValue("nlp_scaling_method","gradient-based");
-    CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","none");
-    // CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","first-order");
+    // CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","none");
+    CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","first-order");
     CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test_print_all","yes");
     // CAST_IPOPTAPP(App)->Options()->SetStringValue("print_timing_statistics","yes");
     // CAST_IPOPTAPP(App)->Options()->SetStringValue("print_options_documentation","no");
