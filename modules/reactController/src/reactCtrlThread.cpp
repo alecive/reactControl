@@ -386,19 +386,17 @@ bool reactCtrlThread::alignJointsBounds()
     lim.push_back(ilimT);
     lim.push_back(ilimA);
 
-    bool result=arm->alignJointsBounds(lim);
-    // bool result=true;
-    if (result==false) return result;
+    if (!arm->alignJointsBounds(lim)) return false;
 
-    iCub::iKin::iKinChain chain=*arm->asChain();
-    chain(0).setMin(-22.0*CTRL_DEG2RAD);    chain(0).setMin(-84.0*CTRL_DEG2RAD);
-    chain(1).setMin(-39.0*CTRL_DEG2RAD);    chain(0).setMin(-39.0*CTRL_DEG2RAD);
-    chain(2).setMin(-59.0*CTRL_DEG2RAD);    chain(0).setMin(-59.0*CTRL_DEG2RAD);
+    // iCub::iKin::iKinChain chain=*arm->asChain();
+    // chain(0).setMin(-22.0*CTRL_DEG2RAD);    chain(0).setMin(-84.0*CTRL_DEG2RAD);
+    // chain(1).setMin(-39.0*CTRL_DEG2RAD);    chain(0).setMin(-39.0*CTRL_DEG2RAD);
+    // chain(2).setMin(-59.0*CTRL_DEG2RAD);    chain(0).setMin(-59.0*CTRL_DEG2RAD);
 
     yDebug("[reactCtrlThread][alignJointsBounds] post alignment:");
     printJointsBounds();
 
-    return result;
+    return true;
 }
 
 void reactCtrlThread::printJointsBounds()
