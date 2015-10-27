@@ -180,7 +180,7 @@ protected:
     }
 
     /************************************************************************/
-    bool computeWeightDerivative(const yarp::sig::Vector &q)
+    bool computeWeightDerivatives(const yarp::sig::Vector &q)
     {
         for (unsigned int i=0; i<dim; i++)
         {
@@ -435,12 +435,9 @@ public:
         computeQuantities(x);
         yarp::sig::Vector q(dim,0.0);
 
-        for (Index i=0; i<m; i++)
+        for (Index i=0; i<dim; i++)
         {
-            if (i<dim)
-            {
-                q[i]=q_t(i) + dT * q_dot(i);
-            }
+            q[i]=q_t(i) + dT * q_dot(i);
         }
         computeWeight(q);
 
@@ -466,7 +463,6 @@ public:
                     Index* iRow, Index *jCol, Number* values)
     {
         // printMessage(9,"[eval_jac_g] START\tx: %i\n",IPOPT_Number_toString(x,CTRL_RAD2DEG).c_str());
-        // computeQuantities(x);
 
         if (m>=n) // if there are at least the joint bounds as constraint
         {
@@ -486,12 +482,21 @@ public:
             {
                 computeQuantities(x);
 
+                yarp::sig::Vector q(dim,0.0);
+
+                for (Index i=0; i<dim; i++)
+                {
+                    q[i]=q_t(i) + dT * q_dot(i);
+                }
+                computeWeight(q);
+                computeWeightDerivatives(q);
+
                 Index idx=0;
                 
                 // Let's populate the diagonal matrix with dT
                 for (Index i=0; i<m; i++)
                 {
-                    values[idx]=dT;
+                    values[idx]=dT*(W[i]+q[i]*W_dot[i]);
                     idx++;
                 }
             }
@@ -576,10 +581,10 @@ reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
     CAST_IPOPTAPP(App)->Options()->SetStringValue("mu_strategy","adaptive");
     CAST_IPOPTAPP(App)->Options()->SetIntegerValue("print_level",verbose);
 
-    CAST_IPOPTAPP(App)->Options()->SetStringValue("jacobian_approximation","finite-difference-values");
+    // CAST_IPOPTAPP(App)->Options()->SetStringValue("jacobian_approximation","finite-difference-values");
     CAST_IPOPTAPP(App)->Options()->SetStringValue("nlp_scaling_method","gradient-based");
-    // CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","none");
-    CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","first-order");
+    CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","none");
+    // CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","first-order");
     CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test_print_all","yes");
     // CAST_IPOPTAPP(App)->Options()->SetStringValue("print_timing_statistics","yes");
     // CAST_IPOPTAPP(App)->Options()->SetStringValue("print_options_documentation","no");

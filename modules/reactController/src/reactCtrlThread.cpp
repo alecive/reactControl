@@ -295,16 +295,19 @@ bool reactCtrlThread::stopControl()
 
 bool reactCtrlThread::enableTorso()
 {
+    yarp::os::LockGuard lg(mutex);
     useTorso=true;
     for (int i = 0; i < 3; i++)
     {
         arm->releaseLink(i);
     }
+    alignJointsBounds();
     return true;
 }
 
 bool reactCtrlThread::disableTorso()
 {
+    yarp::os::LockGuard lg(mutex);
     useTorso=false;
     for (int i = 0; i < 3; i++)
     {
