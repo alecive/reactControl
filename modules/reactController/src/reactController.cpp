@@ -119,8 +119,8 @@ public:
         disableTorso = false;
         trajTime     =   3.0;
         trajSpeed    =   0.1;
-        tol          =  1e-3;
-        vMax         =  50.0;
+        tol          =  1e-4;
+        vMax         =  30.0;
     }
 
     bool set_xd(const yarp::sig::Vector& _xd)

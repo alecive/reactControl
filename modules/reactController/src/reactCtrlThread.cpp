@@ -63,10 +63,11 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
     }
 
     slv=NULL;
-    x_d.resize(3,0.0);
-    x_t.resize(3,0.0);
     x_0.resize(3,0.0);
-    vel.resize(3,0.0);
+    x_t.resize(3,0.0);
+    x_n.resize(3,0.0);
+    x_d.resize(3,0.0);
+    
     H.resize(4,4);
 }
 
@@ -158,9 +159,12 @@ void reactCtrlThread::run()
         }
         case 1:
         {
-            if (yarp::os::Time::now()>t_d)
-            // if (norm(x_t-x_0) > norm(x_d-x_0))
+            // if (yarp::os::Time::now()>t_d)
+            if (norm(x_n-x_0) > norm(x_d-x_0))
             {
+                printMessage(0,"x_0 %s\tx_n %s\tx_d %s\n",x_0.toString(3,3).c_str(),
+                                                          x_n.toString(3,3).c_str(),
+                                                          x_d.toString(3,3).c_str() );
                 if (!stopControl())
                 {
                     yError("Unable to properly stop the control of the arm!");
@@ -214,29 +218,28 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     //     return Vector(3,0.0);
     // }
 
-    Vector x_next(3,0.0);
     // First test: the next point will be given w.r.t. the current one
-    // x_next = x_t + (x_d-x_t) * (dT/(t_d-t_t));
+    // x_n = x_t + (x_d-x_t) * (dT/(t_d-t_t));
     // Second test: the next point will be agnostic of the current 
     // configuration
-    x_next = x_0 + (x_d-x_0) * ((t_t+dT-t_0)/(t_d-t_0));
+    // x_n = x_0 + (x_d-x_0) * ((t_t+dT-t_0)/(t_d-t_0));
     // Third solution: use the particleThread
-    // x_next = prtclThrd->getParticle();
+    x_n=prtclThrd->getParticle();
     
-    Vector result = slv->solve(x_next,q_0,dT,vMax,&cpu_time,&exit_code) * CTRL_RAD2DEG;
+    Vector res=slv->solve(x_n,q_0,dT,vMax,&cpu_time,&exit_code) * CTRL_RAD2DEG;
 
     printf("\n");
     printMessage(0,"t_d %g t_t %g\n",t_d-t_0, t_t-t_0);
-    printMessage(0,"x_d:    %s\n",x_d.toString(3,3).c_str());
-    printMessage(0,"x_t:    %s\n",x_t.toString(3,3).c_str());
-    printMessage(0,"x_next: %s\tdT %g\n",x_next.toString(3,3).c_str(),dT);
-    printMessage(0,"norm(x_next-x_t): %g\tnorm(x_d-x_next): %g\tnorm(x_d-x_t): %g\n",
-                    norm(x_next-x_t), norm(x_d-x_next), norm(x_d-x_t));
-    printMessage(0,"Result: %s\n",result.toString(3,3).c_str());
+    printMessage(0,"x_d: %s\n",x_d.toString(3,3).c_str());
+    printMessage(0,"x_t: %s\n",x_t.toString(3,3).c_str());
+    printMessage(0,"x_n: %s\tdT %g\n",x_n.toString(3,3).c_str(),dT);
+    printMessage(0,"norm(x_n-x_t): %g\tnorm(x_d-x_n): %g\tnorm(x_d-x_t): %g\n",
+                    norm(x_n-x_t), norm(x_d-x_n), norm(x_d-x_t));
+    printMessage(0,"Result: %s\n",res.toString(3,3).c_str());
     _exit_code=exit_code;
     delete slv;
 
-    return result;
+    return res;
 }
 
 bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
@@ -372,8 +375,10 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d)
     {
         q_0.resize(arm->getDOF(),0.0);
         x_0=x_t;
+        x_n=x_0;
         x_d=_x_d;
         t_0=yarp::os::Time::now();
+        yarp::sig::Vector vel(3,0.0);
         vel=trajSpeed * (x_d-x_0) / norm(x_d-x_0);
         t_d=t_0+trajTime;
 

@@ -80,11 +80,10 @@ protected:
     
     double      t_0;        // Time at which the trajectory starts
     double      t_d;        // Time at which the trajectory should end
-    yarp::sig::Vector x_d;  // Vector that stores the new target
     yarp::sig::Vector x_0;  // Initial end-effector position
     yarp::sig::Vector x_t;  // Current end-effector position
-
-    yarp::sig::Vector vel;  // 3D velocity vector that describes the trajectory
+    yarp::sig::Vector x_n;  // Desired next end-effector position
+    yarp::sig::Vector x_d;  // Vector that stores the new target
 
     yarp::sig::Vector q_0;   // Initial arm configuration
     yarp::sig::Matrix H;    // End-effector pose
