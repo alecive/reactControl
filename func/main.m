@@ -18,8 +18,8 @@ g_b=0.5*W_gamma*(1.0+tanh(-6.0*(q-qGuardMinCOG)/qGuard))+W_min;
 % This is for the end of the joints limits (the last window)
 g_e=0.5*W_gamma*(1.0+tanh( 6.0*(q-qGuardMaxCOG)/qGuard))+W_min;
 
-diff_g_b=diff(g_b)
-diff_g_e=diff(g_e)
+diff_g_b=diff(g_b,q)
+diff_g_e=diff(g_e,q)
 
 % %% Test example #1
 % q_Guard=8.0;
@@ -38,25 +38,25 @@ q_GuardMinInt=-30.0;
 q_GuardMaxInt= 30.0;
 q_GuardMaxCOG= 35.0;
 q_GuardMaxExt= 40.0;
-q=[-42:0.1:42];
+q_=[-42:0.1:42];
 
 W__gamma=1.0;
 W__min=1.0;
 
 
-for(i=1:size(q,2))
+for(i=1:size(q_,2))
     % disp(i);
-    f_q(i)=func(q(i),q_GuardMinExt,q_GuardMinCOG,q_GuardMinInt, ...
-                     q_GuardMaxInt,q_GuardMaxCOG,q_GuardMaxExt, ...
-                           q_Guard,       W__min,     W__gamma);
+    f_q(i)=func(q_(i),q_GuardMinExt,q_GuardMinCOG,q_GuardMinInt, ...
+                      q_GuardMaxInt,q_GuardMaxCOG,q_GuardMaxExt, ...
+                            q_Guard,       W__min,     W__gamma);
 end
 
-for(i=1:size(q,2))
+for(i=1:size(q_,2))
     % disp(i);
-    f_dot_q(i)=func_dot(q(i),q_GuardMinExt,q_GuardMinCOG,q_GuardMinInt, ...
-                             q_GuardMaxInt,q_GuardMaxCOG,q_GuardMaxExt, ...
-                                   q_Guard,       W__min,     W__gamma);
+    f_dot_q(i)=func_dot(q_(i),q_GuardMinExt,q_GuardMinCOG,q_GuardMinInt, ...
+                              q_GuardMaxInt,q_GuardMaxCOG,q_GuardMaxExt, ...
+                                    q_Guard,       W__min,     W__gamma);
 end
 
-close; figure; hold on;plot(q,f_q);plot(q,f_dot_q,'r');
+close; figure; hold on;plot(q_,f_q);plot(q_,f_dot_q,'r');
 legend('function','derivative');
