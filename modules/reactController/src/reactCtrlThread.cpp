@@ -30,10 +30,10 @@ using namespace yarp::math;
 
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,
                                  const string &_part, int _verbosity, bool _disableTorso,
-                                 double _trajSpeed, double _trajTime, double _tol, particleThread *_pT) :
+                                 double _trajSpeed, double _trajTime, double _vMax, double _tol, particleThread *_pT) :
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
                                  verbosity(_verbosity), useTorso(!_disableTorso),
-                                 trajSpeed(_trajSpeed), trajTime(_trajTime), tol(_tol)
+                                 trajSpeed(_trajSpeed), trajTime(_trajTime), vMax(_vMax), tol(_tol)
 {
     prtclThrd=_pT;
     step=0;
@@ -205,7 +205,6 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // The equation is x(t_next) = x_t + (x_d - x_t) * (t_next - t_now/T-t_now)
     //                              s.t. t_next = t_now + dT
     double dT=getRate()/1000.0;
-    double vM=50.0;
     double t_t=yarp::os::Time::now();
     int    exit_code=-1;
     double cpu_time=0.0;
@@ -224,7 +223,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // Third solution: use the particleThread
     // x_next = prtclThrd->getParticle();
     
-    Vector result = slv->solve(x_next,q_0,dT,vM,&cpu_time,&exit_code) * CTRL_RAD2DEG;
+    Vector result = slv->solve(x_next,q_0,dT,vMax,&cpu_time,&exit_code) * CTRL_RAD2DEG;
 
     printf("\n");
     printMessage(0,"t_d %g t_t %g\n",t_d-t_0, t_t-t_0);
@@ -322,6 +321,26 @@ bool reactCtrlThread::setTol(const double _tol)
     {
         return tol=_tol;
     }
+    return false;
+}
+
+double reactCtrlThread::getTol()
+{
+    return tol;
+}
+
+bool reactCtrlThread::setVMax(const double _vMax)
+{
+    if (_vMax>=0.0)
+    {
+        return vMax=_vMax;
+    }
+    return false;
+}
+
+double reactCtrlThread::getVMax()
+{
+    return vMax;
 }
 
 bool reactCtrlThread::setTrajTime(const double _traj_time)

@@ -44,6 +44,25 @@ service reactController_IDL
   bool set_tol(1:double _tol);
 
   /**
+  * Gets the tolerance.
+  * @return the current tolerance value.
+  */
+  double get_tol();
+
+  /**
+  * Sets the max velocity at the joints.
+  * @param _v_max the max velocity to be set.
+  * @return true/false on success/failure.
+  */
+  bool set_v_max(1:double _v_max);
+
+  /**
+  * Gets the max velocity.
+  * @return the max velocity at the joints.
+  */
+  double get_v_max();
+
+  /**
   * Sets Trajectory Speed.
   * @param _traj_speed  the speed of the trajectory
   * @return true/false on success/failure.

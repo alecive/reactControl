@@ -90,6 +90,7 @@ protected:
     yarp::sig::Matrix H;    // End-effector pose
 
     double tol;         // Tolerance. The solver exits if norm(x_d-x)<tol.
+    double vMax;        // Max belocity set for the joints
 
     // Driver for "classical" interfaces
     PolyDriver       ddA;
@@ -178,7 +179,7 @@ protected:
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & , const string &_ ,
-                    int , bool , double , double , double , particleThread * );
+                    int , bool , double , double , double , double , particleThread * );
     // INIT
     virtual bool threadInit();
     // RUN
@@ -200,6 +201,15 @@ public:
 
     // Sets the tolerance
     bool setTol(const double );
+
+    // Gets the tolerance
+    double getTol();
+
+    // Sets the vMax
+    bool setVMax(const double );
+
+    // Gets the vMax
+    double getVMax();
 
     // [DEPRECATED] Sets the trajectory time 
     bool setTrajTime(const double );

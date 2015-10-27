@@ -101,6 +101,7 @@ private:
     double   trajTime;  // trajectory time (deprecated)
     double  trajSpeed;  // trajectory speed
     double        tol;  // tolerance of the end-effector error to solve the task
+    double       vMax;  // max velocity set for the joints
 
 public:
     reactController()
@@ -119,6 +120,7 @@ public:
         trajTime     =   3.0;
         trajSpeed    =   0.1;
         tol          =  1e-3;
+        vMax         =  50.0;
     }
 
     bool set_xd(const yarp::sig::Vector& _xd)
@@ -146,6 +148,21 @@ public:
     bool set_tol(const double _tol)
     {
         return rctCtrlThrd->setTol(_tol);
+    }
+
+    double get_tol()
+    {
+        return rctCtrlThrd->getTol();
+    }
+
+    bool set_v_max(const double _v_max)
+    {
+        return rctCtrlThrd->setVMax(_v_max);
+    }
+
+    double get_v_max()
+    {
+        return rctCtrlThrd->getVMax();
     }
 
     bool set_traj_speed(const double _traj_speed)
@@ -268,6 +285,14 @@ public:
             }
             else yInfo("[reactController] Could not find trajSpeed in the config file; using %g as default",trajSpeed);
 
+        //****************** vMax ******************
+            if (rf.check("vMax"))
+            {
+                vMax = rf.find("vMax").asDouble();
+                yInfo("[reactController] vMax set to %g [deg/s].",vMax);
+            }
+            else yInfo("[reactController] Could not find vMax in the config file; using %g [deg/s] as default",vMax);
+
         //****************** tol ******************
             if (rf.check("tol"))
             {
@@ -288,7 +313,7 @@ public:
         }
 
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
-                                          disableTorso, trajSpeed, trajTime, tol, prtclThrd);
+                                          disableTorso, trajSpeed, trajTime, vMax, tol, prtclThrd);
         bool strt = rctCtrlThrd->start();
         if (!strt)
         {

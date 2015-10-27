@@ -33,6 +33,31 @@ public:
   virtual bool read(yarp::os::ConnectionReader& connection);
 };
 
+class reactController_IDL_get_tol : public yarp::os::Portable {
+public:
+  double _return;
+  void init();
+  virtual bool write(yarp::os::ConnectionWriter& connection);
+  virtual bool read(yarp::os::ConnectionReader& connection);
+};
+
+class reactController_IDL_set_v_max : public yarp::os::Portable {
+public:
+  double _v_max;
+  bool _return;
+  void init(const double _v_max);
+  virtual bool write(yarp::os::ConnectionWriter& connection);
+  virtual bool read(yarp::os::ConnectionReader& connection);
+};
+
+class reactController_IDL_get_v_max : public yarp::os::Portable {
+public:
+  double _return;
+  void init();
+  virtual bool write(yarp::os::ConnectionWriter& connection);
+  virtual bool read(yarp::os::ConnectionReader& connection);
+};
+
 class reactController_IDL_set_traj_speed : public yarp::os::Portable {
 public:
   double _traj_speed;
@@ -159,6 +184,71 @@ bool reactController_IDL_set_tol::read(yarp::os::ConnectionReader& connection) {
 void reactController_IDL_set_tol::init(const double _tol) {
   _return = false;
   this->_tol = _tol;
+}
+
+bool reactController_IDL_get_tol::write(yarp::os::ConnectionWriter& connection) {
+  yarp::os::idl::WireWriter writer(connection);
+  if (!writer.writeListHeader(2)) return false;
+  if (!writer.writeTag("get_tol",1,2)) return false;
+  return true;
+}
+
+bool reactController_IDL_get_tol::read(yarp::os::ConnectionReader& connection) {
+  yarp::os::idl::WireReader reader(connection);
+  if (!reader.readListReturn()) return false;
+  if (!reader.readDouble(_return)) {
+    reader.fail();
+    return false;
+  }
+  return true;
+}
+
+void reactController_IDL_get_tol::init() {
+  _return = (double)0;
+}
+
+bool reactController_IDL_set_v_max::write(yarp::os::ConnectionWriter& connection) {
+  yarp::os::idl::WireWriter writer(connection);
+  if (!writer.writeListHeader(4)) return false;
+  if (!writer.writeTag("set_v_max",1,3)) return false;
+  if (!writer.writeDouble(_v_max)) return false;
+  return true;
+}
+
+bool reactController_IDL_set_v_max::read(yarp::os::ConnectionReader& connection) {
+  yarp::os::idl::WireReader reader(connection);
+  if (!reader.readListReturn()) return false;
+  if (!reader.readBool(_return)) {
+    reader.fail();
+    return false;
+  }
+  return true;
+}
+
+void reactController_IDL_set_v_max::init(const double _v_max) {
+  _return = false;
+  this->_v_max = _v_max;
+}
+
+bool reactController_IDL_get_v_max::write(yarp::os::ConnectionWriter& connection) {
+  yarp::os::idl::WireWriter writer(connection);
+  if (!writer.writeListHeader(3)) return false;
+  if (!writer.writeTag("get_v_max",1,3)) return false;
+  return true;
+}
+
+bool reactController_IDL_get_v_max::read(yarp::os::ConnectionReader& connection) {
+  yarp::os::idl::WireReader reader(connection);
+  if (!reader.readListReturn()) return false;
+  if (!reader.readDouble(_return)) {
+    reader.fail();
+    return false;
+  }
+  return true;
+}
+
+void reactController_IDL_get_v_max::init() {
+  _return = (double)0;
 }
 
 bool reactController_IDL_set_traj_speed::write(yarp::os::ConnectionWriter& connection) {
@@ -346,6 +436,36 @@ bool reactController_IDL::set_tol(const double _tol) {
   bool ok = yarp().write(helper,helper);
   return ok?helper._return:_return;
 }
+double reactController_IDL::get_tol() {
+  double _return = (double)0;
+  reactController_IDL_get_tol helper;
+  helper.init();
+  if (!yarp().canWrite()) {
+    yError("Missing server method '%s'?","double reactController_IDL::get_tol()");
+  }
+  bool ok = yarp().write(helper,helper);
+  return ok?helper._return:_return;
+}
+bool reactController_IDL::set_v_max(const double _v_max) {
+  bool _return = false;
+  reactController_IDL_set_v_max helper;
+  helper.init(_v_max);
+  if (!yarp().canWrite()) {
+    yError("Missing server method '%s'?","bool reactController_IDL::set_v_max(const double _v_max)");
+  }
+  bool ok = yarp().write(helper,helper);
+  return ok?helper._return:_return;
+}
+double reactController_IDL::get_v_max() {
+  double _return = (double)0;
+  reactController_IDL_get_v_max helper;
+  helper.init();
+  if (!yarp().canWrite()) {
+    yError("Missing server method '%s'?","double reactController_IDL::get_v_max()");
+  }
+  bool ok = yarp().write(helper,helper);
+  return ok?helper._return:_return;
+}
 bool reactController_IDL::set_traj_speed(const double _traj_speed) {
   bool _return = false;
   reactController_IDL_set_traj_speed helper;
@@ -470,6 +590,44 @@ bool reactController_IDL::read(yarp::os::ConnectionReader& connection) {
       if (!writer.isNull()) {
         if (!writer.writeListHeader(1)) return false;
         if (!writer.writeBool(_return)) return false;
+      }
+      reader.accept();
+      return true;
+    }
+    if (tag == "get_tol") {
+      double _return;
+      _return = get_tol();
+      yarp::os::idl::WireWriter writer(reader);
+      if (!writer.isNull()) {
+        if (!writer.writeListHeader(1)) return false;
+        if (!writer.writeDouble(_return)) return false;
+      }
+      reader.accept();
+      return true;
+    }
+    if (tag == "set_v_max") {
+      double _v_max;
+      if (!reader.readDouble(_v_max)) {
+        reader.fail();
+        return false;
+      }
+      bool _return;
+      _return = set_v_max(_v_max);
+      yarp::os::idl::WireWriter writer(reader);
+      if (!writer.isNull()) {
+        if (!writer.writeListHeader(1)) return false;
+        if (!writer.writeBool(_return)) return false;
+      }
+      reader.accept();
+      return true;
+    }
+    if (tag == "get_v_max") {
+      double _return;
+      _return = get_v_max();
+      yarp::os::idl::WireWriter writer(reader);
+      if (!writer.isNull()) {
+        if (!writer.writeListHeader(1)) return false;
+        if (!writer.writeDouble(_return)) return false;
       }
       reader.accept();
       return true;
@@ -603,6 +761,9 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
     helpString.push_back("set_xd");
     helpString.push_back("set_relative_xd");
     helpString.push_back("set_tol");
+    helpString.push_back("get_tol");
+    helpString.push_back("set_v_max");
+    helpString.push_back("get_v_max");
     helpString.push_back("set_traj_speed");
     helpString.push_back("set_verbosity");
     helpString.push_back("get_verbosity");
@@ -634,6 +795,22 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
       helpString.push_back("Sets tolerance. ");
       helpString.push_back("@param _tol the solver exits if norm(x_d-x)<tol. ");
       helpString.push_back("@return true/false on success/failure. ");
+    }
+    if (functionName=="get_tol") {
+      helpString.push_back("double get_tol() ");
+      helpString.push_back("Gets the tolerance. ");
+      helpString.push_back("@return the current tolerance value. ");
+    }
+    if (functionName=="set_v_max") {
+      helpString.push_back("bool set_v_max(const double _v_max) ");
+      helpString.push_back("Sets the max velocity at the joints. ");
+      helpString.push_back("@param _v_max the max velocity to be set. ");
+      helpString.push_back("@return true/false on success/failure. ");
+    }
+    if (functionName=="get_v_max") {
+      helpString.push_back("double get_v_max() ");
+      helpString.push_back("Gets the max velocity. ");
+      helpString.push_back("@return the max velocity at the joints. ");
     }
     if (functionName=="set_traj_speed") {
       helpString.push_back("bool set_traj_speed(const double _traj_speed) ");

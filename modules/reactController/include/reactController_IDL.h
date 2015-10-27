@@ -41,6 +41,22 @@ public:
    */
   virtual bool set_tol(const double _tol);
   /**
+   * Gets the tolerance.
+   * @return the current tolerance value.
+   */
+  virtual double get_tol();
+  /**
+   * Sets the max velocity at the joints.
+   * @param _v_max the max velocity to be set.
+   * @return true/false on success/failure.
+   */
+  virtual bool set_v_max(const double _v_max);
+  /**
+   * Gets the max velocity.
+   * @return the max velocity at the joints.
+   */
+  virtual double get_v_max();
+  /**
    * Sets Trajectory Speed.
    * @param _traj_speed  the speed of the trajectory
    * @return true/false on success/failure.
