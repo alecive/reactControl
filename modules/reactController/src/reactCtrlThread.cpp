@@ -205,7 +205,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // The equation is x(t_next) = x_t + (x_d - x_t) * (t_next - t_now/T-t_now)
     //                              s.t. t_next = t_now + dT
     double dT=getRate()/1000.0;
-    double vM=30.0;
+    double vM=50.0;
     double t_t=yarp::os::Time::now();
     int    exit_code=-1;
     double cpu_time=0.0;
