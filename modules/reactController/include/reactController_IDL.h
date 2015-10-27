@@ -83,7 +83,13 @@ public:
    */
   virtual bool setup_new_particle(const yarp::sig::Vector& _x_0_vel);
   /**
-   * Gets the particle state
+   * Stops the particle motion.
+   * @return true/false on success/failure.
+   */
+  virtual bool stop_particle();
+  /**
+   * Gets the particle state.
+   * @return the particle 3D position.
    */
   virtual yarp::sig::Vector get_particle();
   /**

@@ -81,14 +81,21 @@ public:
     virtual void threadRelease();
 
     /**
-     * initializes the integrator to a new particle to track
-     */
+    * Initializes the integrator to a new particle to track.
+    * @return true/false on success/failure.
+    **/
     bool setupNewParticle(const yarp::sig::Vector &, const yarp::sig::Vector &);
 
     /**
-     * gets the current state of the particle
-     * @return [description]
-     */
+    * Stops the particle motion.
+    * @return true/false on success/failure.
+    **/
+    bool stopParticle();
+
+    /**
+    * Gets the current state of the particle.
+    * @return the particle 3D position.
+    **/
     yarp::sig::Vector getParticle();
 };
 

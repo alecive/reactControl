@@ -190,8 +190,15 @@ public:
         return prtclThrd->setupNewParticle(_x_0,_vel);
     }
 
+    bool stop_particle()
+    {
+        yInfo("[reactController] Stopping particle..");
+        return prtclThrd->stopParticle();
+    }
+
     yarp::sig::Vector get_particle()
     {
+        yInfo("[reactController] Getting particle..");
         return prtclThrd->getParticle();
     }
 

@@ -93,7 +93,14 @@ service reactController_IDL
   bool setup_new_particle(1:Vector _x_0_vel);
 
   /**
-  * Gets the particle state
+  * Stops the particle motion.
+  * @return true/false on success/failure.
+  **/
+  bool stop_particle();
+
+  /**
+  * Gets the particle state.
+  * @return the particle 3D position.
   **/
   Vector get_particle();
 

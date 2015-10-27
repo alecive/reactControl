@@ -64,6 +64,13 @@ bool particleThread::setupNewParticle(const yarp::sig::Vector &_x_0, const yarp:
     return false;
 }
 
+bool particleThread::stopParticle()
+{
+    LockGuard lg(mutex);
+    isRunning=false;
+    return true;
+}
+
 yarp::sig::Vector particleThread::getParticle()
 {
     LockGuard lg(mutex);
