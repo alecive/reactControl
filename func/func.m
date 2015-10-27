@@ -8,9 +8,6 @@ function f_q = func( q, qGuardMinExt, qGuardMinCOG, qGuardMinInt,...
 
     % f_q=0.5*W_gamma*(1.0+tanh(6.0*(q-qGuardMaxCOG)/qGuard))+W_min; 
 
-    % disp('q')
-    disp(q)
-
     if ((q>=qGuardMinInt) & (q<=qGuardMaxInt))
         disp('safe');
         f_q=W_min;

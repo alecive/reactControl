@@ -45,14 +45,14 @@ W__min=1.0;
 
 
 for(i=1:size(q,2))
-    disp(i);
+    % disp(i);
     f_q(i)=func(q(i),q_GuardMinExt,q_GuardMinCOG,q_GuardMinInt, ...
                      q_GuardMaxInt,q_GuardMaxCOG,q_GuardMaxExt, ...
                            q_Guard,       W__min,     W__gamma);
 end
 
 for(i=1:size(q,2))
-    disp(i);
+    % disp(i);
     f_dot_q(i)=func_dot(q(i),q_GuardMinExt,q_GuardMinCOG,q_GuardMinInt, ...
                              q_GuardMaxInt,q_GuardMaxCOG,q_GuardMaxExt, ...
                                    q_Guard,       W__min,     W__gamma);

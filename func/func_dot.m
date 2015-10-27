@@ -8,9 +8,6 @@ function f_dot_q = func_dot( q, qGuardMinExt, qGuardMinCOG, qGuardMinInt,...
 
     % f_dot_q=0.5*W_gamma*(1.0+tanh(6.0*(q-qGuardMaxCOG)/qGuard))+W_min; 
 
-    disp('q')
-    disp(q)
-
     if ((q>=qGuardMinInt) & (q<=qGuardMaxInt))
         disp('safe');
         f_dot_q=0.0;
@@ -19,10 +16,10 @@ function f_dot_q = func_dot( q, qGuardMinExt, qGuardMinCOG, qGuardMinInt,...
         f_dot_q=0.0;
     elseif (q<qGuardMinInt)
         disp('inside min');
-        f_dot_q= (3*W_gamma*(tanh((6*q - 6*qGuardMinCOG)/qGuard)^2 - 1))/qGuard;
+        f_dot_q= (3*W_gamma*( (tanh((6*q - 6*qGuardMinCOG)/qGuard))^2 - 1))/qGuard;
     else
         disp('inside max');
-        f_dot_q=-(3*W_gamma*(tanh((6*q - 6*qGuardMaxCOG)/qGuard)^2 - 1))/qGuard;
+        f_dot_q=-(3*W_gamma*( (tanh((6*q - 6*qGuardMaxCOG)/qGuard))^2 - 1))/qGuard;
     end
 
 end
