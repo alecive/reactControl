@@ -90,6 +90,9 @@ protected:
     // Weights set to the joint limits
     yarp::sig::Vector W;
 
+    // Derivative of said weights w.r.t q
+    yarp::sig::Vector W_dot;
+
     // The maximum weight given to the joint limits bound function
     double W_min;
     double W_gamma;
@@ -177,6 +180,36 @@ protected:
     }
 
     /************************************************************************/
+    bool computeWeightDerivative(const yarp::sig::Vector &q)
+    {
+        for (unsigned int i=0; i<dim; i++)
+        {
+            bool print=false;
+            if ((q[i]>=qGuardMinInt[i]) && (q[i]<=qGuardMaxInt[i]))
+                W_dot(i)=0.0;
+            else if ((q[i]<=qGuardMinExt[i]) || (q[i]>=qGuardMaxExt[i]))
+                W_dot(i)=0.0;
+            else if (q[i]<qGuardMinInt[i])
+            {
+                W_dot(i)= (3*W_gamma*(pow(tanh((6*q[i] - 6*qGuardMinCOG[i])/qGuard[i]),2) - 1))/qGuard[i];
+                // W_dot(i)=0.5*W_gamma*(1.0+tanh(-6.0*(q[i]-qGuardMinCOG[i])/qGuard[i]))+W_min;
+            }
+            else
+            {
+                W_dot(i)=-(3*W_gamma*(pow(tanh((6*q[i] - 6*qGuardMaxCOG[i])/qGuard[i]),2) - 1))/qGuard[i];
+                // W_dot(i)=0.5*W_gamma*(1.0+tanh( 6.0*(q[i]-qGuardMaxCOG[i])/qGuard[i]))+W_min;
+            }
+
+            if (print)
+            {
+                printf("weight vector: %s\n", W_dot.toString(3,3).c_str());
+            }
+        }
+        
+        return true;
+    }
+
+    /************************************************************************/
     bool computeGuard()
     {
         for (unsigned int i=0; i<dim; i++)
@@ -192,13 +225,13 @@ protected:
             qGuardMaxCOG[i]=0.5*(qGuardMaxExt[i]+qGuardMaxInt[i]);
         }
 
-        printMessage(7,"qGuard       %s\n",(CTRL_RAD2DEG*qGuard).toString(3,3).c_str());
-        printMessage(7,"qGuardMinExt %s\n",(CTRL_RAD2DEG*qGuardMinExt).toString(3,3).c_str());
-        printMessage(7,"qGuardMinCOG %s\n",(CTRL_RAD2DEG*qGuardMinCOG).toString(3,3).c_str());
-        printMessage(7,"qGuardMinInt %s\n",(CTRL_RAD2DEG*qGuardMinInt).toString(3,3).c_str());
-        printMessage(7,"qGuardMaxInt %s\n",(CTRL_RAD2DEG*qGuardMaxInt).toString(3,3).c_str());
-        printMessage(7,"qGuardMaxCOG %s\n",(CTRL_RAD2DEG*qGuardMaxCOG).toString(3,3).c_str());
-        printMessage(7,"qGuardMaxExt %s\n",(CTRL_RAD2DEG*qGuardMaxExt).toString(3,3).c_str());
+        printMessage(4,"qGuard       %s\n",(CTRL_RAD2DEG*qGuard).toString(3,3).c_str());
+        printMessage(4,"qGuardMinExt %s\n",(CTRL_RAD2DEG*qGuardMinExt).toString(3,3).c_str());
+        printMessage(4,"qGuardMinCOG %s\n",(CTRL_RAD2DEG*qGuardMinCOG).toString(3,3).c_str());
+        printMessage(4,"qGuardMinInt %s\n",(CTRL_RAD2DEG*qGuardMinInt).toString(3,3).c_str());
+        printMessage(4,"qGuardMaxInt %s\n",(CTRL_RAD2DEG*qGuardMaxInt).toString(3,3).c_str());
+        printMessage(4,"qGuardMaxCOG %s\n",(CTRL_RAD2DEG*qGuardMaxCOG).toString(3,3).c_str());
+        printMessage(4,"qGuardMaxExt %s\n",(CTRL_RAD2DEG*qGuardMaxExt).toString(3,3).c_str());
     }
 
     /************************************************************************/
@@ -245,9 +278,10 @@ public:
         J_cst.resize(3,dim); J_cst.zero();
 
         W.resize(dim,0.0);
+        W_dot.resize(dim,0.0);
         W_min=1.0;
         W_gamma=1.0;
-        guardRatio=0.1;
+        guardRatio=0.4;
 
         qGuard.resize(dim,0.0);
         qGuardMinInt.resize(dim,0.0);
