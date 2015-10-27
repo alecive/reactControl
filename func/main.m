@@ -21,18 +21,29 @@ g_e=0.5*W_gamma*(1.0+tanh( 6.0*(q-qGuardMaxCOG)/qGuard))+W_min;
 diff_g_b=diff(g_b)
 diff_g_e=diff(g_e)
 
-%% Test example
+% %% Test example #1
+% q_Guard=8.0;
+% q_GuardMinExt=-2.0;
+% q_GuardMinCOG= 2.0;
+% q_GuardMinInt= 6.0;
+% q_GuardMaxInt=54.0;
+% q_GuardMaxCOG=58.0;
+% q_GuardMaxExt=62.0;
+% q=[-9:0.1:69];
+%% Test example #2
 q_Guard=8.0;
-q_GuardMinExt=-2.0;
-q_GuardMinCOG= 2.0;
-q_GuardMinInt= 6.0;
-q_GuardMaxInt=54.0;
-q_GuardMaxCOG=58.0;
-q_GuardMaxExt=62.0;
+q_GuardMinExt=-40.0;
+q_GuardMinCOG=-35.0;
+q_GuardMinInt=-30.0;
+q_GuardMaxInt= 30.0;
+q_GuardMaxCOG= 35.0;
+q_GuardMaxExt= 40.0;
+q=[-42:0.1:42];
+
 W__gamma=1.0;
 W__min=1.0;
 
-q=[-9:0.1:69];
+
 for(i=1:size(q,2))
     disp(i);
     f_q(i)=func(q(i),q_GuardMinExt,q_GuardMinCOG,q_GuardMinInt, ...
