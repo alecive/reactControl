@@ -125,6 +125,14 @@ public:
   virtual bool read(yarp::os::ConnectionReader& connection);
 };
 
+class reactController_IDL_stop : public yarp::os::Portable {
+public:
+  bool _return;
+  void init();
+  virtual bool write(yarp::os::ConnectionWriter& connection);
+  virtual bool read(yarp::os::ConnectionReader& connection);
+};
+
 bool reactController_IDL_set_xd::write(yarp::os::ConnectionWriter& connection) {
   yarp::os::idl::WireWriter writer(connection);
   if (!writer.writeListHeader(3)) return false;
@@ -432,6 +440,27 @@ void reactController_IDL_disable_torso::init() {
   _return = false;
 }
 
+bool reactController_IDL_stop::write(yarp::os::ConnectionWriter& connection) {
+  yarp::os::idl::WireWriter writer(connection);
+  if (!writer.writeListHeader(1)) return false;
+  if (!writer.writeTag("stop",1,1)) return false;
+  return true;
+}
+
+bool reactController_IDL_stop::read(yarp::os::ConnectionReader& connection) {
+  yarp::os::idl::WireReader reader(connection);
+  if (!reader.readListReturn()) return false;
+  if (!reader.readBool(_return)) {
+    reader.fail();
+    return false;
+  }
+  return true;
+}
+
+void reactController_IDL_stop::init() {
+  _return = false;
+}
+
 reactController_IDL::reactController_IDL() {
   yarp().setOwner(*this);
 }
@@ -571,6 +600,16 @@ bool reactController_IDL::disable_torso() {
   helper.init();
   if (!yarp().canWrite()) {
     yError("Missing server method '%s'?","bool reactController_IDL::disable_torso()");
+  }
+  bool ok = yarp().write(helper,helper);
+  return ok?helper._return:_return;
+}
+bool reactController_IDL::stop() {
+  bool _return = false;
+  reactController_IDL_stop helper;
+  helper.init();
+  if (!yarp().canWrite()) {
+    yError("Missing server method '%s'?","bool reactController_IDL::stop()");
   }
   bool ok = yarp().write(helper,helper);
   return ok?helper._return:_return;
@@ -774,6 +813,17 @@ bool reactController_IDL::read(yarp::os::ConnectionReader& connection) {
       reader.accept();
       return true;
     }
+    if (tag == "stop") {
+      bool _return;
+      _return = stop();
+      yarp::os::idl::WireWriter writer(reader);
+      if (!writer.isNull()) {
+        if (!writer.writeListHeader(1)) return false;
+        if (!writer.writeBool(_return)) return false;
+      }
+      reader.accept();
+      return true;
+    }
     if (tag == "help") {
       std::string functionName;
       if (!reader.readString(functionName)) {
@@ -822,6 +872,7 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
     helpString.push_back("get_particle");
     helpString.push_back("enable_torso");
     helpString.push_back("disable_torso");
+    helpString.push_back("stop");
     helpString.push_back("help");
   }
   else {
@@ -907,6 +958,11 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
     if (functionName=="disable_torso") {
       helpString.push_back("bool disable_torso() ");
       helpString.push_back("Disables the torso ");
+      helpString.push_back("@return true/false on success/failure. ");
+    }
+    if (functionName=="stop") {
+      helpString.push_back("bool stop() ");
+      helpString.push_back("Disables the controller ");
       helpString.push_back("@return true/false on success/failure. ");
     }
     if (functionName=="help") {

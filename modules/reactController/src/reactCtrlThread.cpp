@@ -18,6 +18,8 @@
 */
 
 #include <yarp/os/Time.h>
+#include <iCub/skinDynLib/common.h>
+
 #include "reactCtrlThread.h"
 #include <fstream>
 #include <sstream>
@@ -28,6 +30,10 @@
 using namespace yarp::sig;
 using namespace yarp::math;
 
+#define STATE_WAIT              0
+#define STATE_REACH             1
+#define STATE_IDLE              2
+
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,
                                  const string &_part, int _verbosity, bool _disableTorso,
                                  double _trajSpeed, double _trajTime, double _vMax, double _tol, particleThread *_pT) :
@@ -36,7 +42,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  trajSpeed(_trajSpeed), trajTime(_trajTime), vMax(_vMax), tol(_tol)
 {
     prtclThrd=_pT;
-    step=0;
+    state=STATE_WAIT;
 
     if (part=="left_arm")
     {
@@ -139,6 +145,8 @@ bool reactCtrlThread::threadInit()
         return false;
     }
 
+    outPort.open("/"+name +"/data:o");
+
     yarp::os::Time::delay(0.2);
 
     return true;
@@ -147,7 +155,8 @@ bool reactCtrlThread::threadInit()
 void reactCtrlThread::run()
 {
     updateArmChain();
-    switch (step)
+
+    switch (state)
     {
         case 0:
         {
@@ -159,23 +168,28 @@ void reactCtrlThread::run()
         }
         case 1:
         {
-            // if (yarp::os::Time::now()>t_d)
+            // If the particle reached the target, let's stop it
             if (norm(x_n-x_0) > norm(x_d-x_0))
             {
-                printMessage(0,"x_0 %s\tx_n %s\tx_d %s\n",x_0.toString(3,3).c_str(),
-                                                          x_n.toString(3,3).c_str(),
-                                                          x_d.toString(3,3).c_str() );
+                prtclThrd->stopParticle();
+            }
+            
+            // if (yarp::os::Time::now()>t_d)
+            if (norm(x_t-x_d) < tol*100.0)
+            {
+                printf("\n");
+                printMessage(0,"norm(x_t-x_d) %g\ttol %g\n",norm(x_t-x_d),tol*100.0);
                 if (!stopControl())
                 {
                     yError("Unable to properly stop the control of the arm!");
                 }
-                step++;
+                
                 break;
             }
 
             int exit_code;
             Vector q_dot = solveIK(exit_code);
-            // step++; // This is for testing purposes. To be removed!
+            // state++; // This is for testing purposes. To be removed!
 
             if (exit_code==Ipopt::Solve_Succeeded ||
                 exit_code==Ipopt::Maximum_CpuTime_Exceeded)
@@ -193,12 +207,16 @@ void reactCtrlThread::run()
             break;
         }
         case 2:
+            yInfo("[reactCtrlThread] finished.");
+            state=STATE_WAIT;
             break;
         default:
-            yError("[reactCtrlThread] reactCtrlThread should never be here!!! Step: %d",step);
+            yError("[reactCtrlThread] reactCtrlThread should never be here!!! Step: %d",state);
             yarp::os::Time::delay(2.0);
             break;
     }
+
+    sendData();
 }
 
 Vector reactCtrlThread::solveIK(int &_exit_code)
@@ -229,10 +247,9 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     Vector res=slv->solve(x_n,q_0,dT,vMax,&cpu_time,&exit_code) * CTRL_RAD2DEG;
 
     printf("\n");
-    printMessage(0,"t_d %g t_t %g\n",t_d-t_0, t_t-t_0);
-    printMessage(0,"x_d: %s\n",x_d.toString(3,3).c_str());
-    printMessage(0,"x_t: %s\n",x_t.toString(3,3).c_str());
-    printMessage(0,"x_n: %s\tdT %g\n",x_n.toString(3,3).c_str(),dT);
+    // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
+    printMessage(0,"x_n: %s\tx_d: %s\tdT %g\n",x_n.toString(3,3).c_str(),x_d.toString(3,3).c_str(),dT);
+    printMessage(0,"x_0: %s\tx_t: %s\n",       x_0.toString(3,3).c_str(),x_t.toString(3,3).c_str());
     printMessage(0,"norm(x_n-x_t): %g\tnorm(x_d-x_n): %g\tnorm(x_d-x_t): %g\n",
                     norm(x_n-x_t), norm(x_d-x_n), norm(x_d-x_t));
     printMessage(0,"Result: %s\n",res.toString(3,3).c_str());
@@ -247,21 +264,36 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
     yarp::os::LockGuard lg(mutex);
     VectorOf<int> jointsToSetA;
     VectorOf<int> jointsToSetT;
-    if (!areJointsHealthyAndSet(jointsToSetA,"arm","velocity") || 
-        !areJointsHealthyAndSet(jointsToSetT,"torso","velocity"))
+    if (!areJointsHealthyAndSet(jointsToSetA,"arm","velocity"))
     {
-        yWarning("[reactController] Stopping control because joints are not healthy!");
+        yWarning("[reactController] Stopping control because arm joints are not healthy!");
         stopControl();
         return false;
     }
-    else
+
+    if (useTorso)
     {
-        if (!setCtrlModes(jointsToSetA,"arm","velocity") || 
-            !setCtrlModes(jointsToSetT,"torso","velocity"))
+        if (!areJointsHealthyAndSet(jointsToSetT,"torso","velocity"))
         {
-            yError("[reactController] I am not able to set the joints to velocity mode!");
+            yWarning("[reactController] Stopping control because torso joints are not healthy!");
+            stopControl();
             return false;
-        }   
+        }
+    }
+
+    if (!setCtrlModes(jointsToSetA,"arm","velocity"))
+    {
+        yError("[reactController] I am not able to set the arm joints to velocity mode!");
+        return false;
+    }   
+
+    if (useTorso)
+    {
+        if (!setCtrlModes(jointsToSetT,"torso","velocity"))
+        {
+            yError("[reactController] I am not able to set the torso joints to velocity mode!");
+            return false;
+        }
     }
 
     printMessage(1,"Moving the robot with velocities: %s\n",_vels.toString(3,3).c_str());
@@ -283,10 +315,32 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
     return true;
 }
 
+void reactCtrlThread::sendData()
+{
+    if (state==STATE_REACH)
+    {
+        if (outPort.getOutputCount()>0)
+        {
+            yarp::os::Bottle out;
+            out.clear();
+            out.addInt(state);
+
+            yarp::os::Bottle &b_x_d=out.addList();
+            iCub::skinDynLib::vectorIntoBottle(x_d,b_x_d);
+
+            yarp::os::Bottle &b_x_t=out.addList();
+            iCub::skinDynLib::vectorIntoBottle(x_t,b_x_t);            
+
+            outPort.write(out);
+        }
+    }
+}
+
 bool reactCtrlThread::stopControl()
 {
     yarp::os::LockGuard lg(mutex);
-    yInfo("[reactController] Stopping control.\n");
+
+    state=STATE_IDLE;
     if (useTorso)
     {
         return ivelA->stop() && ivelT->stop();
@@ -387,7 +441,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d)
             yInfo("[reactCtrlThread] got new target: x_0: %s",x_0.toString(3,3).c_str());
             yInfo("[reactCtrlThread]                 x_d: %s",x_d.toString(3,3).c_str());
             yInfo("[reactCtrlThread]                 vel: %s",vel.toString(3,3).c_str());
-            step = 1;
+            state = STATE_REACH;
 
             return true;
         }
@@ -397,6 +451,8 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d)
 
 bool reactCtrlThread::setNewRelativeTarget(const Vector& _rel_x_d)
 {
+    if(_rel_x_d == Vector(3,0.0)) return false;
+
     Vector x_d = x_t + _rel_x_d;
     return setNewTarget(x_d);
 }

@@ -25,6 +25,7 @@
 #include <yarp/os/Log.h>
 #include <yarp/os/Mutex.h>
 #include <yarp/os/LockGuard.h>
+#include <yarp/os/Port.h>
 
 #include <yarp/sig/Vector.h>
 #include <yarp/sig/Matrix.h>
@@ -76,7 +77,7 @@ protected:
     // INTERNAL VARIABLES:
     particleThread  *prtclThrd;     // Pointer to the particleThread in order to access its data
 
-    int        step;        // Flag to know in which step the thread is in
+    int        state;        // Flag to know in which state the thread is in
     
     double      t_0;        // Time at which the trajectory starts
     double      t_d;        // Time at which the trajectory should end
@@ -85,11 +86,13 @@ protected:
     yarp::sig::Vector x_n;  // Desired next end-effector position
     yarp::sig::Vector x_d;  // Vector that stores the new target
 
-    yarp::sig::Vector q_0;   // Initial arm configuration
+    yarp::sig::Vector q_0;  // Initial arm configuration
     yarp::sig::Matrix H;    // End-effector pose
 
     double tol;         // Tolerance. The solver exits if norm(x_d-x)<tol.
-    double vMax;        // Max belocity set for the joints
+    double vMax;        // Max velocity set for the joints
+
+    yarp::os::Port outPort;
 
     // Driver for "classical" interfaces
     PolyDriver       ddA;
@@ -135,6 +138,11 @@ protected:
     void updateArmChain();
 
     /**
+    * Sends useful data to a port in order to track it on matlab
+    **/
+    void sendData();
+
+    /**
     * Solves the Inverse Kinematic task
     */
     yarp::sig::Vector solveIK(int &);
@@ -143,11 +151,6 @@ protected:
     * Sends the computed velocities to the robot
     */
     bool controlArm(const yarp::sig::Vector &);
-
-    /**
-    * Sends the computed velocities to the robot
-    */
-    bool stopControl();
 
     /**
      * Check the state of each joint to be controlled
@@ -221,6 +224,11 @@ public:
 
     // gets the verbosity
     int getVerbosity() { return verbosity; };
+
+    /**
+    * Stops the control of the robot
+    */
+    bool stopControl();
 };
 
 #endif

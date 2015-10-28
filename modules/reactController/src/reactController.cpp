@@ -204,12 +204,20 @@ public:
 
     bool enable_torso()
     {
+        yInfo("[reactController] Enabling torso..");
         return rctCtrlThrd->enableTorso();
     }
 
     bool disable_torso()
     {
+        yInfo("[reactController] Disabling torso..");
         return rctCtrlThrd->disableTorso();
+    }
+
+    bool stop()
+    {
+        yInfo("[reactController] Stopping control..");
+        return rctCtrlThrd->stopControl();
     }
 
     bool configure(ResourceFinder &rf)

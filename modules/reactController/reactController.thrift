@@ -115,4 +115,10 @@ service reactController_IDL
   * @return true/false on success/failure.
   **/
   bool disable_torso();
+
+  /**
+  * Disables the controller
+  * @return true/false on success/failure.
+  **/
+  bool stop();
 }

@@ -30,6 +30,6 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include
                     ${IPOPT_INCLUDE_DIRS})
 
 add_executable(${PROJECT_NAME} ${header_files} ${source_files} ${idl_files})
-target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES} iKin ${IPOPT_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES} iKin skinDynLib ${IPOPT_LIBRARIES})
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 
