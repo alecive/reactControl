@@ -83,7 +83,14 @@ public:
    */
   virtual bool setup_new_particle(const yarp::sig::Vector& _x_0_vel);
   /**
-   * Stops the particle motion.
+   * Stops the particle motion, sets the output vector to the given value.
+   * @param _x_0     3D Vector that specifies the new value of the output vector.
+   *                 (put it between brackets if asking for it through rpc).
+   * @return true/false on success/failure.
+   */
+  virtual bool reset_particle(const yarp::sig::Vector& _x_0);
+  /**
+   * Stops the particle motion at the current state.
    * @return true/false on success/failure.
    */
   virtual bool stop_particle();
@@ -93,12 +100,16 @@ public:
    */
   virtual yarp::sig::Vector get_particle();
   /**
-   * Enables the torso
+   * Enables the torso. WARNING: if this command is sent while the robot
+   * is performing a reaching, the flag will not be enabled. You have to
+   * wait for the robot to stop (or stop it manually).
    * @return true/false on success/failure.
    */
   virtual bool enable_torso();
   /**
-   * Disables the torso
+   * Disables the torso WARNING: if this command is sent while the robot
+   * is performing a reaching, the flag will not be enabled. You have to
+   * wait for the robot to stop (or stop it manually).
    * @return true/false on success/failure.
    */
   virtual bool disable_torso();
@@ -107,6 +118,15 @@ public:
    * @return true/false on success/failure.
    */
   virtual bool stop();
+  /**
+   * Gets the state of the reactCtrlThread.
+   * @return an integer that represent the state of the controller. As of now,
+   *         it can be one of the following:
+   *         STATE_WAIT  (0) -> wait for a new command
+   *         STATE_REACH (1) -> a reaching is being performed
+   *         STATE_IDLE  (2) -> idle state, it falls back automatically to STATE_WAIT
+   */
+  virtual int32_t get_state();
   virtual bool read(yarp::os::ConnectionReader& connection);
   virtual std::vector<std::string> help(const std::string& functionName="--all");
 };

@@ -93,25 +93,37 @@ service reactController_IDL
   bool setup_new_particle(1:Vector _x_0_vel);
 
   /**
-  * Stops the particle motion.
+  * Stops the particle motion, sets the output vector to the given value.
+  * @param _x_0     3D Vector that specifies the new value of the output vector.
+  *                 (put it between brackets if asking for it through rpc).
+  * @return true/false on success/failure.
+  **/
+  bool reset_particle(1:Vector _x_0);
+
+  /**
+  * Stops the particle motion at the current state.
   * @return true/false on success/failure.
   **/
   bool stop_particle();
 
   /**
-  * Gets the particle state.
+  * Gets the particle state. 
   * @return the particle 3D position.
   **/
   Vector get_particle();
 
   /**
-  * Enables the torso
+  * Enables the torso. WARNING: if this command is sent while the robot 
+  * is performing a reaching, the flag will not be enabled. You have to 
+  * wait for the robot to stop (or stop it manually).
   * @return true/false on success/failure.
   **/
   bool enable_torso();
 
   /**
-  * Disables the torso
+  * Disables the torso WARNING: if this command is sent while the robot 
+  * is performing a reaching, the flag will not be enabled. You have to 
+  * wait for the robot to stop (or stop it manually).
   * @return true/false on success/failure.
   **/
   bool disable_torso();
@@ -121,4 +133,14 @@ service reactController_IDL
   * @return true/false on success/failure.
   **/
   bool stop();
+
+  /**
+  * Gets the state of the reactCtrlThread. 
+  * @return an integer that represent the state of the controller. As of now,
+  *         it can be one of the following:
+  *         STATE_WAIT  (0) -> wait for a new command
+  *         STATE_REACH (1) -> a reaching is being performed
+  *         STATE_IDLE  (2) -> idle state, it falls back automatically to STATE_WAIT
+  **/
+  i32 get_state();
 }

@@ -53,9 +53,8 @@ protected:
     // Integrator to get the particle trajectory
     iCub::ctrl::Integrator *integrator;
 
-    yarp::sig::Vector x_0;
+    // Speed of the particle in 3D
     yarp::sig::Vector vel;
-    yarp::sig::Vector x_t;
 
     // Mutex for handling things correctly
     yarp::os::Mutex mutex;
@@ -91,6 +90,13 @@ public:
     * @return true/false on success/failure.
     **/
     bool stopParticle();
+
+    /**
+    * Resets the particle at a given state
+    * @param  _x_0 the state
+    * @return true/false on success/failure.
+    **/
+    bool resetParticle(const yarp::sig::Vector &_x_0);
 
     /**
     * Gets the current state of the particle.

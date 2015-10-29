@@ -119,7 +119,7 @@ public:
         disableTorso = false;
         trajTime     =   3.0;
         trajSpeed    =   0.1;
-        tol          =  1e-4;
+        tol          =  1e-5;
         vMax         =  30.0;
     }
 
@@ -175,6 +175,11 @@ public:
         return rctCtrlThrd->getVerbosity();
     }
 
+    int get_state()
+    {
+        return rctCtrlThrd->getState();
+    }
+
     bool set_verbosity(const int32_t _verbosity)
     {
         yInfo("[reactController] Setting verbosity to %i",_verbosity);
@@ -188,6 +193,16 @@ public:
         yInfo("[reactController] Setting up new particle.. x_0: %s\tvel: %s\n",
                 _x_0.toString(3,3).c_str(), _vel.toString(3,3).c_str());
         return prtclThrd->setupNewParticle(_x_0,_vel);
+    }
+
+    bool reset_particle(const yarp::sig::Vector& _x_0)
+    {
+        if (_x_0.size()<3)
+        {
+            return false;
+        }
+        yInfo("[reactController] Resetting particle to %s..",_x_0.toString(3,3).c_str());
+        return prtclThrd->resetParticle(_x_0);
     }
 
     bool stop_particle()

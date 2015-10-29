@@ -31,8 +31,6 @@ particleThread::particleThread(int _rate, const string &_name, int _verbosity) :
 
     isRunning=false;
     vel.resize(3,0.0);
-    x_0.resize(3,0.0);
-    x_t.resize(3,0.0);
 }
 
 bool particleThread::threadInit()
@@ -45,7 +43,7 @@ void particleThread::run()
     if (isRunning)
     {
         LockGuard lg(mutex);
-        x_t=integrator->integrate(vel);
+        integrator->integrate(vel);
     }
 }
 
@@ -55,13 +53,20 @@ bool particleThread::setupNewParticle(const yarp::sig::Vector &_x_0, const yarp:
     if (_x_0.size()>=3 && _vel.size()>=3)
     {
         isRunning=true;
-        x_0=_x_0;
         vel=_vel;
-        integrator->reset(x_0);
+        integrator->reset(_x_0);
         return true;
     }
     
     return false;
+}
+
+bool particleThread::resetParticle(const yarp::sig::Vector &_x_0)
+{
+    LockGuard lg(mutex);
+    integrator->reset(_x_0);
+    isRunning=false;
+    return true;
 }
 
 bool particleThread::stopParticle()
@@ -74,7 +79,7 @@ bool particleThread::stopParticle()
 yarp::sig::Vector particleThread::getParticle()
 {
     LockGuard lg(mutex);
-    return x_t;
+    return integrator->get();
 }
 
 int particleThread::printMessage(const int l, const char *f, ...) const

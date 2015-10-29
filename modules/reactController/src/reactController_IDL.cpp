@@ -93,6 +93,15 @@ public:
   virtual bool read(yarp::os::ConnectionReader& connection);
 };
 
+class reactController_IDL_reset_particle : public yarp::os::Portable {
+public:
+  yarp::sig::Vector _x_0;
+  bool _return;
+  void init(const yarp::sig::Vector& _x_0);
+  virtual bool write(yarp::os::ConnectionWriter& connection);
+  virtual bool read(yarp::os::ConnectionReader& connection);
+};
+
 class reactController_IDL_stop_particle : public yarp::os::Portable {
 public:
   bool _return;
@@ -128,6 +137,14 @@ public:
 class reactController_IDL_stop : public yarp::os::Portable {
 public:
   bool _return;
+  void init();
+  virtual bool write(yarp::os::ConnectionWriter& connection);
+  virtual bool read(yarp::os::ConnectionReader& connection);
+};
+
+class reactController_IDL_get_state : public yarp::os::Portable {
+public:
+  int32_t _return;
   void init();
   virtual bool write(yarp::os::ConnectionWriter& connection);
   virtual bool read(yarp::os::ConnectionReader& connection);
@@ -357,6 +374,29 @@ void reactController_IDL_setup_new_particle::init(const yarp::sig::Vector& _x_0_
   this->_x_0_vel = _x_0_vel;
 }
 
+bool reactController_IDL_reset_particle::write(yarp::os::ConnectionWriter& connection) {
+  yarp::os::idl::WireWriter writer(connection);
+  if (!writer.writeListHeader(3)) return false;
+  if (!writer.writeTag("reset_particle",1,2)) return false;
+  if (!writer.write(_x_0)) return false;
+  return true;
+}
+
+bool reactController_IDL_reset_particle::read(yarp::os::ConnectionReader& connection) {
+  yarp::os::idl::WireReader reader(connection);
+  if (!reader.readListReturn()) return false;
+  if (!reader.readBool(_return)) {
+    reader.fail();
+    return false;
+  }
+  return true;
+}
+
+void reactController_IDL_reset_particle::init(const yarp::sig::Vector& _x_0) {
+  _return = false;
+  this->_x_0 = _x_0;
+}
+
 bool reactController_IDL_stop_particle::write(yarp::os::ConnectionWriter& connection) {
   yarp::os::idl::WireWriter writer(connection);
   if (!writer.writeListHeader(2)) return false;
@@ -459,6 +499,27 @@ bool reactController_IDL_stop::read(yarp::os::ConnectionReader& connection) {
 
 void reactController_IDL_stop::init() {
   _return = false;
+}
+
+bool reactController_IDL_get_state::write(yarp::os::ConnectionWriter& connection) {
+  yarp::os::idl::WireWriter writer(connection);
+  if (!writer.writeListHeader(2)) return false;
+  if (!writer.writeTag("get_state",1,2)) return false;
+  return true;
+}
+
+bool reactController_IDL_get_state::read(yarp::os::ConnectionReader& connection) {
+  yarp::os::idl::WireReader reader(connection);
+  if (!reader.readListReturn()) return false;
+  if (!reader.readI32(_return)) {
+    reader.fail();
+    return false;
+  }
+  return true;
+}
+
+void reactController_IDL_get_state::init() {
+  _return = 0;
 }
 
 reactController_IDL::reactController_IDL() {
@@ -564,6 +625,16 @@ bool reactController_IDL::setup_new_particle(const yarp::sig::Vector& _x_0_vel) 
   bool ok = yarp().write(helper,helper);
   return ok?helper._return:_return;
 }
+bool reactController_IDL::reset_particle(const yarp::sig::Vector& _x_0) {
+  bool _return = false;
+  reactController_IDL_reset_particle helper;
+  helper.init(_x_0);
+  if (!yarp().canWrite()) {
+    yError("Missing server method '%s'?","bool reactController_IDL::reset_particle(const yarp::sig::Vector& _x_0)");
+  }
+  bool ok = yarp().write(helper,helper);
+  return ok?helper._return:_return;
+}
 bool reactController_IDL::stop_particle() {
   bool _return = false;
   reactController_IDL_stop_particle helper;
@@ -610,6 +681,16 @@ bool reactController_IDL::stop() {
   helper.init();
   if (!yarp().canWrite()) {
     yError("Missing server method '%s'?","bool reactController_IDL::stop()");
+  }
+  bool ok = yarp().write(helper,helper);
+  return ok?helper._return:_return;
+}
+int32_t reactController_IDL::get_state() {
+  int32_t _return = 0;
+  reactController_IDL_get_state helper;
+  helper.init();
+  if (!yarp().canWrite()) {
+    yError("Missing server method '%s'?","int32_t reactController_IDL::get_state()");
   }
   bool ok = yarp().write(helper,helper);
   return ok?helper._return:_return;
@@ -769,6 +850,22 @@ bool reactController_IDL::read(yarp::os::ConnectionReader& connection) {
       reader.accept();
       return true;
     }
+    if (tag == "reset_particle") {
+      yarp::sig::Vector _x_0;
+      if (!reader.read(_x_0)) {
+        reader.fail();
+        return false;
+      }
+      bool _return;
+      _return = reset_particle(_x_0);
+      yarp::os::idl::WireWriter writer(reader);
+      if (!writer.isNull()) {
+        if (!writer.writeListHeader(1)) return false;
+        if (!writer.writeBool(_return)) return false;
+      }
+      reader.accept();
+      return true;
+    }
     if (tag == "stop_particle") {
       bool _return;
       _return = stop_particle();
@@ -824,6 +921,17 @@ bool reactController_IDL::read(yarp::os::ConnectionReader& connection) {
       reader.accept();
       return true;
     }
+    if (tag == "get_state") {
+      int32_t _return;
+      _return = get_state();
+      yarp::os::idl::WireWriter writer(reader);
+      if (!writer.isNull()) {
+        if (!writer.writeListHeader(1)) return false;
+        if (!writer.writeI32(_return)) return false;
+      }
+      reader.accept();
+      return true;
+    }
     if (tag == "help") {
       std::string functionName;
       if (!reader.readString(functionName)) {
@@ -868,11 +976,13 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
     helpString.push_back("set_verbosity");
     helpString.push_back("get_verbosity");
     helpString.push_back("setup_new_particle");
+    helpString.push_back("reset_particle");
     helpString.push_back("stop_particle");
     helpString.push_back("get_particle");
     helpString.push_back("enable_torso");
     helpString.push_back("disable_torso");
     helpString.push_back("stop");
+    helpString.push_back("get_state");
     helpString.push_back("help");
   }
   else {
@@ -940,9 +1050,16 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
       helpString.push_back("                (put it between brackets if asking for it through rpc). ");
       helpString.push_back("@return true/false on success/failure. ");
     }
+    if (functionName=="reset_particle") {
+      helpString.push_back("bool reset_particle(const yarp::sig::Vector& _x_0) ");
+      helpString.push_back("Stops the particle motion, sets the output vector to the given value. ");
+      helpString.push_back("@param _x_0     3D Vector that specifies the new value of the output vector. ");
+      helpString.push_back("                (put it between brackets if asking for it through rpc). ");
+      helpString.push_back("@return true/false on success/failure. ");
+    }
     if (functionName=="stop_particle") {
       helpString.push_back("bool stop_particle() ");
-      helpString.push_back("Stops the particle motion. ");
+      helpString.push_back("Stops the particle motion at the current state. ");
       helpString.push_back("@return true/false on success/failure. ");
     }
     if (functionName=="get_particle") {
@@ -952,18 +1069,31 @@ std::vector<std::string> reactController_IDL::help(const std::string& functionNa
     }
     if (functionName=="enable_torso") {
       helpString.push_back("bool enable_torso() ");
-      helpString.push_back("Enables the torso ");
+      helpString.push_back("Enables the torso. WARNING: if this command is sent while the robot ");
+      helpString.push_back("is performing a reaching, the flag will not be enabled. You have to ");
+      helpString.push_back("wait for the robot to stop (or stop it manually). ");
       helpString.push_back("@return true/false on success/failure. ");
     }
     if (functionName=="disable_torso") {
       helpString.push_back("bool disable_torso() ");
-      helpString.push_back("Disables the torso ");
+      helpString.push_back("Disables the torso WARNING: if this command is sent while the robot ");
+      helpString.push_back("is performing a reaching, the flag will not be enabled. You have to ");
+      helpString.push_back("wait for the robot to stop (or stop it manually). ");
       helpString.push_back("@return true/false on success/failure. ");
     }
     if (functionName=="stop") {
       helpString.push_back("bool stop() ");
       helpString.push_back("Disables the controller ");
       helpString.push_back("@return true/false on success/failure. ");
+    }
+    if (functionName=="get_state") {
+      helpString.push_back("int32_t get_state() ");
+      helpString.push_back("Gets the state of the reactCtrlThread. ");
+      helpString.push_back("@return an integer that represent the state of the controller. As of now, ");
+      helpString.push_back("        it can be one of the following: ");
+      helpString.push_back("        STATE_WAIT  (0) -> wait for a new command ");
+      helpString.push_back("        STATE_REACH (1) -> a reaching is being performed ");
+      helpString.push_back("        STATE_IDLE  (2) -> idle state, it falls back automatically to STATE_WAIT ");
     }
     if (functionName=="help") {
       helpString.push_back("std::vector<std::string> help(const std::string& functionName=\"--all\")");
