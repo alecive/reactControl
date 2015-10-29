@@ -36,10 +36,10 @@ using namespace yarp::math;
 
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,
                                  const string &_part, int _verbosity, bool _disableTorso,
-                                 double _trajSpeed, double _trajTime, double _vMax, double _tol, particleThread *_pT) :
+                                 double _trajSpeed, double _globalTol, double _vMax, double _tol, particleThread *_pT) :
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
                                  verbosity(_verbosity), useTorso(!_disableTorso),
-                                 trajSpeed(_trajSpeed), trajTime(_trajTime), vMax(_vMax), tol(_tol)
+                                 trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol)
 {
     prtclThrd=_pT;
     state=STATE_WAIT;
@@ -87,7 +87,7 @@ bool reactCtrlThread::threadInit()
     OptA.put("local", ("/"+name +"/"+part).c_str());
     if (!ddA.open(OptA))
     {
-        yError("[reactController] Could not open %s PolyDriver!",part.c_str());
+        yError("[reactCtrlThread]Could not open %s PolyDriver!",part.c_str());
         return false;
     }
 
@@ -105,7 +105,7 @@ bool reactCtrlThread::threadInit()
 
     if (!okA)
     {
-        yError("[reactController] Problems acquiring %s interfaces!!!!",part.c_str());
+        yError("[reactCtrlThread]Problems acquiring %s interfaces!!!!",part.c_str());
         return false;
     }
 
@@ -117,7 +117,7 @@ bool reactCtrlThread::threadInit()
     OptT.put("local", ("/"+name +"/torso").c_str());
     if (!ddT.open(OptT))
     {
-        yError("[reactController] Could not open torso PolyDriver!");
+        yError("[reactCtrlThread]Could not open torso PolyDriver!");
         return false;
     }
 
@@ -135,13 +135,13 @@ bool reactCtrlThread::threadInit()
 
     if (!okT)
     {
-        yError("[reactController] Problems acquiring torso interfaces!!!!");
+        yError("[reactCtrlThread]Problems acquiring torso interfaces!!!!");
         return false;
     }
 
     if (!alignJointsBounds())
     {
-        yError("[reactController] alignJointsBounds failed!!!\n");
+        yError("[reactCtrlThread]alignJointsBounds failed!!!\n");
         return false;
     }
 
@@ -169,13 +169,13 @@ void reactCtrlThread::run()
         case 1:
         {
             // if (yarp::os::Time::now()>t_d)
-            if (norm(x_t-x_d) < 0.01)
+            if (norm(x_t-x_d) < globalTol)
             {
                 printf("\n");
-                printMessage(0,"norm(x_t-x_d) %g\ttol %g\n",norm(x_t-x_d),tol*100.0);
+                yDebug(0,"[reactCtrlThread] norm(x_t-x_d) %g\tglobalTol %g\n",norm(x_t-x_d),globalTol);
                 if (!stopControl())
                 {
-                    yError("Unable to properly stop the control of the arm!");
+                    yError("[reactCtrlThread] Unable to properly stop the control of the arm!");
                 }
                 
                 break;
@@ -190,7 +190,7 @@ void reactCtrlThread::run()
             {
                 if (exit_code==Ipopt::Maximum_CpuTime_Exceeded)
                 {
-                    yWarning("Ipopt cpu time was higher than the rate of the thread!");
+                    yWarning("[reactCtrlThread] Ipopt cpu time was higher than the rate of the thread!");
                 }
                 // q_0 = q_dot;
                 if (!controlArm(q_dot))
@@ -266,7 +266,7 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
     VectorOf<int> jointsToSetT;
     if (!areJointsHealthyAndSet(jointsToSetA,"arm","velocity"))
     {
-        yWarning("[reactController] Stopping control because arm joints are not healthy!");
+        yWarning("[reactCtrlThread]Stopping control because arm joints are not healthy!");
         stopControl();
         return false;
     }
@@ -275,7 +275,7 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
     {
         if (!areJointsHealthyAndSet(jointsToSetT,"torso","velocity"))
         {
-            yWarning("[reactController] Stopping control because torso joints are not healthy!");
+            yWarning("[reactCtrlThread]Stopping control because torso joints are not healthy!");
             stopControl();
             return false;
         }
@@ -283,7 +283,7 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
 
     if (!setCtrlModes(jointsToSetA,"arm","velocity"))
     {
-        yError("[reactController] I am not able to set the arm joints to velocity mode!");
+        yError("[reactCtrlThread]I am not able to set the arm joints to velocity mode!");
         return false;
     }   
 
@@ -291,7 +291,7 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
     {
         if (!setCtrlModes(jointsToSetT,"torso","velocity"))
         {
-            yError("[reactController] I am not able to set the torso joints to velocity mode!");
+            yError("[reactCtrlThread]I am not able to set the torso joints to velocity mode!");
             return false;
         }
     }
@@ -438,8 +438,8 @@ double reactCtrlThread::getVMax()
 
 bool reactCtrlThread::setTrajTime(const double _traj_time)
 {
-    yWarning("[reactController] trajTime is deprecated! Use trajSpeed instead.");
-    
+    yWarning("[reactCtrlThread]trajTime is deprecated! Use trajSpeed instead.");
+    return false;
     if (_traj_time>=0.0)
     {
         return trajTime=_traj_time;

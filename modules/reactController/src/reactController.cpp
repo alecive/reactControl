@@ -100,7 +100,8 @@ private:
 
     double   trajTime;  // trajectory time (deprecated)
     double  trajSpeed;  // trajectory speed
-    double        tol;  // tolerance of the end-effector error to solve the task
+    double        tol;  // Tolerance of the ipopt task. The solver exits if norm2(x_d-x)<tol.
+    double  globalTol;  // global tolerance of the task. The controller exits if norm(x_d-x)<globalTol
     double       vMax;  // max velocity set for the joints
 
 public:
@@ -120,6 +121,7 @@ public:
         trajTime     =   3.0;
         trajSpeed    =   0.1;
         tol          =  1e-5;
+        globalTol    =  1e-2;
         vMax         =  30.0;
     }
 
@@ -331,6 +333,14 @@ public:
             }
             else yInfo("[reactController] Could not find tol in the config file; using %g as default",tol);
 
+        //****************** globalTol ******************
+            if (rf.check("globalTol"))
+            {
+                globalTol = rf.find("globalTol").asDouble();
+                yInfo("[reactController] globalTol set to %g m.",globalTol);
+            }
+            else yInfo("[reactController] Could not find globalTol in the config file; using %g as default",globalTol);
+
         //************* THREAD *************
         prtclThrd = new particleThread(prtclRate, name, verbosity);
         if (!prtclThrd->start())
@@ -343,7 +353,7 @@ public:
         }
 
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
-                                          disableTorso, trajSpeed, trajTime, vMax, tol, prtclThrd);
+                                          disableTorso, trajSpeed, globalTol, vMax, tol, prtclThrd);
         bool strt = rctCtrlThrd->start();
         if (!strt)
         {

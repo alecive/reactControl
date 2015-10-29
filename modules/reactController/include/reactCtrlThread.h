@@ -72,6 +72,12 @@ protected:
     double trajTime;
     // Tracjectory speed (default 0.1 m/s)
     double trajSpeed;
+    // Tolerance of the ipopt task. The solver exits if norm2(x_d-x)<tol.
+    double tol;
+    // Global tolerance of the task. The controller exits if norm(x_d-x)<globalTol
+    double globalTol;
+    // Max velocity set for the joints
+    double vMax;
 
     /***************************************************************************/
     // INTERNAL VARIABLES:
@@ -89,9 +95,6 @@ protected:
     yarp::sig::Vector q_0;    // Initial arm configuration
     yarp::sig::Vector q_dot;  // Computed arm configuration to reach the target
     yarp::sig::Matrix H;      // End-effector pose
-
-    double tol;         // Tolerance. The solver exits if norm(x_d-x)<tol.
-    double vMax;        // Max velocity set for the joints
 
     yarp::os::Port outPort;
 
