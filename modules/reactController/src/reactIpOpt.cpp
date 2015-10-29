@@ -280,7 +280,7 @@ public:
         W.resize(dim,0.0);
         W_dot.resize(dim,0.0);
         W_min=1.0;
-        W_gamma=1.0;
+        W_gamma=3.0;
         guardRatio=0.4;
 
         qGuard.resize(dim,0.0);
@@ -381,6 +381,12 @@ public:
             // Let's put these limits to the velocities for the time being
             x_l[i]=-V_max*CTRL_DEG2RAD;
             x_u[i]=+V_max*CTRL_DEG2RAD;
+
+            if (n==10 & i<3)
+            {
+                x_l[i]=-V_max*CTRL_DEG2RAD/3;
+                x_u[i]=+V_max*CTRL_DEG2RAD/3;
+            }
         }
         
         for (Index i=0; i<m; i++)
