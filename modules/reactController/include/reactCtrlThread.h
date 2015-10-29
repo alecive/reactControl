@@ -86,8 +86,9 @@ protected:
     yarp::sig::Vector x_n;  // Desired next end-effector position
     yarp::sig::Vector x_d;  // Vector that stores the new target
 
-    yarp::sig::Vector q_0;  // Initial arm configuration
-    yarp::sig::Matrix H;    // End-effector pose
+    yarp::sig::Vector q_0;    // Initial arm configuration
+    yarp::sig::Vector q_dot;  // Computed arm configuration to reach the target
+    yarp::sig::Matrix H;      // End-effector pose
 
     double tol;         // Tolerance. The solver exits if norm(x_d-x)<tol.
     double vMax;        // Max velocity set for the joints
@@ -136,6 +137,11 @@ protected:
     * Updates the arm's kinematic chain with the encoders from the robot
     **/
     void updateArmChain();
+
+    /**
+    * Computes the spatial step that will be performed by the robot
+    **/
+    yarp::sig::Vector computeDeltaX();
 
     /**
     * Sends useful data to a port in order to track it on matlab
@@ -224,6 +230,9 @@ public:
 
     // gets the verbosity
     int getVerbosity() { return verbosity; };
+
+    // gets the state of the controller
+    int getState() { return state; };
 
     /**
     * Stops the control of the robot

@@ -168,14 +168,8 @@ void reactCtrlThread::run()
         }
         case 1:
         {
-            // If the particle reached the target, let's stop it
-            if (norm(x_n-x_0) > norm(x_d-x_0))
-            {
-                prtclThrd->stopParticle();
-            }
-            
             // if (yarp::os::Time::now()>t_d)
-            if (norm(x_t-x_d) < tol*100.0)
+            if (norm(x_t-x_d) < 0.01)
             {
                 printf("\n");
                 printMessage(0,"norm(x_t-x_d) %g\ttol %g\n",norm(x_t-x_d),tol*100.0);
@@ -188,7 +182,7 @@ void reactCtrlThread::run()
             }
 
             int exit_code;
-            Vector q_dot = solveIK(exit_code);
+            q_dot = solveIK(exit_code);
             // state++; // This is for testing purposes. To be removed!
 
             if (exit_code==Ipopt::Solve_Succeeded ||
@@ -198,12 +192,13 @@ void reactCtrlThread::run()
                 {
                     yWarning("Ipopt cpu time was higher than the rate of the thread!");
                 }
-                q_0 = q_dot;
+                // q_0 = q_dot;
                 if (!controlArm(q_dot))
                 {
                     yError("I am not able to properly control the arm!");
                 }
             }
+
             break;
         }
         case 2:
@@ -242,8 +237,13 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // configuration
     // x_n = x_0 + (x_d-x_0) * ((t_t+dT-t_0)/(t_d-t_0));
     // Third solution: use the particleThread
+    // If the particle reached the target, let's stop it
+    if (norm(x_n-x_0) > norm(x_d-x_0))
+    {
+        prtclThrd->resetParticle(x_d);
+    }
+
     x_n=prtclThrd->getParticle();
-    
     Vector res=slv->solve(x_n,q_0,dT,vMax,&cpu_time,&exit_code) * CTRL_RAD2DEG;
 
     printf("\n");
@@ -315,21 +315,47 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
     return true;
 }
 
+Vector reactCtrlThread::computeDeltaX()
+{
+    iCub::iKin::iKinChain chain=*arm->asChain();
+    yarp::sig::Matrix J1=chain.GeoJacobian();
+    yarp::sig::Matrix J_cst;
+    J_cst.resize(3,arm->getDOF());
+    J_cst.zero();
+    submatrix(J1,J_cst,0,2,0,arm->getDOF()-1);
+    double dT=getRate()/1000.0;
+
+    return dT*J_cst*q_dot;
+}
+
 void reactCtrlThread::sendData()
 {
-    if (state==STATE_REACH)
+    if (outPort.getOutputCount()>0)
     {
-        if (outPort.getOutputCount()>0)
+        if (state==STATE_REACH)
         {
             yarp::os::Bottle out;
             out.clear();
+
+            // 1: the sate of the robot
             out.addInt(state);
 
+            // 2: the desired final target
             yarp::os::Bottle &b_x_d=out.addList();
             iCub::skinDynLib::vectorIntoBottle(x_d,b_x_d);
 
+            // 3: the current desired target given by the particle
+            yarp::os::Bottle &b_x_n=out.addList();
+            iCub::skinDynLib::vectorIntoBottle(x_n,b_x_n);
+
+            // 4: the end effector position in which the robot currently is
             yarp::os::Bottle &b_x_t=out.addList();
-            iCub::skinDynLib::vectorIntoBottle(x_t,b_x_t);            
+            iCub::skinDynLib::vectorIntoBottle(x_t,b_x_t);
+
+            // 5: the delta_x, that is the 3D vector that ipopt commands to 
+            //    the robot in order for x_t to reach x_n
+            yarp::os::Bottle &b_delta_x=out.addList();
+            iCub::skinDynLib::vectorIntoBottle(computeDeltaX(),b_delta_x);
 
             outPort.write(out);
         }
@@ -352,6 +378,11 @@ bool reactCtrlThread::stopControl()
 bool reactCtrlThread::enableTorso()
 {
     yarp::os::LockGuard lg(mutex);
+    if (state==STATE_REACH)
+    {
+        return false;
+    }
+
     useTorso=true;
     for (int i = 0; i < 3; i++)
     {
@@ -364,6 +395,11 @@ bool reactCtrlThread::enableTorso()
 bool reactCtrlThread::disableTorso()
 {
     yarp::os::LockGuard lg(mutex);
+    if (state==STATE_REACH)
+    {
+        return false;
+    }
+
     useTorso=false;
     for (int i = 0; i < 3; i++)
     {
@@ -428,6 +464,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d)
     if (_x_d.size()==3)
     {
         q_0.resize(arm->getDOF(),0.0);
+        q_dot.resize(arm->getDOF(),0.0);
         x_0=x_t;
         x_n=x_0;
         x_d=_x_d;
@@ -441,7 +478,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d)
             yInfo("[reactCtrlThread] got new target: x_0: %s",x_0.toString(3,3).c_str());
             yInfo("[reactCtrlThread]                 x_d: %s",x_d.toString(3,3).c_str());
             yInfo("[reactCtrlThread]                 vel: %s",vel.toString(3,3).c_str());
-            state = STATE_REACH;
+            state=STATE_REACH;
 
             return true;
         }
