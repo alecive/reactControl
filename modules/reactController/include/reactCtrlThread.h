@@ -92,7 +92,7 @@ protected:
     yarp::sig::Vector x_n;  // Desired next end-effector position
     yarp::sig::Vector x_d;  // Vector that stores the new target
 
-    yarp::sig::Vector q_0;    // Initial arm configuration
+    yarp::sig::Vector q_dot_0;    // Initial arm configuration
     yarp::sig::Vector q_dot;  // Computed arm configuration to reach the target
     yarp::sig::Matrix H;      // End-effector pose
 

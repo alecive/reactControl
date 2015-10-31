@@ -53,7 +53,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
         part_short="right";
     }
     arm = new iCub::iKin::iCubArm(part_short.c_str());
-    q_0.resize(arm->getDOF(),0.0);
+    q_dot_0.resize(arm->getDOF(),0.0);
 
     // Block torso links
     for (int i = 0; i < 3; i++)
@@ -192,7 +192,7 @@ void reactCtrlThread::run()
                 {
                     yWarning("[reactCtrlThread] Ipopt cpu time was higher than the rate of the thread!");
                 }
-                // q_0 = q_dot;
+                // q_dot_0 = q_dot;
                 if (!controlArm(q_dot))
                 {
                     yError("I am not able to properly control the arm!");
@@ -244,7 +244,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     }
 
     x_n=prtclThrd->getParticle();
-    Vector res=slv->solve(x_n,q_0,dT,vMax,&cpu_time,&exit_code) * CTRL_RAD2DEG;
+    Vector res=slv->solve(x_n,q_dot_0,dT,vMax,&cpu_time,&exit_code) * CTRL_RAD2DEG;
 
     printf("\n");
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
@@ -463,7 +463,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d)
 {
     if (_x_d.size()==3)
     {
-        q_0.resize(arm->getDOF(),0.0);
+        q_dot_0.resize(arm->getDOF(),0.0);
         q_dot.resize(arm->getDOF(),0.0);
         x_0=x_t;
         x_n=x_0;
