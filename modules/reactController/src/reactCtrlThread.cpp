@@ -664,12 +664,12 @@ void reactCtrlThread::threadRelease()
         delete   arm;   arm = NULL;
 
     yInfo("Closing ports..");
+        outPort.close();
 
     yInfo("Closing controllers..");
+        stopControl();
         ddA.close();
         ddT.close();
-
-    yInfo("Closing solver..");
 }
 
 // empty line to make gcc happy
