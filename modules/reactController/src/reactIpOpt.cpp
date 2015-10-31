@@ -89,15 +89,19 @@ protected:
 
     // Weights set to the joint limits
     yarp::sig::Vector W;
-
     // Derivative of said weights w.r.t q
     yarp::sig::Vector W_dot;
-
-    // The maximum weight given to the joint limits bound function
-    double W_min;
-    double W_gamma;
-
+    // The minimum weight given to the joint limits bound function (1.0)
+    double W_min;   
+    // The gamma of the weight given to the joint limits bound function (W_min+W_gamma=W_max, default 3.0)
+    double W_gamma; 
+    // The guard ratio 
     double guardRatio;
+
+    // The torso reduction rate at for the max velocities sent to the torso(default 3.0)
+    double torsoReduction;
+
+    double boundSmoothness;
 
     yarp::sig::Vector qGuard;
     yarp::sig::Vector qGuardMinInt, qGuardMinExt, qGuardMinCOG;
@@ -132,7 +136,7 @@ protected:
 
             q_t = chain.getAng();
             cost_func=xd -(x0+dT*J_cst*q_dot);
-            grad_cost_func=2*cost_func*(-dT*J_cst);
+            grad_cost_func=2.0*cost_func*(-dT*J_cst);
 
             // if (LIC.isActive())
             //     linC=LIC.getC()*q_t;
@@ -141,7 +145,7 @@ protected:
     }
 
     /************************************************************************/
-    string IPOPT_Number_toString(const Number* x, const double multiplier=1)
+    string IPOPT_Number_toString(const Number* x, const double multiplier=1.0)
     {
         std::ostringstream ss;
         for (Index i=0; i<dim; i++)
@@ -283,6 +287,9 @@ public:
         W_gamma=3.0;
         guardRatio=0.4;
 
+        torsoReduction=3.0;
+        boundSmoothness=10.0;
+
         qGuard.resize(dim,0.0);
         qGuardMinInt.resize(dim,0.0);
         qGuardMinExt.resize(dim,0.0);
@@ -365,7 +372,7 @@ public:
         for (Index i=0; i<n; i++)
             x[i]=q_dot_0[i];
 
-        printMessage(7,"[get_starting_pnt]  OK n: %i x_0: %s\n",n,IPOPT_Number_toString(x).c_str());
+        printMessage(3,"[get_starting_pnt] x_0: %s\n",IPOPT_Number_toString(x,CTRL_RAD2DEG).c_str());
 
         return true;
     }
@@ -376,17 +383,19 @@ public:
     {
         for (Index i=0; i<n; i++)
         {
-            // x_l[i]=chain(i).getMin();
-            // x_u[i]=chain(i).getMax();
-            // Let's put these limits to the velocities for the time being
-            x_l[i]=-V_max*CTRL_DEG2RAD;
-            x_u[i]=+V_max*CTRL_DEG2RAD;
+            // The joints velocities will be constrained by the previous state (that is our current
+            // initial state), in order to avoid abrupt changes
+            x_l[i]=max(-V_max*CTRL_DEG2RAD,q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD);
+            x_u[i]=min(+V_max*CTRL_DEG2RAD,q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD);
 
-            if (n==10 & i<3)
+            if (n==10 && i<3)
             {
-                x_l[i]=-V_max*CTRL_DEG2RAD/3;
-                x_u[i]=+V_max*CTRL_DEG2RAD/3;
+                x_l[i]=max(-V_max*CTRL_DEG2RAD/torsoReduction,q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD);
+                x_u[i]=min(+V_max*CTRL_DEG2RAD/torsoReduction,q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD);
             }
+
+            // printf("-V_max*CTRL_DEG2RAD %g\tq_dot_0[i]-boundSmoothness*CTRL_DEG2RAD %g\n",
+            //         -V_max*CTRL_DEG2RAD,    q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD);
         }
         
         for (Index i=0; i<m; i++)
@@ -403,11 +412,10 @@ public:
             // }
         }
         
-        printMessage(7,"[get_bounds_info]   n: %i m: %i\n",n,m);
-        printMessage(9,"[get_bounds_info]   x_l: %s\n", IPOPT_Number_toString(x_l).c_str());
-        printMessage(9,"[get_bounds_info]   x_u: %s\n", IPOPT_Number_toString(x_u).c_str());
-        printMessage(9,"[get_bounds_info]   g_l: %s\n", IPOPT_Number_toString(g_l).c_str());
-        printMessage(9,"[get_bounds_info]   g_u: %s\n", IPOPT_Number_toString(g_u).c_str());
+        printMessage(3,"[get_bounds_info]   x_l: %s\n", IPOPT_Number_toString(x_l,CTRL_RAD2DEG).c_str());
+        printMessage(3,"[get_bounds_info]   x_u: %s\n", IPOPT_Number_toString(x_u,CTRL_RAD2DEG).c_str());
+        printMessage(4,"[get_bounds_info]   g_l: %s\n", IPOPT_Number_toString(g_l,CTRL_RAD2DEG).c_str());
+        printMessage(4,"[get_bounds_info]   g_u: %s\n", IPOPT_Number_toString(g_u,CTRL_RAD2DEG).c_str());
         return true;
     }
     

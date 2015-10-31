@@ -192,7 +192,7 @@ void reactCtrlThread::run()
                 {
                     yWarning("[reactCtrlThread] Ipopt cpu time was higher than the rate of the thread!");
                 }
-                // q_dot_0 = q_dot;
+                
                 if (!controlArm(q_dot))
                 {
                     yError("I am not able to properly control the arm!");
@@ -244,7 +244,11 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     }
 
     x_n=prtclThrd->getParticle();
-    Vector res=slv->solve(x_n,q_dot_0,dT,vMax,&cpu_time,&exit_code) * CTRL_RAD2DEG;
+
+    // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
+    // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
+    // So, q_dot_0 is in degrees, but I have to convert it in radians before sending it to ipopt
+    Vector res=slv->solve(x_n,q_dot_0*CTRL_DEG2RAD,dT,vMax,&cpu_time,&exit_code)*CTRL_RAD2DEG;
 
     printf("\n");
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
@@ -254,8 +258,9 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
                     norm(x_n-x_t), norm(x_d-x_n), norm(x_d-x_t));
     printMessage(0,"Result: %s\n",res.toString(3,3).c_str());
     _exit_code=exit_code;
-    delete slv;
+    q_dot_0=res;
 
+    delete slv;
     return res;
 }
 
