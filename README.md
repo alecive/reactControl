@@ -1,6 +1,6 @@
 #React Control
 
-This is a repo created with the purpose of providing the iCub with a framework for performing a reaching behavior with whole-body obstacle avoidance. It will be deeply linked with the [peripersonal-space repository](github.com/robotology/peripersonal-space), but for now it is a completely independent module.
+This is a repo created with the purpose of providing the iCub with a framework for performing a reaching behavior with whole-body obstacle avoidance. It will be deeply linked with the [peripersonal-space repository](https://github.com/robotology/peripersonal-space), but for now it is a completely independent module.
 
 **The name is really bad, so if you find a better name I will be glad to update the code accordingly!** For the sake of historic reference, `reactController` comes from the fact that this is a purely iterative control that reacts to changes in the environment (i.e. obstacles to avoid).
 
