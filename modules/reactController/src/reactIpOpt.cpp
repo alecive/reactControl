@@ -38,7 +38,7 @@ using namespace iCub::ctrl;
 using namespace iCub::iKin;
 using namespace Ipopt;
 
-/************************************************************************/
+/*************optimization problem representation********************************************************/
 class react_NLP : public TNLP
 {
 private:
@@ -54,7 +54,7 @@ protected:
     int verbosity;
     // The chain that will undergo the task
     iKinChain &chain;
-    // The inequality constraints (if available)
+    // The inequality constraints (if available) - for the cable mechanism in the real iCub shoulder assembly
     iKinLinIneqConstr &LIC;
     // The dimensionality of the task (for now it should be 7)
     unsigned int dim;
@@ -84,7 +84,7 @@ protected:
     yarp::sig::Vector cost_func;
     // The gradient of the cost function
     yarp::sig::Vector grad_cost_func;
-    // The jacobian associated with the const function
+    // The jacobian associated with the cost function
     yarp::sig::Matrix J_cst;
 
     // Weights set to the joint limits
@@ -257,6 +257,7 @@ protected:
 
 
 public:
+    /***** 8 pure virtual functions from TNLP class need to be implemented here **********/
     /************************************************************************/
     react_NLP(iKinChain &c, yarp::sig::Vector &_xd, yarp::sig::Vector &_q_dot_0,
              double &_dT, double &_vM, iKinLinIneqConstr &_LIC, int _verbosity) : chain(c),
@@ -274,12 +275,12 @@ public:
         yarp::sig::Matrix H=chain.getH();
         x0=H.subcol(0,3,3);
 
-        dim=chain.getDOF();
+        dim=chain.getDOF(); //e.g. 7 for the arm joints
         q_dot.resize(dim,0.0);
         q_dot_d.resize(dim,0.0);
 
-        cost_func.resize(3,0.0);
-        J_cst.resize(3,dim); J_cst.zero();
+        cost_func.resize(3,0.0); //cost function is defined in cartesian space - position of end-effector
+        J_cst.resize(3,dim); J_cst.zero(); // The jacobian associated with the cost function
 
         W.resize(dim,0.0);
         W_dot.resize(dim,0.0);
@@ -336,7 +337,7 @@ public:
     {
         n=dim; // number of vars in the problem (dim(x)) ~ n DOF in chain in our case 
         m=dim+0; // nr constraints - dim(g(x))
-        nnz_jac_g=dim; // the jacobian has dim non zero entries (the diagonal)
+        nnz_jac_g=dim; // the jacobian of g has dim non zero entries (the diagonal)
 
         // if (LIC.isActive())
         // {
@@ -353,7 +354,7 @@ public:
         // }
         
         // nnz_h_lag=(dim*(dim+1))>>1;
-        nnz_h_lag=0;
+        nnz_h_lag=0; //number of nonzero entries in the Hessian
         index_style=TNLP::C_STYLE;
         printMessage(7,"[get_nlp_info]\tn: %i m: %i nnz_jac_g: %i\n",n,m,nnz_jac_g);
         
@@ -365,13 +366,15 @@ public:
                             Number* z_L, Number* z_U, Index m, bool init_lambda,
                             Number* lambda)
     {
-        assert(init_x == true);
-        assert(init_z == false);
-        assert(init_lambda == false);
+        assert(init_x == true); //initial value for x
+        assert(init_z == false); // false => no initial value for bound multipliers z_L, z_U
+        assert(init_lambda == false); // false => no initial value for constraint multipliers
 
-        for (Index i=0; i<n; i++)
-            x[i]=q_dot_0[i];
-
+        for (Index i=0; i<n; i++){
+            x[i]=q_dot_0[i]; //initializing the primal variables 
+            //inside IPOPT, the variables optimized ("primal variables") are x (in our case they are q_dot - 
+            // watch out that you don't confuse them with x - Cartesian pos)
+        }
         printMessage(3,"[get_starting_pnt] x_0: %s\n",IPOPT_Number_toString(x,CTRL_RAD2DEG).c_str());
 
         return true;
@@ -383,8 +386,8 @@ public:
     {
         for (Index i=0; i<n; i++)
         {
-            // The joints velocities will be constrained by the previous state (that is our current
-            // initial state), in order to avoid abrupt changes
+            // The joints velocities will be constrained by the V_min / V_max constraints and 
+            // the previous state (that is our current initial state), in order to avoid abrupt changes
             x_l[i]=max(-V_max*CTRL_DEG2RAD,q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD);
             x_u[i]=min(+V_max*CTRL_DEG2RAD,q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD);
 
@@ -419,10 +422,10 @@ public:
         return true;
     }
     
-    /************************************************************************/
+    /*******Return the value of the objective function at the point x **************************************************/
     bool eval_f(Index n, const Number* x, bool new_x, Number& obj_value)
     {
-        computeQuantities(x);
+        computeQuantities(x); //computes the cost function (global variable)
 
         obj_value=norm2(cost_func);
         printMessage(7,"[eval_f] OK\t\tcost_func: %s\tobj_value %g\n",cost_func.toString().c_str(),obj_value);
@@ -430,7 +433,7 @@ public:
         return true;
     }
     
-    /************************************************************************/
+    /************** Return the gradient of the objective function at the point x*********************************************************/
     bool eval_grad_f(Index n, const Number* x, bool new_x, Number* grad_f)
     {
         computeQuantities(x);
@@ -442,7 +445,7 @@ public:
         return true;
     }
     
-    /************************************************************************/
+    /********** Return the value of the constraint function at the point x***********************************************************/
     bool eval_g(Index n, const Number* x, bool new_x, Index m, Number* g)
     {
         printMessage(9,"[eval_g]\t\tq(t): %s\n",(q_t*CTRL_RAD2DEG).toString(3,3).c_str());
@@ -459,7 +462,7 @@ public:
         {
             if (i<dim)
             {
-                g[i]=W[i]*q[i];
+                g[i]=W[i]*q[i]; //joint position limits are handled here - with a weight, such that they are considered smoothly - not "bang bang"
             }
             // if (i>=dim)
             // {
