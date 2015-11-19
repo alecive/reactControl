@@ -158,7 +158,7 @@ void reactCtrlThread::run()
 
     switch (state)
     {
-        case 0:
+        case STATE_WAIT:
         {
             // Vector x_d(3,0.0);
             // x_d    =x_t;
@@ -166,7 +166,7 @@ void reactCtrlThread::run()
             // setNewTarget(x_d);
             break;
         }
-        case 1:
+        case STATE_REACH:
         {
             // if (yarp::os::Time::now()>t_d)
             if (norm(x_t-x_d) < globalTol)
@@ -201,7 +201,7 @@ void reactCtrlThread::run()
 
             break;
         }
-        case 2:
+        case STATE_IDLE:
             yInfo("[reactCtrlThread] finished.");
             state=STATE_WAIT;
             break;

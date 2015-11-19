@@ -334,8 +334,8 @@ public:
     bool get_nlp_info(Index& n, Index& m, Index& nnz_jac_g, Index& nnz_h_lag,
                       IndexStyleEnum& index_style)
     {
-        n=dim;
-        m=dim+0;
+        n=dim; // number of vars in the problem (dim(x)) ~ n DOF in chain in our case 
+        m=dim+0; // nr constraints - dim(g(x))
         nnz_jac_g=dim; // the jacobian has dim non zero entries (the diagonal)
 
         // if (LIC.isActive())
@@ -402,8 +402,8 @@ public:
         {
             if (i<dim)
             {
-                g_l[i]=chain(i).getMin();
-                g_u[i]=chain(i).getMax();
+                g_l[i]=chain(i).getMin(); //returns joint angle lower bound
+                g_u[i]=chain(i).getMax();  //returns joint angle upper bound
             }
             // if (i>=dim)
             // {
