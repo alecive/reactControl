@@ -322,7 +322,7 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
 
 Vector reactCtrlThread::computeDeltaX()
 {
-    iCub::iKin::iKinChain chain=*arm->asChain();
+    iCub::iKin::iKinChain &chain=*arm->asChain();
     yarp::sig::Matrix J1=chain.GeoJacobian();
     yarp::sig::Matrix J_cst;
     J_cst.resize(3,arm->getDOF());
@@ -538,7 +538,7 @@ bool reactCtrlThread::alignJointsBounds()
 
     if (!arm->alignJointsBounds(lim)) return false;
 
-    // iCub::iKin::iKinChain chain=*arm->asChain();
+    // iCub::iKin::iKinChain &chain=*arm->asChain();
     // chain(0).setMin(-22.0*CTRL_DEG2RAD);    chain(0).setMin(-84.0*CTRL_DEG2RAD);
     // chain(1).setMin(-39.0*CTRL_DEG2RAD);    chain(0).setMin(-39.0*CTRL_DEG2RAD);
     // chain(2).setMin(-59.0*CTRL_DEG2RAD);    chain(0).setMin(-59.0*CTRL_DEG2RAD);
@@ -552,7 +552,7 @@ bool reactCtrlThread::alignJointsBounds()
 void reactCtrlThread::printJointsBounds()
 {
     double min, max;
-    iCub::iKin::iKinChain chain=*arm->asChain();
+    iCub::iKin::iKinChain &chain=*arm->asChain();
 
     for (int i = 0; i < arm->getDOF(); i++)
     {
