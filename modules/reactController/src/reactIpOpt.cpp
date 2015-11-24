@@ -64,17 +64,17 @@ protected:
     // The current position
     yarp::sig::Vector x0;
 
-    // The delta T with which ipopt needs to solve the task
+    // The delta T with which ipopt needs to solve the task - time in the task, not comp. time - delta x = delta T * J * q_dot 
     double &dT;
 
     // The maximum allowed speed at the joints
     double V_max;
 
-    // The desired final joint velocities
+    // The desired final joint velocities - the solution of this iteration 
     yarp::sig::Vector q_dot_d;
-    // The initial joint velocities
+    // The initial joint velocities - solution from prev. step 
     yarp::sig::Vector q_dot_0;
-    // The current joint velocities
+    // The current joint velocities - for internal steps of ipopt, not carrying a particular meaning
     yarp::sig::Vector q_dot;
 
     // The current joint configuration

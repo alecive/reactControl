@@ -155,6 +155,11 @@ bool reactCtrlThread::threadInit()
 void reactCtrlThread::run()
 {
     updateArmChain();
+    
+    //debug - see Jacobian
+    //iCub::iKin::iKinChain &chain_temp=*arm->asChain();
+    //yarp::sig::Matrix J1_temp=chain_temp.GeoJacobian();
+    //yDebug("GeoJacobian: \n %s \n",J1_temp.toString(3,3).c_str());    
 
     switch (state)
     {
@@ -166,10 +171,10 @@ void reactCtrlThread::run()
             // setNewTarget(x_d);
             break;
         }
-        case STATE_REACH:
+        case STATE_REACH: //triggered by rpc request
         {
             // if (yarp::os::Time::now()>t_d)
-            if (norm(x_t-x_d) < globalTol)
+            if (norm(x_t-x_d) < globalTol) //we keep solving until we reach the desired target
             {
                 printf("\n");
                 yDebug(0,"[reactCtrlThread] norm(x_t-x_d) %g\tglobalTol %g\n",norm(x_t-x_d),globalTol);
@@ -189,7 +194,7 @@ void reactCtrlThread::run()
                 exit_code==Ipopt::Maximum_CpuTime_Exceeded)
             {
                 if (exit_code==Ipopt::Maximum_CpuTime_Exceeded)
-                {
+                { //if this happens, try to use a more powerful machine or investigate with higher verbosity and then adapt the rate of the thread with --rate
                     yWarning("[reactCtrlThread] Ipopt cpu time was higher than the rate of the thread!");
                 }
                 
@@ -201,7 +206,7 @@ void reactCtrlThread::run()
 
             break;
         }
-        case STATE_IDLE:
+        case STATE_IDLE: //stop control gets you there just for the printout, then we move to STATE_WAIT
             yInfo("[reactCtrlThread] finished.");
             state=STATE_WAIT;
             break;
@@ -238,12 +243,12 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // x_n = x_0 + (x_d-x_0) * ((t_t+dT-t_0)/(t_d-t_0));
     // Third solution: use the particleThread
     // If the particle reached the target, let's stop it
-    if (norm(x_n-x_0) > norm(x_d-x_0))
+    if (norm(x_n-x_0) > norm(x_d-x_0)) //if the particle is farther than the final target, we reset the particle - it will stay with the target
     {
         prtclThrd->resetParticle(x_d);
     }
 
-    x_n=prtclThrd->getParticle();
+    x_n=prtclThrd->getParticle(); //to get next target 
 
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
@@ -258,7 +263,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
                     norm(x_n-x_t), norm(x_d-x_n), norm(x_d-x_t));
     printMessage(0,"Result: %s\n",res.toString(3,3).c_str());
     _exit_code=exit_code;
-    q_dot_0=res;
+    q_dot_0=res;  //result at this step will be prepared as q_dot_0 for the next iteration of the solver
 
     delete slv;
     return res;
