@@ -85,8 +85,8 @@ protected:
 
     int        state;        // Flag to know in which state the thread is in
     
-    double      t_0;        // Time at which the trajectory starts
-    double      t_d;        // Time at which the trajectory should end
+    double      t_0;        // Time at which the trajectory starts - currently these params are not used 
+    double      t_d;        // Time at which the trajectory should end - currently these params are not used
     yarp::sig::Vector x_0;  // Initial end-effector position
     yarp::sig::Vector x_t;  // Current end-effector position
     yarp::sig::Vector x_n;  // Desired next end-effector position
