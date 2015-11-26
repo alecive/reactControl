@@ -118,7 +118,7 @@ public:
         rctCtrlRate  =    20;    
         prtclRate    =    10;
         disableTorso = false;
-        trajTime     =   3.0;
+        trajTime     =   3.0; //deprecated
         trajSpeed    =   0.1;
         tol          =  1e-5;
         globalTol    =  1e-2;
@@ -240,13 +240,6 @@ public:
     bool configure(ResourceFinder &rf)
     {
         //******************************************************
-        //********************** CONFIGS ***********************
-            disableTorso = rf.check("disableTorso");
-
-            if (disableTorso)
-            {
-                yInfo("[reactController] disableTorso flag set to ON");
-            }
         //******************* NAME ******************
             if (rf.check("name"))
             {
@@ -264,7 +257,23 @@ public:
             }
             else yInfo("[reactController] Could not find robot option in the config file; using %s as default",robot.c_str());
 
-        //******************* PART ******************
+         //******************* VERBOSE ******************
+            if (rf.check("verbosity"))
+            {
+                verbosity = rf.find("verbosity").asInt();
+                yInfo("[reactController] verbosity set to %i", verbosity);
+            }
+            else yInfo("[reactController] Could not find verbosity option in the config file; using %i as default",verbosity);
+
+        //****************** rctCtrlRate ******************
+            if (rf.check("rctCtrlRate"))
+            {
+                rctCtrlRate = rf.find("rctCtrlRate").asInt();
+                yInfo("[reactController] rctCTrlThread working at %i ms.",rctCtrlRate);
+            }
+            else yInfo("[reactController] Could not find rctCtrlRate in the config file; using %i as default",rctCtrlRate);
+
+         //******************* PART ******************
             if (rf.check("part"))
             {
                 part = rf.find("part").asString();
@@ -285,22 +294,22 @@ public:
             }
             else yInfo("[reactController] Could not find part option in the config file; using %s as default",part.c_str());
 
-        //******************* VERBOSE ******************
-            if (rf.check("verbosity"))
+        //********************** CONFIGS ***********************
+            if (rf.check("disableTorso"))
             {
-                verbosity = rf.find("verbosity").asInt();
-                yInfo("[reactController] verbosity set to %i", verbosity);
+                if(rf.find("disableTorso").asString()=="on"){
+                    disableTorso = true;
+                    yInfo("[reactController] disableTorso flag set to on.");
+                }
+                else{
+                    disableTorso = false;
+                    yInfo("[reactController] disableTorso flag set to off.");
+                }
             }
-            else yInfo("[reactController] Could not find verbosity option in the config file; using %i as default",verbosity);
-
-        //****************** rctCtrlRate ******************
-            if (rf.check("rctCtrlRate"))
+            else
             {
-                rctCtrlRate = rf.find("rctCtrlRate").asInt();
-                yInfo("[reactController] rctCTrlThread working at %i ms.",rctCtrlRate);
+                 yInfo("[reactController] Could not find disableTorso flag (on/off) in the config file; using %d as default",disableTorso);
             }
-            else yInfo("[reactController] Could not find rctCtrlRate in the config file; using %i as default",rctCtrlRate);
-
         //****************** prtclRate ******************
             if (rf.check("prtclRate"))
             {
@@ -321,9 +330,9 @@ public:
             if (rf.check("vMax"))
             {
                 vMax = rf.find("vMax").asDouble();
-                yInfo("[reactController] vMax set to %g [deg/s].",vMax);
+                yInfo("[reactController] vMax (max joint vel) set to %g [deg/s].",vMax);
             }
-            else yInfo("[reactController] Could not find vMax in the config file; using %g [deg/s] as default",vMax);
+            else yInfo("[reactController] Could not find vMax (max joint vel) in the config file; using %g [deg/s] as default",vMax);
 
         //****************** tol ******************
             if (rf.check("tol"))
@@ -415,7 +424,7 @@ int main(int argc, char * argv[])
     yarp::os::Network yarp;
 
     ResourceFinder rf;
-    rf.setVerbose(false);
+    rf.setVerbose(true);
     rf.setDefaultContext("reactController");
     rf.setDefaultConfigFile("reactController.ini");
     rf.configure(argc,argv);
