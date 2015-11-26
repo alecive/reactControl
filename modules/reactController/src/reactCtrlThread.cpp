@@ -175,6 +175,7 @@ bool reactCtrlThread::threadInit()
     T(3,3)=1;
     //iT=SE3inv(T);
     
+    firstTarget = true;
     
     yarp::os::Time::delay(0.2);
 
@@ -278,7 +279,13 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     }
 
     x_n=prtclThrd->getParticle(); //to get next target 
-
+ 
+    if(visualizeParticleInSim){
+        Vector x_n_sim(3,0.0);
+        convertPosFromRootToSimFoR(x_n,x_n_sim);
+        moveSphere(2,x_n_sim); //sphere created as second (particle) will keep the index 2  
+    }
+         
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
     // So, q_dot_0 is in degrees, but I have to convert it in radians before sending it to ipopt
@@ -511,7 +518,12 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d)
         if(visualizeTargetInSim){
             Vector x_d_sim(3,0.0);
             convertPosFromRootToSimFoR(x_d,x_d_sim);
-            createStaticSphere(0.02,x_d_sim);
+            if (firstTarget){
+                createStaticSphere(0.02,x_d_sim);
+            }
+            else{
+                moveSphere(1,x_d_sim);
+            }
         }
         
         t_0=yarp::os::Time::now();
@@ -526,7 +538,22 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d)
             yInfo("[reactCtrlThread]                 vel: %s",vel.toString(3,3).c_str());
             state=STATE_REACH;
 
+            if(visualizeParticleInSim){
+                    Vector x_0_sim(3,0.0);
+                    convertPosFromRootToSimFoR(x_0,x_0_sim);
+                    if (firstTarget){
+                        createStaticSphere(0.01,x_0_sim);
+                    }
+                    else{
+                       moveSphere(2,x_0_sim); //sphere created as second will keep the index 2  
+                    }
+            }
+            
             return true;
+        }
+        
+        if (firstTarget){
+            firstTarget = false;
         }
     }
     return false;
@@ -699,9 +726,6 @@ int reactCtrlThread::printMessage(const int l, const char *f, ...) const
 
 void reactCtrlThread::createStaticSphere(double radius, Vector pos)
 {
-    yarp::os::Bottle pair;
-    pair.clear();
-
     cmd.clear();
     cmd.addString("world");
     cmd.addString("mk");
@@ -717,20 +741,31 @@ void reactCtrlThread::createStaticSphere(double radius, Vector pos)
     portToSimWorld.write(cmd);
 }
 
+void reactCtrlThread::moveSphere(int index, Vector pos)
+{
+    cmd.addString("world");
+    cmd.addString("set");
+    cmd.addString("ssph");
+    cmd.addDouble(index);
+    cmd.addDouble(pos(0));
+    cmd.addDouble(pos(1));
+    cmd.addDouble(pos(2));
+}
+
 void reactCtrlThread::convertPosFromRootToSimFoR(const Vector pos, Vector &outPos)
 {
     Vector pos_temp = pos;
     pos_temp.resize(4); 
     pos_temp(3) = 1.0;
      
-    printf("convertPosFromRootToSimFoR: need to convert %s in icub root FoR to simulator FoR.\n",pos.toString().c_str());
-    printf("convertPosFromRootToSimFoR: pos in icub root resized to 4, with last value set to 1:%s\n",pos_temp.toString().c_str());
+    //printf("convertPosFromRootToSimFoR: need to convert %s in icub root FoR to simulator FoR.\n",pos.toString().c_str());
+    //printf("convertPosFromRootToSimFoR: pos in icub root resized to 4, with last value set to 1:%s\n",pos_temp.toString().c_str());
     
     outPos.resize(4,0.0); 
     outPos = T * pos_temp;
-    printf("convertPosFromRootToSimFoR: outPos in simulator FoR:%s\n",outPos.toString().c_str());
+    //printf("convertPosFromRootToSimFoR: outPos in simulator FoR:%s\n",outPos.toString().c_str());
     outPos.resize(3); 
-    printf("convertPosFromRootToSimFoR: outPos after resizing back to 3 values:%s\n",outPos.toString().c_str());
+    //printf("convertPosFromRootToSimFoR: outPos after resizing back to 3 values:%s\n",outPos.toString().c_str());
     return;
 }
 

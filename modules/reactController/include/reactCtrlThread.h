@@ -84,6 +84,8 @@ protected:
     bool visualizeTargetInSim;
     // will use the yarp rpc /icubSim/world to visualize the particle (trajectory - intermediate targets)
     bool visualizeParticleInSim; 
+    // objects in simulator will be created only for first target - with new targets they will be moved
+    bool firstTarget;
 
     /***************************************************************************/
     // INTERNAL VARIABLES:
@@ -203,6 +205,8 @@ protected:
     * @param pos  
     */
     void createStaticSphere(double radius, yarp::sig::Vector pos);
+    
+    void moveSphere(int index, yarp::sig::Vector pos);
     
     void convertPosFromRootToSimFoR(const yarp::sig::Vector pos, yarp::sig::Vector &outPos);
 public:
