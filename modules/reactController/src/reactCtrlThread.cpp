@@ -36,10 +36,12 @@ using namespace yarp::math;
 
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,
                                  const string &_part, int _verbosity, bool _disableTorso,
-                                 double _trajSpeed, double _globalTol, double _vMax, double _tol, particleThread *_pT) :
+                                 double _trajSpeed, double _globalTol, double _vMax, double _tol, 
+                                 bool _visualizeTargetInSim, bool _visualizeParticleInSim, particleThread *_pT) :
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
                                  verbosity(_verbosity), useTorso(!_disableTorso),
-                                 trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol)
+                                 trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol),
+                                 visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim)
 {
     prtclThrd=_pT;
     state=STATE_WAIT;
@@ -146,7 +148,34 @@ bool reactCtrlThread::threadInit()
     }
 
     outPort.open("/"+name +"/data:o");
-
+    
+    if((robot == "icubSim") && (visualizeTargetInSim || visualizeParticleInSim) ){ 
+        string port2icubsim = "/" + name + "/sim:o";
+        if (!portToSimWorld.open(port2icubsim.c_str())) {
+            yError("[reactCtrlThread] Unable to open port << port2icubsim << endl");
+        }    
+        std::string port2world = "/icubSim/world";
+        yarp::os::Network::connect(port2icubsim, port2world.c_str());
+    
+        cmd.clear();
+        cmd.addString("world");
+        cmd.addString("del");
+        cmd.addString("all");
+        portToSimWorld.write(cmd);
+    
+    }    
+    
+    //homo transform between root and simulator FoR
+    T = zeros(4,4); 
+    T(0,1)=-1;
+    T(1,2)=1;
+    T(1,3)=0.5976;
+    T(2,0)=-1;
+    T(2,3)=-0.026;
+    T(3,3)=1;
+    //iT=SE3inv(T);
+    
+    
     yarp::os::Time::delay(0.2);
 
     return true;
@@ -478,6 +507,13 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d)
         x_0=x_t;
         x_n=x_0;
         x_d=_x_d;
+        
+        if(visualizeTargetInSim){
+            Vector x_d_sim(3,0.0);
+            convertPosFromRootToSimFoR(x_d,x_d_sim);
+            createStaticSphere(0.02,x_d_sim);
+        }
+        
         t_0=yarp::os::Time::now();
         yarp::sig::Vector vel(3,0.0);
         vel=trajSpeed * (x_d-x_0) / norm(x_d-x_0);
@@ -661,6 +697,43 @@ int reactCtrlThread::printMessage(const int l, const char *f, ...) const
         return -1;
 }
 
+void reactCtrlThread::createStaticSphere(double radius, Vector pos)
+{
+    yarp::os::Bottle pair;
+    pair.clear();
+
+    cmd.clear();
+    cmd.addString("world");
+    cmd.addString("mk");
+    cmd.addString("ssph");
+    cmd.addDouble(radius);
+    
+    cmd.addDouble(pos(0));
+    cmd.addDouble(pos(1));
+    cmd.addDouble(pos(2));
+    // color
+    cmd.addInt(1);cmd.addInt(0);cmd.addInt(0);
+    yDebug("createSphere(): sending %s",cmd.toString().c_str());
+    portToSimWorld.write(cmd);
+}
+
+void reactCtrlThread::convertPosFromRootToSimFoR(const Vector pos, Vector &outPos)
+{
+    Vector pos_temp = pos;
+    pos_temp.resize(4); 
+    pos_temp(3) = 1.0;
+     
+    printf("convertPosFromRootToSimFoR: need to convert %s in icub root FoR to simulator FoR.\n",pos.toString().c_str());
+    printf("convertPosFromRootToSimFoR: pos in icub root resized to 4, with last value set to 1:%s\n",pos_temp.toString().c_str());
+    
+    outPos.resize(4,0.0); 
+    outPos = T * pos_temp;
+    printf("convertPosFromRootToSimFoR: outPos in simulator FoR:%s\n",outPos.toString().c_str());
+    outPos.resize(3); 
+    printf("convertPosFromRootToSimFoR: outPos after resizing back to 3 values:%s\n",outPos.toString().c_str());
+    return;
+}
+
 void reactCtrlThread::threadRelease()
 {
     yInfo("Returning to position mode..");
@@ -670,11 +743,23 @@ void reactCtrlThread::threadRelease()
 
     yInfo("Closing ports..");
         outPort.close();
-
+        if (portToSimWorld.isOpen()){
+            portToSimWorld.close();
+        }
     yInfo("Closing controllers..");
         stopControl();
         ddA.close();
         ddT.close();
+        
+     if((robot == "icubSim") && (visualizeTargetInSim || visualizeParticleInSim) ){ 
+        yInfo("Deleting objects from simulator world.");
+        cmd.clear();
+        cmd.addString("world");
+        cmd.addString("del");
+        cmd.addString("all");
+        portToSimWorld.write(cmd);
+    
+    }         
 }
 
 // empty line to make gcc happy

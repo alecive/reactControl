@@ -26,9 +26,11 @@
 #include <yarp/os/Mutex.h>
 #include <yarp/os/LockGuard.h>
 #include <yarp/os/Port.h>
+#include <yarp/os/Network.h>
 
 #include <yarp/sig/Vector.h>
 #include <yarp/sig/Matrix.h>
+#include <yarp/sig/Image.h>
 
 #include <yarp/math/Math.h>
 
@@ -78,6 +80,10 @@ protected:
     double globalTol;
     // Max velocity set for the joints
     double vMax;
+    // will use the yarp rpc /icubSim/world to visualize the target
+    bool visualizeTargetInSim;
+    // will use the yarp rpc /icubSim/world to visualize the particle (trajectory - intermediate targets)
+    bool visualizeParticleInSim; 
 
     /***************************************************************************/
     // INTERNAL VARIABLES:
@@ -97,7 +103,8 @@ protected:
     yarp::sig::Matrix H;      // End-effector pose
 
     yarp::os::Port outPort;
-
+    yarp::os::Port portToSimWorld;
+    
     // Driver for "classical" interfaces
     PolyDriver       ddA;
     PolyDriver       ddT;
@@ -125,6 +132,9 @@ protected:
 
     // Mutex for handling things correctly
     yarp::os::Mutex mutex;
+    
+    yarp::os::Bottle    cmd; 
+    yarp::sig::Matrix T; //from robot to simulator reference frame
 
     /**
     * Aligns joint bounds according to the actual limits of the robot
@@ -187,10 +197,18 @@ protected:
     */
     int printMessage(const int l, const char *f, ...) const;
 
+    /**
+    * Creates a sphere (not affected by gravity) in the iCub simulator through the /icubSim/world port
+    * @param radius
+    * @param pos  
+    */
+    void createStaticSphere(double radius, yarp::sig::Vector pos);
+    
+    void convertPosFromRootToSimFoR(const yarp::sig::Vector pos, yarp::sig::Vector &outPos);
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & , const string &_ ,
-                    int , bool , double , double , double , double , particleThread * );
+                    int , bool , double , double , double , double , bool , bool ,particleThread * );
     // INIT
     virtual bool threadInit();
     // RUN

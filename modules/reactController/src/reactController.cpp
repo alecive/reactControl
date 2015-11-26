@@ -103,6 +103,10 @@ private:
     double        tol;  // Tolerance of the ipopt task. The solver exits if norm2(x_d-x)<tol.
     double  globalTol;  // global tolerance of the task. The controller exits if norm(x_d-x)<globalTol
     double       vMax;  // max velocity set for the joints
+    
+    bool visualizeTargetInSim; // will use the yarp rpc /icubSim/world to visualize the target
+    bool visualizeParticleInSim; // will use the yarp rpc /icubSim/world to visualize the particle (trajectory - intermediate targets)
+    
 
 public:
     reactController()
@@ -123,6 +127,15 @@ public:
         tol          =  1e-5;
         globalTol    =  1e-2;
         vMax         =  30.0;
+        
+        if(robot == "icubSim"){
+            visualizeTargetInSim = true;
+            visualizeParticleInSim = true;
+        }
+        else{
+            visualizeTargetInSim = false;
+            visualizeParticleInSim = false;
+        }
     }
 
     bool set_xd(const yarp::sig::Vector& _xd)
@@ -361,8 +374,8 @@ public:
             return false;
         }
 
-        rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
-                                          disableTorso, trajSpeed, globalTol, vMax, tol, prtclThrd);
+        rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity, disableTorso, trajSpeed,
+                                          globalTol, vMax, tol,visualizeTargetInSim, visualizeParticleInSim,prtclThrd);
         bool strt = rctCtrlThrd->start();
         if (!strt)
         {
