@@ -519,7 +519,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d)
             Vector x_d_sim(3,0.0);
             convertPosFromRootToSimFoR(x_d,x_d_sim);
             if (firstTarget){
-                createStaticSphere(0.02,x_d_sim);
+                createStaticSphere(0.03,x_d_sim);
             }
             else{
                 moveSphere(1,x_d_sim);
@@ -542,21 +542,25 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d)
                     Vector x_0_sim(3,0.0);
                     convertPosFromRootToSimFoR(x_0,x_0_sim);
                     if (firstTarget){
-                        createStaticSphere(0.01,x_0_sim);
+                        createStaticSphere(0.02,x_0_sim);
                     }
                     else{
                        moveSphere(2,x_0_sim); //sphere created as second will keep the index 2  
                     }
             }
             
-            return true;
+           
+        }
+        else{
+            yWarning("prtclThrd->setupNewParticle(x_0,vel) returned false.\n");
+            return false;
         }
         
         if (firstTarget){
             firstTarget = false;
         }
     }
-    return false;
+    return true;
 }
 
 bool reactCtrlThread::setNewRelativeTarget(const Vector& _rel_x_d)
@@ -737,19 +741,22 @@ void reactCtrlThread::createStaticSphere(double radius, Vector pos)
     cmd.addDouble(pos(2));
     // color
     cmd.addInt(1);cmd.addInt(0);cmd.addInt(0);
+    cmd.addString("false"); //no collisions
     yDebug("createSphere(): sending %s",cmd.toString().c_str());
     portToSimWorld.write(cmd);
 }
 
 void reactCtrlThread::moveSphere(int index, Vector pos)
 {
+    cmd.clear();
     cmd.addString("world");
     cmd.addString("set");
     cmd.addString("ssph");
-    cmd.addDouble(index);
+    cmd.addInt(index);
     cmd.addDouble(pos(0));
     cmd.addDouble(pos(1));
     cmd.addDouble(pos(2));
+    portToSimWorld.write(cmd);
 }
 
 void reactCtrlThread::convertPosFromRootToSimFoR(const Vector pos, Vector &outPos)

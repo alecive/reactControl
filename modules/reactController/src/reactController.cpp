@@ -362,6 +362,41 @@ public:
                 yInfo("[reactController] globalTol set to %g m.",globalTol);
             }
             else yInfo("[reactController] Could not find globalTol in the config file; using %g as default",globalTol);
+            
+         //********************** Visualizations in simulator ***********************
+            if (robot == "icubSim"){
+                if (rf.check("visualizeTargetInSim"))
+                {
+                    if(rf.find("visualizeTargetInSim").asString()=="on"){
+                        visualizeTargetInSim = true;
+                        yInfo("[reactController] visualizeTargetInSim flag set to on.");
+                    }
+                    else{
+                        visualizeTargetInSim = false;
+                        yInfo("[reactController] visualizeTargetInSim flag set to off.");
+                    }
+                }
+                else
+                {
+                    yInfo("[reactController] Could not find visualizeTargetInSim flag (on/off) in the config file; using %d as default",visualizeTargetInSim);
+                }
+                
+                if (rf.check("visualizeParticleInSim"))
+                {
+                    if(rf.find("visualizeParticleInSim").asString()=="on"){
+                        visualizeParticleInSim = true;
+                        yInfo("[reactController] visualizeParticleInSim flag set to on.");
+                    }
+                    else{
+                        visualizeParticleInSim = false;
+                        yInfo("[reactController] visualizeParticleInSim flag set to off.");
+                    }
+                }
+                else
+                {
+                    yInfo("[reactController] Could not find visualizeParticleInSim flag (on/off) in the config file; using %d as default",visualizeParticleInSim);
+                }
+            }
 
         //************* THREAD *************
         prtclThrd = new particleThread(prtclRate, name, verbosity);
