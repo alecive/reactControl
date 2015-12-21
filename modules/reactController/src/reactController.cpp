@@ -106,7 +106,7 @@ private:
     
     bool visualizeTargetInSim; // will use the yarp rpc /icubSim/world to visualize the target
     bool visualizeParticleInSim; // will use the yarp rpc /icubSim/world to visualize the particle (trajectory - intermediate targets)
-    
+    bool visualizeCollisionPointsInSim; // will visualize the (potential) collision points in iCub simulator 
 
 public:
     reactController()
@@ -131,10 +131,12 @@ public:
         if(robot == "icubSim"){
             visualizeTargetInSim = true;
             visualizeParticleInSim = true;
+            visualizeCollisionPointsInSim = true;
         }
         else{
             visualizeTargetInSim = false;
             visualizeParticleInSim = false;
+            visualizeCollisionPointsInSim = false;
         }
     }
 
@@ -396,6 +398,21 @@ public:
                 {
                     yInfo("[reactController] Could not find visualizeParticleInSim flag (on/off) in the config file; using %d as default",visualizeParticleInSim);
                 }
+                if (rf.check("visualizeCollisionPointsInSim"))
+                {
+                    if(rf.find("visualizeCollisionPointsInSim").asString()=="on"){
+                        visualizeCollisionPointsInSim = true;
+                        yInfo("[reactController] visualizeCollisionPointsInSim flag set to on.");
+                    }
+                    else{
+                        visualizeCollisionPointsInSim = false;
+                        yInfo("[reactController] visualizeCollisionPointsInSim flag set to off.");
+                    }
+                }
+                else
+                {
+                    yInfo("[reactController] Could not find visualizeCollisionPointsInSim flag (on/off) in the config file; using %d as default",visualizeCollisionPointsInSim);
+                }
             }
 
         //************* THREAD *************
@@ -410,7 +427,7 @@ public:
         }
 
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity, disableTorso, trajSpeed,
-                                          globalTol, vMax, tol,visualizeTargetInSim, visualizeParticleInSim,prtclThrd);
+                                          globalTol, vMax, tol,visualizeTargetInSim, visualizeParticleInSim,visualizeCollisionPointsInSim,prtclThrd);
         bool strt = rctCtrlThrd->start();
         if (!strt)
         {

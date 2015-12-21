@@ -84,9 +84,9 @@ protected:
     bool visualizeTargetInSim;
     // will use the yarp rpc /icubSim/world to visualize the particle (trajectory - intermediate targets)
     bool visualizeParticleInSim; 
-    // objects in simulator will be created only for first target - with new targets they will be moved
-    bool firstTarget;
-
+    // will use the yarp rpc /icubSim/world to visualize the potential collision points
+    bool visualizeCollisionPointsInSim;
+    
     /***************************************************************************/
     // INTERNAL VARIABLES:
     particleThread  *prtclThrd;     // Pointer to the particleThread in order to access its data
@@ -137,7 +137,13 @@ protected:
     
     yarp::os::Bottle    cmd; 
     yarp::sig::Matrix T; //from robot to simulator reference frame
-
+    
+    // objects in simulator will be created only for first target - with new targets they will be moved
+    bool firstTarget;
+    std::vector<collisionPoint_t> collisionPoints; //list of "avoidance vectors" from peripersonal space / safety margin
+    int collisionPointsVisualizedCount; //objects will be created in simulator and then their positions updated every iteration
+    yarp::sig::Vector collisionPointsSimReservoirPos; //inactive collision points will be stored in the world
+    
     /**
     * Aligns joint bounds according to the actual limits of the robot
     */
@@ -194,7 +200,7 @@ protected:
 
     /**
     * Prints a message according to the verbosity level:
-    * @param l is the level of verbosity: if level > verbosity, something is printed
+    * @param l is the level of verbosity: if verbosity >= l, something is printed
     * @param f is the text. Please use c standard (like printf)
     */
     int printMessage(const int l, const char *f, ...) const;
@@ -204,15 +210,23 @@ protected:
     * @param radius
     * @param pos  
     */
-    void createStaticSphere(double radius, yarp::sig::Vector pos);
+    void createStaticSphere(double radius, const yarp::sig::Vector &pos);
+   
+    void moveSphere(int index, const yarp::sig::Vector &pos);
     
-    void moveSphere(int index, yarp::sig::Vector pos);
+    void createStaticBox(const yarp::sig::Vector &pos);
     
-    void convertPosFromRootToSimFoR(const yarp::sig::Vector pos, yarp::sig::Vector &outPos);
+    void moveBox(int index, const yarp::sig::Vector &pos);
+    
+    void convertPosFromRootToSimFoR(const yarp::sig::Vector &pos, yarp::sig::Vector &outPos);
+    
+    void convertPosFromLinkToRootFoR(const yarp::sig::Vector &pos,const iCub::skinDynLib::SkinPart skinPart, yarp::sig::Vector &outPos);
+        
+    void showCollisionPointsInSim();
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & , const string &_ ,
-                    int , bool , double , double , double , double , bool , bool ,particleThread * );
+                    int , bool , double , double , double , double , bool , bool , bool , particleThread * );
     // INIT
     virtual bool threadInit();
     // RUN

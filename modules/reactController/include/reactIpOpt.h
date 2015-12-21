@@ -25,8 +25,20 @@
 
 #include <yarp/os/Log.h>
 
+#include <yarp/math/SVD.h>
+
 #include <iCub/iKin/iKinFwd.h>
 #include <iCub/iKin/iKinIpOpt.h>
+
+#include <iCub/skinDynLib/common.h>
+
+struct collisionPoint_t{
+        iCub::skinDynLib::SkinPart skin_part;
+        yarp::sig::Vector x; //position (x,y,z) in the FoR of the respective skin part
+        yarp::sig::Vector n; //normal vector at that point - derived from taxel normals, pointing out of the skin
+        double magnitude; // ~ activation level from probabilistic representation in pps - likelihood of collision
+};
+    
 
 /**
 *
@@ -161,7 +173,8 @@ public:
     * @param q_dot_0   are the initial joint velocities of the chain.
     * @param dt        is the time step to use in order to solve the task. 
     * @param vm        is the max velocity allowed to the joints.
-    * @param cup_time  is the total time spent by IPOPT to solve the task.
+    * @param avoidance_vectors collision threats from safety margin representation
+    * @param cpu_time  is the total time spent by IPOPT to solve the task.
     * @param exit_code stores the exit code (NULL by default). It is one of these:
     *                   SUCCESS
     *                   MAXITER_EXCEEDED
@@ -180,7 +193,7 @@ public:
     * @return estimated joint velocities.
     */
     virtual yarp::sig::Vector solve(yarp::sig::Vector &xd, yarp::sig::Vector q_dot_0,
-                                    double &dt, double &vm, double *cpu_time, int *exit_code);
+                                    double &dt, double &vm, const std::vector<collisionPoint_t> & collision_points,double *cpu_time, int *exit_code);
 
     /**
     * Default destructor.

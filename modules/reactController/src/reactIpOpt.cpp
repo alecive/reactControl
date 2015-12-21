@@ -36,7 +36,9 @@ using namespace yarp::sig;
 using namespace yarp::math;
 using namespace iCub::ctrl;
 using namespace iCub::iKin;
+using namespace iCub::skinDynLib;
 using namespace Ipopt;
+
 
 /*************optimization problem representation********************************************************/
 class react_NLP : public TNLP
@@ -56,7 +58,7 @@ protected:
     iKinChain &chain;
     // The inequality constraints (if available) - for the cable mechanism in the real iCub shoulder assembly
     iKinLinIneqConstr &LIC;
-    // The dimensionality of the task (for now it should be 7)
+    // The dimensionality of the task ~ nr DOF in the chain ~ nr. primal variables (for now 7 for arm joints, 10 if torso is enabled)
     unsigned int dim;
 
     // The desired position to attain
@@ -69,7 +71,7 @@ protected:
 
     // The maximum allowed speed at the joints
     double V_max;
-
+    
     // The desired final joint velocities - the solution of this iteration 
     yarp::sig::Vector q_dot_d;
     // The initial joint velocities - solution from prev. step 
@@ -99,10 +101,16 @@ protected:
     double guardRatio;
 
     // The torso reduction rate at for the max velocities sent to the torso(default 3.0)
-    double torsoReduction;
-
+    double torsoReduction;  
+    //for smooth changes in joint velocities
     double boundSmoothness;
-
+    
+    vector<collisionPoint_t> collisionPoints; //list of "avoidance vectors" from peripersonal space / safety margin
+    /* every (potential) collision point will be converted into a set of joint velocity limits in the subchain   above the threat - 
+     - the unaffected joints (more distal and those with opposite sign of Jacobian inverse) will be set to their maxima/minima */
+    vector<yarp::sig::Vector> jointVelMinimaForSafetyMargin;
+    vector<yarp::sig::Vector> jointVelMaximaForSafetyMargin;
+    //joint position limits handled in a smooth way - see Pattacini et al. 2010 - iCub Cart. control - Fig. 8
     yarp::sig::Vector qGuard;
     yarp::sig::Vector qGuardMinInt, qGuardMinExt, qGuardMinCOG;
     yarp::sig::Vector qGuardMaxInt, qGuardMaxExt, qGuardMaxCOG;
@@ -212,8 +220,45 @@ protected:
         
         return true;
     }
+    
+    
+    //creates a full transform as given by a DCM matrix at the pos and norm w.r.t. the original frame, from the pos and norm (one axis set arbitrarily)  
+    bool computeFoR(const yarp::sig::Vector &pos, const yarp::sig::Vector &norm, yarp::sig::Matrix &FoR)
+    {
+        if (norm == zeros(3))
+        {
+            FoR=eye(4);
+            return false;
+        }
+        
+        // Set the proper orientation for the touching end-effector
+        yarp::sig::Vector x(3,0.0), z(3,0.0), y(3,0.0);
 
-    /************************************************************************/
+        z = norm;
+        if (z[0] == 0.0)
+        {
+            z[0] = 0.00000001;    // Avoid the division by 0
+        }
+        y[0] = -z[2]/z[0]; //y is in normal plane
+        y[2] = 1; //this setting is arbitrary
+        x = -1*(cross(z,y));
+
+        // Let's make them unitary vectors:
+        x = x / yarp::math::norm(x);
+        y = y / yarp::math::norm(y);
+        z = z / yarp::math::norm(z);
+
+        FoR=eye(4);
+        FoR.setSubcol(x,0,0);
+        FoR.setSubcol(y,0,1);
+        FoR.setSubcol(z,0,2);
+        FoR.setSubcol(pos,0,3);
+
+        return true;
+    }
+    
+
+    /********to ensure joint pos limits but in a smooth way around the limits****************************************/
     bool computeGuard()
     {
         for (unsigned int i=0; i<dim; i++)
@@ -237,7 +282,63 @@ protected:
         printMessage(4,"qGuardMaxCOG %s\n",(CTRL_RAD2DEG*qGuardMaxCOG).toString(3,3).c_str());
         printMessage(4,"qGuardMaxExt %s\n",(CTRL_RAD2DEG*qGuardMaxExt).toString(3,3).c_str());
     }
-
+    
+    /**** goes through the avoidanceVectors and for each of them adapts the joint vel limits in
+     * the chain above the threat so as to assist in avoiding the collision - constraining the joints in going toward the threat */
+    bool setSafetyMarginJointVelLimits()
+    {
+        if (!collisionPoints.empty()){
+            for(std::vector<collisionPoint_t>::const_iterator it = collisionPoints.begin(); it != collisionPoints.end(); ++it) {
+                yarp::sig::Vector minima(dim,-V_max);
+                yarp::sig::Vector maxima(dim,V_max);
+                iKinChain chain_local = chain; //makes a copy that will be used internally 
+                // Block all the more distal joints after the joint 
+                // if the skin part is a hand, no need to block any joints
+                if (((*it).skin_part == SKIN_LEFT_FOREARM) ||  ((*it).skin_part == SKIN_RIGHT_FOREARM)){
+                    if(dim == 10){
+                        chain_local.blockLink(10); chain_local.blockLink(9);//wrist joints
+                        printMessage(4,"obstacle threatening skin part %s, blocking links 9 and 10 (wrist)\n",SkinPart_s[(*it).skin_part].c_str());
+                    }
+                    else if(dim==7){
+                        chain_local.blockLink(7); chain_local.blockLink(6);//wrist joints
+                        printMessage(4,"obstacle threatening skin part %s, blocking links 7 and 6 (wrist)\n",SkinPart_s[(*it).skin_part].c_str());
+                   
+                    }
+                }
+                else if (((*it).skin_part == SKIN_LEFT_UPPER_ARM) ||  ((*it).skin_part == SKIN_RIGHT_UPPER_ARM)){
+                    if(dim == 10){
+                        chain_local.blockLink(10); chain_local.blockLink(9);chain_local.blockLink(8);chain_local.blockLink(7); //wrist joints + elbow joints
+                        printMessage(4,"obstacle threatening skin part %s, blocking links 7,8,9 and 10 (wrist+elbow)\n",SkinPart_s[(*it).skin_part].c_str());
+                    }
+                    else if(dim==7){
+                        chain_local.blockLink(7); chain_local.blockLink(6);chain_local.blockLink(5);chain_local.blockLink(4); //wrist joints + elbow joints
+                        printMessage(4,"obstacle threatening skin part %s, blocking links 7,8,9 and 10 (wrist+elbow)\n",SkinPart_s[(*it).skin_part].c_str());
+                    }
+                }
+                // SetHN to move the end effector toward the point to be controlled - the average locus of collision threat from safety margin
+                yarp::sig::Matrix HN = eye(4);
+                computeFoR((*it).x,(*it).n,HN);
+                printMessage(5,"HN matrix: %s \n",HN.toString(3,3).c_str());
+                chain_local.setHN(HN);
+                yarp::sig::Matrix J = chain_local.GeoJacobian(); //6 rows, n columns for every active DOF (excluding the blocked)
+                printMessage(5,"GeoJacobian matrix: \n %s \n",J.toString(3,3).c_str());
+                yarp::sig::Matrix pseudoInvJ = yarp::math::pinv(J); 
+                printMessage(5,"Jacobian pseudoinverse matrix: \n %s \n",J.toString(3,3).c_str());
+                
+                printMessage(5,"Normal at collision point: %s, norm %f.\n",(*it).n.toString(3,3).c_str(),yarp::math::norm((*it).n));
+                // Compute the q_dot - joint velocities that contribute to motion along the normal - "toward the "threat" 
+                //yarp::sig::Vector qdotTowardThreat = pseudoInvJ * (*it).n; //TODO the dimensions need to match here
+                //the normal vector is already normalized
+                
+                //TODO take the q_dot and then use them to define the minima and maxima vectors - take into account just the sign like Flacco or 
+                //magnitude of qdot or take into account avoidance vector magnitude; be careful with which links are bklocked - assign to correct joints
+               // printf("setSafetyMarginJointVelLimits: end of \n");
+            } //for all avoidance vectors
+        } // if (!avoidanceVectors.empty()) 
+    }  // bool setSafetyMarginJointVelLimits() 
+        
+    
+    
     /************************************************************************/
     int printMessage(const int l, const char *f, ...) const
     {
@@ -260,8 +361,8 @@ public:
     /***** 8 pure virtual functions from TNLP class need to be implemented here **********/
     /************************************************************************/
     react_NLP(iKinChain &c, yarp::sig::Vector &_xd, yarp::sig::Vector &_q_dot_0,
-             double &_dT, double &_vM, iKinLinIneqConstr &_LIC, int _verbosity) : chain(c),
-             q_dot_0(_q_dot_0), dT(_dT), xd(_xd), LIC(_LIC), verbosity(_verbosity), V_max(_vM)
+             double &_dT, double &_vM, const std::vector<collisionPoint_t> & _collision_points, iKinLinIneqConstr &_LIC, int _verbosity) : chain(c),
+             q_dot_0(_q_dot_0), dT(_dT), xd(_xd), collisionPoints(_collision_points), LIC(_LIC), verbosity(_verbosity), V_max(_vM)
     {
         name="react_NLP";
 
@@ -275,7 +376,10 @@ public:
         yarp::sig::Matrix H=chain.getH();
         x0=H.subcol(0,3,3);
 
-        dim=chain.getDOF(); //e.g. 7 for the arm joints
+        dim=chain.getDOF(); //e.g. 7 for the arm joints, 10 if torso is included
+        if (!((dim == 7) || (dim == 10)) ){ 
+            yError("react_NLP(): unexpected nr DOF on the chain : %d\n",dim);
+        }
         q_dot.resize(dim,0.0);
         q_dot_d.resize(dim,0.0);
 
@@ -384,14 +488,17 @@ public:
     bool get_bounds_info(Index n, Number* x_l, Number* x_u, Index m, Number* g_l,
                          Number* g_u)
     {
+        //x_l, x_u - limits for the primal variables - in our case joint velocities
+        setSafetyMarginJointVelLimits(); //will go through the avoidanceVectors and set the jointVel[Maxima/Minima]ForSafetyMargin
+        //TODO Matej integrate the new limits, write out everything to console to see the effects
         for (Index i=0; i<n; i++)
         {
             // The joints velocities will be constrained by the V_min / V_max constraints and 
-            // the previous state (that is our current initial state), in order to avoid abrupt changes
-            x_l[i]=max(-V_max*CTRL_DEG2RAD,q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD);
-            x_u[i]=min(+V_max*CTRL_DEG2RAD,q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD);
+            // and the previous state (that is our current initial state), in order to avoid abrupt changes
+            x_l[i]=max(-V_max*CTRL_DEG2RAD,q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD); //lower bound
+            x_u[i]=min(+V_max*CTRL_DEG2RAD,q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD); //upper bound
 
-            if (n==10 && i<3)
+            if (n==10 && i<3) //special handling of torso joints - should be moving less
             {
                 x_l[i]=max(-V_max*CTRL_DEG2RAD/torsoReduction,q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD);
                 x_u[i]=min(+V_max*CTRL_DEG2RAD/torsoReduction,q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD);
@@ -401,6 +508,7 @@ public:
             //         -V_max*CTRL_DEG2RAD,    q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD);
         }
         
+        //limits for the g function - in our case joint position limits
         for (Index i=0; i<m; i++)
         {
             if (i<dim)
@@ -711,9 +819,9 @@ void reactIpOpt::setBoundsInf(const double lower, const double upper)
 
 /************************************************************************/
 yarp::sig::Vector reactIpOpt::solve(yarp::sig::Vector &xd, yarp::sig::Vector q_dot_0,
-                                    double &dt, double &vm, double *cpu_time,int *exit_code)
+                                    double &dt, double &vm, const std::vector<collisionPoint_t> & collision_points, double *cpu_time,int *exit_code)
 {
-    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,vm,*pLIC,verbosity);
+    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,vm,collision_points,*pLIC,verbosity);
     
     nlp->set_scaling(obj_scaling,x_scaling,g_scaling);
     nlp->set_bound_inf(lowerBoundInf,upperBoundInf);

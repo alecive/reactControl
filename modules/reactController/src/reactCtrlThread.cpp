@@ -29,19 +29,21 @@
 
 using namespace yarp::sig;
 using namespace yarp::math;
+using namespace iCub::skinDynLib;
 
 #define STATE_WAIT              0
 #define STATE_REACH             1
 #define STATE_IDLE              2
 
-reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,
-                                 const string &_part, int _verbosity, bool _disableTorso,
-                                 double _trajSpeed, double _globalTol, double _vMax, double _tol, 
-                                 bool _visualizeTargetInSim, bool _visualizeParticleInSim, particleThread *_pT) :
+reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,  const string &_part,
+                                 int _verbosity, bool _disableTorso,  double _trajSpeed, double _globalTol, 
+                                 double _vMax, double _tol, bool _visualizeTargetInSim, bool _visualizeParticleInSim,
+                                 bool _visualizeCollisionPointsInSim,particleThread *_pT) :
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
                                  verbosity(_verbosity), useTorso(!_disableTorso),
                                  trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol),
-                                 visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim)
+                                 visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
+                                 visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim)
 {
     prtclThrd=_pT;
     state=STATE_WAIT;
@@ -149,7 +151,7 @@ bool reactCtrlThread::threadInit()
 
     outPort.open("/"+name +"/data:o");
     
-    if((robot == "icubSim") && (visualizeTargetInSim || visualizeParticleInSim) ){ 
+    if((robot == "icubSim") && (visualizeTargetInSim || visualizeParticleInSim || visualizeCollisionPointsInSim) ){ 
         string port2icubsim = "/" + name + "/sim:o";
         if (!portToSimWorld.open(port2icubsim.c_str())) {
             yError("[reactCtrlThread] Unable to open port << port2icubsim << endl");
@@ -162,6 +164,13 @@ bool reactCtrlThread::threadInit()
         cmd.addString("del");
         cmd.addString("all");
         portToSimWorld.write(cmd);
+        
+        collisionPointsVisualizedCount = 0;
+        collisionPointsSimReservoirPos.zero();
+        collisionPointsSimReservoirPos.resize(3);
+        collisionPointsSimReservoirPos(0)=0.3;
+        collisionPointsSimReservoirPos(1)=0.03;
+        collisionPointsSimReservoirPos(2)=0.0;
     
     }    
     
@@ -190,7 +199,40 @@ void reactCtrlThread::run()
     //iCub::iKin::iKinChain &chain_temp=*arm->asChain();
     //yarp::sig::Matrix J1_temp=chain_temp.GeoJacobian();
     //yDebug("GeoJacobian: \n %s \n",J1_temp.toString(3,3).c_str());    
+        
+    collisionPoints.clear();
+    /* For now, let's experiment with some fixed points on the forearm skin, emulating the vectors coming from margin of safety, 
+     to test the performance of the algorithm
+    Let's try 3 triangle midpoints on the upper patch on the forearm, taking positions from CAD, 
+    normals from /home/matej/programming/icub-main/app/skinGui/conf/positions/left_forearm_mesh.txt
+    All in wrist FoR (nr. 8), see  /media/Data/my_matlab/skin/left_forearm/selected_taxels_upper_patch_for_testing.txt
 
+    Upper patch, left forearm
+    1) central, distal triangle - ID 291, row 4 in triangle_centers_CAD_upperPatch_wristFoR8
+    ID  x   y   z   n1  n2  n3
+    291 -0.0002 -0.0131 -0.0258434  -0.005  0.238   -0.971
+    2) left, outermost, proximal triangle - ID 255, row 7 in triangle_centers_CAD_upperPatch_wristFoR8
+    ID  x   y   z   n1  n2  n3
+    255 0.026828    -0.054786   -0.0191051  0.883   0.15    -0.385
+    3) right, outermost, proximal triangle - ID 207, row 1 in triangle_centers_CAD_upperPatch_wristFoR8
+    ID  x   y   z   n1  n2  n3
+    207 -0.027228   -0.054786   -0.0191051  -0.886  0.14    -0.431 */
+    
+    collisionPoint_t collisionPointStruct;
+    collisionPointStruct.skin_part = SKIN_LEFT_FOREARM;
+    collisionPointStruct.x.resize(3,0.0);
+    collisionPointStruct.n.resize(3,0.0);
+    collisionPointStruct.x(0) = -0.0002;  collisionPointStruct.x(1) = -0.0131; collisionPointStruct.x(2) = -0.0258434;
+    collisionPointStruct.n(0) = -0.005; collisionPointStruct.n(1) = 0.238; collisionPointStruct.n(2) = -0.971;
+    collisionPointStruct.magnitude = 1.0; //~ "probability of collision"
+    //getAvoidanceVectorsFromPort(); we'll do that later - see WYSIWYD/ppsAllostatic/cartControlReachAvoid/cartControlReachAvoidThread
+    //filterSkinPartsFromOtherChains(); TODO - we should send only those corresponding to the chosen part in reactControl (part_short)
+    collisionPoints.push_back(collisionPointStruct);
+    
+    if (visualizeCollisionPointsInSim){
+      showCollisionPointsInSim();  
+    }
+    
     switch (state)
     {
         case STATE_WAIT:
@@ -218,8 +260,7 @@ void reactCtrlThread::run()
 
             int exit_code;
             q_dot = solveIK(exit_code);
-            // state++; // This is for testing purposes. To be removed!
-
+            
             if (exit_code==Ipopt::Solve_Succeeded ||
                 exit_code==Ipopt::Maximum_CpuTime_Exceeded)
             {
@@ -289,7 +330,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
     // So, q_dot_0 is in degrees, but I have to convert it in radians before sending it to ipopt
-    Vector res=slv->solve(x_n,q_dot_0*CTRL_DEG2RAD,dT,vMax,&cpu_time,&exit_code)*CTRL_RAD2DEG;
+    Vector res=slv->solve(x_n,q_dot_0*CTRL_DEG2RAD,dT,vMax, collisionPoints, &cpu_time,&exit_code)*CTRL_RAD2DEG;
 
     printf("\n");
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
@@ -728,7 +769,7 @@ int reactCtrlThread::printMessage(const int l, const char *f, ...) const
         return -1;
 }
 
-void reactCtrlThread::createStaticSphere(double radius, Vector pos)
+void reactCtrlThread::createStaticSphere(double radius, const Vector &pos)
 {
     cmd.clear();
     cmd.addString("world");
@@ -742,11 +783,11 @@ void reactCtrlThread::createStaticSphere(double radius, Vector pos)
     // color
     cmd.addInt(1);cmd.addInt(0);cmd.addInt(0);
     cmd.addString("false"); //no collisions
-    yDebug("createSphere(): sending %s",cmd.toString().c_str());
+    printMessage(5,"createSphere(): sending %s",cmd.toString().c_str());
     portToSimWorld.write(cmd);
 }
 
-void reactCtrlThread::moveSphere(int index, Vector pos)
+void reactCtrlThread::moveSphere(int index, const Vector &pos)
 {
     cmd.clear();
     cmd.addString("world");
@@ -759,7 +800,38 @@ void reactCtrlThread::moveSphere(int index, Vector pos)
     portToSimWorld.write(cmd);
 }
 
-void reactCtrlThread::convertPosFromRootToSimFoR(const Vector pos, Vector &outPos)
+void reactCtrlThread::createStaticBox(const Vector &pos)
+{
+    cmd.clear();
+    cmd.addString("world");
+    cmd.addString("mk");
+    cmd.addString("sbox");
+    cmd.addDouble(0.02); cmd.addDouble(0.02); cmd.addDouble(0.02); //fixed size
+    
+    cmd.addDouble(pos(0));
+    cmd.addDouble(pos(1));
+    cmd.addDouble(pos(2));
+    // color 
+    cmd.addInt(0);cmd.addInt(0);cmd.addInt(1); //blue
+    cmd.addString("false"); //no collisions
+    printMessage(5,"createBox(): sending %s",cmd.toString().c_str());
+    portToSimWorld.write(cmd);
+}
+
+void reactCtrlThread::moveBox(int index, const Vector &pos)
+{
+    cmd.clear();
+    cmd.addString("world");
+    cmd.addString("set");
+    cmd.addString("sbox");
+    cmd.addInt(index);
+    cmd.addDouble(pos(0));
+    cmd.addDouble(pos(1));
+    cmd.addDouble(pos(2));
+    portToSimWorld.write(cmd);
+}
+
+void reactCtrlThread::convertPosFromRootToSimFoR(const Vector &pos, Vector &outPos)
 {
     Vector pos_temp = pos;
     pos_temp.resize(4); 
@@ -776,6 +848,74 @@ void reactCtrlThread::convertPosFromRootToSimFoR(const Vector pos, Vector &outPo
     return;
 }
 
+void reactCtrlThread::convertPosFromLinkToRootFoR(const Vector &pos,const SkinPart skinPart, Vector &outPos)
+{
+    Matrix T_root_to_link = yarp::math::zeros(4,4);
+    int torsoDOF = 0;
+    if (useTorso){
+        torsoDOF = 3;
+    }
+
+     T_root_to_link = arm->getH(SkinPart_2_LinkNum[skinPart].linkNum + torsoDOF);
+     //e.g. skinPart LEFT_UPPER_ARM gives link number 2, which means we ask iKin for getH(2+3), which gives us  FoR 6 - at the first elbow joint, which is the FoR for the upper arm 
+     
+    Vector pos_temp = pos;
+    pos_temp.resize(4); 
+    pos_temp(3) = 1.0;
+    //printf("convertPosFromLinkToRootFoR: need to convert %s in the %dth link FoR, skin part %s into iCub root FoR.\n",pos.toString().c_str(),SkinPart_2_LinkNum[skinPart].linkNum,SkinPart_s[skinPart].c_str());
+    //printf("convertPosFromRootToSimFoR: pos in icub root resized to 4, with last value set to 1:%s\n",pos_temp.toString().c_str());
+    
+    outPos.resize(4,0.0);
+    outPos = T_root_to_link * pos_temp;
+    outPos.resize(3);
+    //printf("convertPosFromLinkToRootFoR: outPos after resizing back to 3 values:%s\n",outPos.toString().c_str());
+    
+    return;   
+ 
+}
+
+
+void reactCtrlThread::showCollisionPointsInSim()
+{
+    int nrCollisionPoints = collisionPoints.size();
+    Vector pos(3,0.0);  
+    if (nrCollisionPoints > collisionPointsVisualizedCount){
+        for(int i=1; i<= (nrCollisionPoints - collisionPointsVisualizedCount);i++){
+            pos = collisionPointsSimReservoirPos; 
+            pos(2)=pos(2)+0.03*i;
+            printMessage(5,"There are more collision points, %d, than available boxes in sim, %d, adding one at %s\n",nrCollisionPoints,collisionPointsVisualizedCount,pos.toString(3,3).c_str());
+            createStaticBox(pos);   
+            collisionPointsVisualizedCount++;
+        }
+        
+    }
+    
+    int j=1;
+    Vector posRoot(3,0.0);
+    Vector posSim(3,0.0);
+    for(std::vector<collisionPoint_t>::const_iterator it = collisionPoints.begin(); it != collisionPoints.end(); ++it) {
+        convertPosFromLinkToRootFoR(it->x,it->skin_part,posRoot);
+        convertPosFromRootToSimFoR(posRoot,posSim);
+        moveBox(j,posSim); //just move a box from the sim world
+        j++;
+        posRoot.zero(); posSim.zero();
+    }
+    
+    //if there have been more boxes allocated, just move them to the reservoir in the world
+    //(icubSim does not support deleting individual objects)
+        
+    if (nrCollisionPoints < collisionPointsVisualizedCount){
+        for(int k=collisionPointsVisualizedCount; k> nrCollisionPoints;k--){
+            pos = collisionPointsSimReservoirPos;
+            pos(2) = pos(2) + +0.03*k;
+            printMessage(5,"There are fewer collision points, %d, than available boxes in sim, %d, moving the rest to the reservoir in the sim world -  this one to: %s \n",nrCollisionPoints,collisionPointsVisualizedCount,pos.toString(3,3).c_str());
+            moveBox(k,pos);    
+        }
+        
+    }    
+                 
+}
+
 void reactCtrlThread::threadRelease()
 {
     yInfo("Returning to position mode..");
@@ -783,6 +923,8 @@ void reactCtrlThread::threadRelease()
         delete encsT; encsT = NULL;
         delete   arm;   arm = NULL;
 
+    collisionPoints.clear();    
+        
     yInfo("Closing ports..");
         outPort.close();
         if (portToSimWorld.isOpen()){
@@ -800,7 +942,6 @@ void reactCtrlThread::threadRelease()
         cmd.addString("del");
         cmd.addString("all");
         portToSimWorld.write(cmd);
-    
     }         
 }
 
