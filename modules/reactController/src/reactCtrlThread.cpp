@@ -217,6 +217,7 @@ void reactCtrlThread::run()
     3) right, outermost, proximal triangle - ID 207, row 1 in triangle_centers_CAD_upperPatch_wristFoR8
     ID  x   y   z   n1  n2  n3
     207 -0.027228   -0.054786   -0.0191051  -0.886  0.14    -0.431 */
+   
     
     collisionPoint_t collisionPointStruct;
     collisionPointStruct.skin_part = SKIN_LEFT_FOREARM;
@@ -783,7 +784,7 @@ void reactCtrlThread::createStaticSphere(double radius, const Vector &pos)
     // color
     cmd.addInt(1);cmd.addInt(0);cmd.addInt(0);
     cmd.addString("false"); //no collisions
-    printMessage(5,"createSphere(): sending %s",cmd.toString().c_str());
+    printMessage(5,"createSphere(): sending %s \n",cmd.toString().c_str());
     portToSimWorld.write(cmd);
 }
 
@@ -814,7 +815,7 @@ void reactCtrlThread::createStaticBox(const Vector &pos)
     // color 
     cmd.addInt(0);cmd.addInt(0);cmd.addInt(1); //blue
     cmd.addString("false"); //no collisions
-    printMessage(5,"createBox(): sending %s",cmd.toString().c_str());
+    printMessage(5,"createBox(): sending %s \n",cmd.toString().c_str());
     portToSimWorld.write(cmd);
 }
 
@@ -924,7 +925,16 @@ void reactCtrlThread::threadRelease()
         delete   arm;   arm = NULL;
 
     collisionPoints.clear();    
-        
+    
+    if((robot == "icubSim") && (visualizeTargetInSim || visualizeParticleInSim || visualizeCollisionPointsInSim) ){ 
+        yInfo("Deleting objects from simulator world.");
+        cmd.clear();
+        cmd.addString("world");
+        cmd.addString("del");
+        cmd.addString("all");
+        portToSimWorld.write(cmd);
+    }  
+    
     yInfo("Closing ports..");
         outPort.close();
         if (portToSimWorld.isOpen()){
@@ -935,14 +945,7 @@ void reactCtrlThread::threadRelease()
         ddA.close();
         ddT.close();
         
-     if((robot == "icubSim") && (visualizeTargetInSim || visualizeParticleInSim) ){ 
-        yInfo("Deleting objects from simulator world.");
-        cmd.clear();
-        cmd.addString("world");
-        cmd.addString("del");
-        cmd.addString("all");
-        portToSimWorld.write(cmd);
-    }         
+           
 }
 
 // empty line to make gcc happy

@@ -292,38 +292,50 @@ protected:
                 yarp::sig::Vector minima(dim,-V_max);
                 yarp::sig::Vector maxima(dim,V_max);
                 iKinChain chain_local = chain; //makes a copy that will be used internally 
-                // Block all the more distal joints after the joint 
+               
+                if (verbosity >= 5){
+                    printf("Full chain has %d DOF \n",chain_local.getDOF());
+                    yarp::sig::Matrix JfullChain = chain_local.GeoJacobian(); //6 rows, n columns for every active DOF
+                    printMessage(5,"GeoJacobian matrix for canonical end-effector (palm): \n %s \n",JfullChain.toString(3,3).c_str());
+                }
+                            
+               // Block all the more distal joints after the joint 
                 // if the skin part is a hand, no need to block any joints
                 if (((*it).skin_part == SKIN_LEFT_FOREARM) ||  ((*it).skin_part == SKIN_RIGHT_FOREARM)){
                     if(dim == 10){
-                        chain_local.blockLink(10); chain_local.blockLink(9);//wrist joints
-                        printMessage(4,"obstacle threatening skin part %s, blocking links 9 and 10 (wrist)\n",SkinPart_s[(*it).skin_part].c_str());
+                        chain_local.blockLink(9); chain_local.blockLink(8);//wrist joints 
+                        printMessage(4,"obstacle threatening skin part %s, blocking links 9 and 10 (wrist) (but indexes 8,9) on subchain for avoidance\n",SkinPart_s[(*it).skin_part].c_str());
                     }
                     else if(dim==7){
-                        chain_local.blockLink(7); chain_local.blockLink(6);//wrist joints
-                        printMessage(4,"obstacle threatening skin part %s, blocking links 7 and 6 (wrist)\n",SkinPart_s[(*it).skin_part].c_str());
+                        chain_local.blockLink(6); chain_local.blockLink(5);//wrist joints
+                        printMessage(4,"obstacle threatening skin part %s, blocking links 6 and 7 (wrist) (but indexes 5,6) on subchain for avoidance\n",SkinPart_s[(*it).skin_part].c_str());
                    
                     }
                 }
                 else if (((*it).skin_part == SKIN_LEFT_UPPER_ARM) ||  ((*it).skin_part == SKIN_RIGHT_UPPER_ARM)){
                     if(dim == 10){
-                        chain_local.blockLink(10); chain_local.blockLink(9);chain_local.blockLink(8);chain_local.blockLink(7); //wrist joints + elbow joints
-                        printMessage(4,"obstacle threatening skin part %s, blocking links 7,8,9 and 10 (wrist+elbow)\n",SkinPart_s[(*it).skin_part].c_str());
+                        chain_local.blockLink(9); chain_local.blockLink(8);chain_local.blockLink(7);chain_local.blockLink(6); //wrist joints + elbow joints
+                        printMessage(4,"obstacle threatening skin part %s, blocking links 7-10 (wrist+elbow; indexes 6-9) on subchain for avoidance\n",SkinPart_s[(*it).skin_part].c_str());
                     }
                     else if(dim==7){
-                        chain_local.blockLink(7); chain_local.blockLink(6);chain_local.blockLink(5);chain_local.blockLink(4); //wrist joints + elbow joints
-                        printMessage(4,"obstacle threatening skin part %s, blocking links 7,8,9 and 10 (wrist+elbow)\n",SkinPart_s[(*it).skin_part].c_str());
+                        chain_local.blockLink(6); chain_local.blockLink(5);chain_local.blockLink(4);chain_local.blockLink(3); //wrist joints + elbow joints
+                        printMessage(4,"obstacle threatening skin part %s, blocking links 7-10 (wrist+elbow; indexes 6-9) on subchain for avoidance\n",SkinPart_s[(*it).skin_part].c_str());
                     }
                 }
                 // SetHN to move the end effector toward the point to be controlled - the average locus of collision threat from safety margin
                 yarp::sig::Matrix HN = eye(4);
                 computeFoR((*it).x,(*it).n,HN);
-                printMessage(5,"HN matrix: %s \n",HN.toString(3,3).c_str());
-                chain_local.setHN(HN);
+                printMessage(5,"HN matrix at collision point w.r.t. local frame: \n %s \n",HN.toString(3,3).c_str());
+                chain_local.setHN(HN); //setting the end-effector to the collision point w.r.t subchain
+                if (verbosity >=5){
+                    yarp::sig::Matrix H = chain_local.getH();
+                    printf("H matrix at collision point w.r.t. root: \n %s \n",H.toString(3,3).c_str());
+                }
+                
                 yarp::sig::Matrix J = chain_local.GeoJacobian(); //6 rows, n columns for every active DOF (excluding the blocked)
-                printMessage(5,"GeoJacobian matrix: \n %s \n",J.toString(3,3).c_str());
+                printMessage(5,"GeoJacobian matrix of new end-effector (collision point), after possible blocking of joints: \n %s \n",J.toString(3,3).c_str());
                 yarp::sig::Matrix pseudoInvJ = yarp::math::pinv(J); 
-                printMessage(5,"Jacobian pseudoinverse matrix: \n %s \n",J.toString(3,3).c_str());
+                printMessage(5,"Jacobian pseudoinverse matrix: \n %s \n",pseudoInvJ.toString(3,3).c_str());
                 
                 printMessage(5,"Normal at collision point: %s, norm %f.\n",(*it).n.toString(3,3).c_str(),yarp::math::norm((*it).n));
                 // Compute the q_dot - joint velocities that contribute to motion along the normal - "toward the "threat" 
