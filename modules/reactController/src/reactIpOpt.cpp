@@ -289,16 +289,24 @@ protected:
     {
         if (!collisionPoints.empty()){
             for(std::vector<collisionPoint_t>::const_iterator it = collisionPoints.begin(); it != collisionPoints.end(); ++it) {
-                yarp::sig::Vector minima(dim,-V_max);
-                yarp::sig::Vector maxima(dim,V_max);
-                iKinChain chain_local = chain; //makes a copy that will be used internally 
+                yarp::sig::Vector minima(dim,-V_max); //joint velocity minima
+                yarp::sig::Vector maxima(dim,V_max); // joint velocity maxima
+                iKinChain chain_local = chain; //makes a copy that will be used internally and some joints blocked
                
                 if (verbosity >= 5){
-                    printf("Full chain has %d DOF \n",chain_local.getDOF());
-                    yarp::sig::Matrix JfullChain = chain_local.GeoJacobian(); //6 rows, n columns for every active DOF
+                    printf("Full chain has %d DOF \n",chain.getDOF());
+                    printf("chain.getH(): \n %s \n",chain.getH().toString(3,3).c_str());
+                    int linkNrForCurrentSkinPartFrame = 0;
+                    if (dim ==7){
+                        printf("chain.getH() relevant for skinPart %s: \n %s \n",SkinPart_s[(*it).skin_part].c_str(),chain.getH(SkinPart_2_LinkNum[(*it).skin_part].linkNum).toString(3,3).c_str());
+                    }
+                    else if (dim == 10){
+                         printf("chain.getH() relevant for skinPart %s: \n %s \n",SkinPart_s[(*it).skin_part].c_str(),chain.getH(SkinPart_2_LinkNum[(*it).skin_part].linkNum + 3).toString(3,3).c_str());
+                    }
+                    yarp::sig::Matrix JfullChain = chain.GeoJacobian(); //6 rows, n columns for every active DOF
                     printMessage(5,"GeoJacobian matrix for canonical end-effector (palm): \n %s \n",JfullChain.toString(3,3).c_str());
                 }
-                            
+                 
                // Block all the more distal joints after the joint 
                 // if the skin part is a hand, no need to block any joints
                 if (((*it).skin_part == SKIN_LEFT_FOREARM) ||  ((*it).skin_part == SKIN_RIGHT_FOREARM)){
@@ -326,24 +334,40 @@ protected:
                 yarp::sig::Matrix HN = eye(4);
                 computeFoR((*it).x,(*it).n,HN);
                 printMessage(5,"HN matrix at collision point w.r.t. local frame: \n %s \n",HN.toString(3,3).c_str());
-                chain_local.setHN(HN); //setting the end-effector to the collision point w.r.t subchain
+                //TODO Ugo - the end-effector needs to be correctly set w.r.t. the sub chain? But coordinates are in the corresponding frame for a given skin part, SkinPart_2_LinkNum[(*it).skin_part].linkNum) [+ 3 torso DOF]  
+                chain_local.setHN(HN); //! this is probably wrong - setting the end-effector transform to the collision point w.r.t subchain
                 if (verbosity >=5){
                     yarp::sig::Matrix H = chain_local.getH();
                     printf("H matrix at collision point w.r.t. root: \n %s \n",H.toString(3,3).c_str());
                 }
+                
+                //printMessage(5,"Normal at collision point w.r.t. skin part frame: %s, norm %f.\n",(*it).n.toString(3,3).c_str(),yarp::math::norm((*it).n));
+                //yarp::sig::Vector normalAtCollisionInRootFoR = chain_local.getH() * (*it).n;
+                //normalAtCollisionInRootFoR.subVector(0,3); //take out the dummy element from homogenous transform
+                //printMessage(5,"Normal at collision point w.r.t. Root: %s, norm %f.\n",normalAtCollisionInRootFoR.toString(3,3).c_str(),yarp::math::norm(normalAtCollisionInRootFoR));
+        
+                //for testing
+                //yarp::sig::Vector normalAtCollisionInEndEffFrame(4,0.0);
+                //normalAtCollisionInEndEffFrame(2) = 1.0; //z-axis ~ normal
+                //yarp::sig::Vector normalAtCollisionInRootFoR_2 = chain_local.getHN() * normalAtCollisionInEndEffFrame;
+                
                 
                 yarp::sig::Matrix J = chain_local.GeoJacobian(); //6 rows, n columns for every active DOF (excluding the blocked)
                 printMessage(5,"GeoJacobian matrix of new end-effector (collision point), after possible blocking of joints: \n %s \n",J.toString(3,3).c_str());
                 yarp::sig::Matrix pseudoInvJ = yarp::math::pinv(J); 
                 printMessage(5,"Jacobian pseudoinverse matrix: \n %s \n",pseudoInvJ.toString(3,3).c_str());
                 
-                printMessage(5,"Normal at collision point: %s, norm %f.\n",(*it).n.toString(3,3).c_str(),yarp::math::norm((*it).n));
+
                 // Compute the q_dot - joint velocities that contribute to motion along the normal - "toward the "threat" 
-                //yarp::sig::Vector qdotTowardThreat = pseudoInvJ * (*it).n; //TODO the dimensions need to match here
-                //the normal vector is already normalized
+                //yarp::sig::Vector qdotTowardThreat = correct submatrix of  pseudoInvJ * normal at collision point; //TODO Ugo
+                // ~ Eq. 13 in Flacco et al. 2012
                 
-                //TODO take the q_dot and then use them to define the minima and maxima vectors - take into account just the sign like Flacco or 
-                //magnitude of qdot or take into account avoidance vector magnitude; be careful with which links are bklocked - assign to correct joints
+                //TODO Ugo take the q_dot and then use them to define the minima and maxima vectors - take into account just the sign like Flacco (Eq. 14) or 
+                //magnitude of qdot or take into account avoidance vector magnitude (Eq. 12 in Flacco, in our case will come from PPS activation; 
+                // be careful with which links are blocked - assign to correct joints
+                
+                //TODO Ugo add the newly found limits to jointVelMinimaForSafetyMargin / jointVelMaximaForSafetyMargin;
+                
                // printf("setSafetyMarginJointVelLimits: end of \n");
             } //for all avoidance vectors
         } // if (!avoidanceVectors.empty()) 
@@ -501,15 +525,18 @@ public:
                          Number* g_u)
     {
         //x_l, x_u - limits for the primal variables - in our case joint velocities
-        setSafetyMarginJointVelLimits(); //will go through the avoidanceVectors and set the jointVel[Maxima/Minima]ForSafetyMargin
-        //TODO Matej integrate the new limits, write out everything to console to see the effects
+        setSafetyMarginJointVelLimits(); //will go through the avoidanceVectors and set the jointVelMinimaForSafetyMargin / jointVelMaximaForSafetyMargin
+
         for (Index i=0; i<n; i++)
         {
             // The joints velocities will be constrained by the V_min / V_max constraints and 
             // and the previous state (that is our current initial state), in order to avoid abrupt changes
             x_l[i]=max(-V_max*CTRL_DEG2RAD,q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD); //lower bound
             x_u[i]=min(+V_max*CTRL_DEG2RAD,q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD); //upper bound
-
+            
+            //TODO Ugo integrate the additional limits from  jointVelMinimaForSafetyMargin / jointVelMaximaForSafetyMargin;
+                
+            
             if (n==10 && i<3) //special handling of torso joints - should be moving less
             {
                 x_l[i]=max(-V_max*CTRL_DEG2RAD/torsoReduction,q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD);
@@ -698,6 +725,7 @@ public:
 
     /************************************************************************/
     virtual ~react_NLP() { }
+    
 };
 
 

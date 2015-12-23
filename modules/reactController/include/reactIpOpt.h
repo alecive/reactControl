@@ -42,7 +42,7 @@ struct collisionPoint_t{
 
 /**
 *
-* Class for inverting chain's kinematics based on IpOpt lib
+* Class for reactive control of kinematic chain with target and obstacles
 */
 class reactIpOpt
 {
