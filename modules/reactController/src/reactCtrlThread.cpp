@@ -17,18 +17,21 @@
  * Public License for more details.
 */
 
-#include <yarp/os/Time.h>
-#include <iCub/skinDynLib/common.h>
-
-#include "reactCtrlThread.h"
 #include <fstream>
 #include <sstream>
 #include <iomanip>
 
 #include <IpIpoptApplication.hpp>
 
+#include <yarp/os/Time.h>
+#include <iCub/ctrl/math.h>
+#include <iCub/skinDynLib/common.h>
+
+#include "reactCtrlThread.h"
+
 using namespace yarp::sig;
 using namespace yarp::math;
+using namespace iCub::ctrl;
 using namespace iCub::skinDynLib;
 
 #define STATE_WAIT              0
@@ -500,7 +503,8 @@ bool reactCtrlThread::setTol(const double _tol)
 {
     if (_tol>=0.0)
     {
-        return tol=_tol;
+        tol=_tol;
+        return true;
     }
     return false;
 }
@@ -514,7 +518,8 @@ bool reactCtrlThread::setVMax(const double _vMax)
 {
     if (_vMax>=0.0)
     {
-        return vMax=_vMax;
+        vMax=_vMax;
+        return true;
     }
     return false;
 }
@@ -528,23 +533,25 @@ bool reactCtrlThread::setTrajTime(const double _traj_time)
 {
     yWarning("[reactCtrlThread]trajTime is deprecated! Use trajSpeed instead.");
     return false;
-    if (_traj_time>=0.0)
-    {
-        return trajTime=_traj_time;
-    }
 }
 
 bool reactCtrlThread::setTrajSpeed(const double _traj_speed)
 {
     if (_traj_speed>=0.0)
     {
-        return trajSpeed=_traj_speed;
+        trajSpeed=_traj_speed;
+        return true;
     }
+    return false;
 }
 
 bool reactCtrlThread::setVerbosity(const int _verbosity)
 {
-    return _verbosity>=0?verbosity=_verbosity:verbosity=0;
+    if (_verbosity>=0)
+        verbosity=_verbosity;
+    else
+        verbosity=0;
+    return true;
 }
 
 bool reactCtrlThread::setNewTarget(const Vector& _x_d)
@@ -668,7 +675,7 @@ void reactCtrlThread::printJointsBounds()
     double min, max;
     iCub::iKin::iKinChain &chain=*arm->asChain();
 
-    for (int i = 0; i < arm->getDOF(); i++)
+    for (size_t i = 0; i < arm->getDOF(); i++)
     {
         min=chain(i).getMin()*CTRL_RAD2DEG;
         max=chain(i).getMax()*CTRL_RAD2DEG;

@@ -26,10 +26,11 @@ source_group("Source Files" FILES ${source_files})
 source_group("IDL Files"    FILES ${idl_files})
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include
-                    ${YARP_INCLUDE_DIRS}
-                    ${IPOPT_INCLUDE_DIRS})
+                    ${IPOPT_INCLUDE_DIRS}
+                    ${YARP_INCLUDE_DIRS}                    
+                    ${ICUB_INCLUDE_DIRS})
 
 add_executable(${PROJECT_NAME} ${header_files} ${source_files} ${idl_files})
-target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES} iKin skinDynLib ${IPOPT_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES} ctrlLib iKin skinDynLib ${IPOPT_LIBRARIES})
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 

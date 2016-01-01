@@ -156,7 +156,7 @@ protected:
     string IPOPT_Number_toString(const Number* x, const double multiplier=1.0)
     {
         std::ostringstream ss;
-        for (Index i=0; i<dim; i++)
+        for (Index i=0; i<(Index)dim; i++)
         {
             ss << x[i]*multiplier << " ";
         }
@@ -259,7 +259,7 @@ protected:
     
 
     /********to ensure joint pos limits but in a smooth way around the limits****************************************/
-    bool computeGuard()
+    void computeGuard()
     {
         for (unsigned int i=0; i<dim; i++)
         {
@@ -285,7 +285,7 @@ protected:
     
     /**** goes through the avoidanceVectors and for each of them adapts the joint vel limits in
      * the chain above the threat so as to assist in avoiding the collision - constraining the joints in going toward the threat */
-    bool setSafetyMarginJointVelLimits()
+    void setSafetyMarginJointVelLimits()
     {
         if (!collisionPoints.empty()){
             for(std::vector<collisionPoint_t>::const_iterator it = collisionPoints.begin(); it != collisionPoints.end(); ++it) {
@@ -369,10 +369,9 @@ protected:
                 //TODO Ugo add the newly found limits to jointVelMinimaForSafetyMargin / jointVelMaximaForSafetyMargin;
                 
                // printf("setSafetyMarginJointVelLimits: end of \n");
-            } //for all avoidance vectors
-        } // if (!avoidanceVectors.empty()) 
-    }  // bool setSafetyMarginJointVelLimits() 
-        
+            }
+        }
+    }
     
     
     /************************************************************************/
@@ -550,7 +549,7 @@ public:
         //limits for the g function - in our case joint position limits
         for (Index i=0; i<m; i++)
         {
-            if (i<dim)
+            if (i<(Index)dim)
             {
                 g_l[i]=chain(i).getMin(); //returns joint angle lower bound
                 g_u[i]=chain(i).getMax();  //returns joint angle upper bound
@@ -599,7 +598,7 @@ public:
         computeQuantities(x);
         yarp::sig::Vector q(dim,0.0);
 
-        for (Index i=0; i<dim; i++)
+        for (Index i=0; i<(Index)dim; i++)
         {
             q[i]=q_t(i) + dT * q_dot(i);
         }
@@ -607,7 +606,7 @@ public:
 
         for (Index i=0; i<m; i++)
         {
-            if (i<dim)
+            if (i<(Index)dim)
             {
                 g[i]=W[i]*q[i]; //joint position limits are handled here - with a weight, such that they are considered smoothly - not "bang bang"
             }
@@ -648,7 +647,7 @@ public:
 
                 yarp::sig::Vector q(dim,0.0);
 
-                for (Index i=0; i<dim; i++)
+                for (Index i=0; i<(Index)dim; i++)
                 {
                     q[i]=q_t(i) + dT * q_dot(i);
                 }
