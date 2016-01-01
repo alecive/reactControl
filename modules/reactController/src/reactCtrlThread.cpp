@@ -231,64 +231,47 @@ void reactCtrlThread::run()
     collisionPointStruct.magnitude = 1.0; //~ "probability of collision"
     //getAvoidanceVectorsFromPort(); we'll do that later - see WYSIWYD/ppsAllostatic/cartControlReachAvoid/cartControlReachAvoidThread
     //filterSkinPartsFromOtherChains(); TODO - we should send only those corresponding to the chosen part in reactControl (part_short)
-    collisionPoints.push_back(collisionPointStruct);
+    //collisionPoints.push_back(collisionPointStruct);
     
-    if (visualizeCollisionPointsInSim){
-      showCollisionPointsInSim();  
-    }
+    if (visualizeCollisionPointsInSim)
+        showCollisionPointsInSim();
     
     switch (state)
     {
         case STATE_WAIT:
-        {
-            // Vector x_d(3,0.0);
-            // x_d    =x_t;
-            // x_d[2]+=0.2;
-            // setNewTarget(x_d);
             break;
-        }
-        case STATE_REACH: //triggered by rpc request
+        case STATE_REACH:
         {
-            // if (yarp::os::Time::now()>t_d)
             if (norm(x_t-x_d) < globalTol) //we keep solving until we reach the desired target
             {
-                printf("\n");
                 yDebug(0,"[reactCtrlThread] norm(x_t-x_d) %g\tglobalTol %g\n",norm(x_t-x_d),globalTol);
                 if (!stopControlHelper())
-                {
                     yError("[reactCtrlThread] Unable to properly stop the control of the arm!");
-                }
-                
                 break;
             }
 
             int exit_code;
             q_dot = solveIK(exit_code);
             
-            if (exit_code==Ipopt::Solve_Succeeded ||
-                exit_code==Ipopt::Maximum_CpuTime_Exceeded)
+            if (exit_code==Ipopt::Solve_Succeeded || exit_code==Ipopt::Maximum_CpuTime_Exceeded)
             {
                 if (exit_code==Ipopt::Maximum_CpuTime_Exceeded)
-                { //if this happens, try to use a more powerful machine or investigate with higher verbosity and then adapt the rate of the thread with --rate
                     yWarning("[reactCtrlThread] Ipopt cpu time was higher than the rate of the thread!");
-                }
                 
                 if (!controlArm(q_dot))
-                {
                     yError("I am not able to properly control the arm!");
-                }
             }
 
             break;
         }
-        case STATE_IDLE: //stop control gets you there just for the printout, then we move to STATE_WAIT
+        case STATE_IDLE:
+        {
             yInfo("[reactCtrlThread] finished.");
             state=STATE_WAIT;
             break;
+        }
         default:
-            yError("[reactCtrlThread] reactCtrlThread should never be here!!! Step: %d",state);
-            yarp::os::Time::delay(2.0);
-            break;
+            yFatal("[reactCtrlThread] reactCtrlThread should never be here!!! Step: %d",state);
     }
 
     sendData();
@@ -335,7 +318,6 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // So, q_dot_0 is in degrees, but I have to convert it in radians before sending it to ipopt
     Vector res=slv->solve(x_n,q_dot_0*CTRL_DEG2RAD,dT,vMax, collisionPoints, &cpu_time,&exit_code)*CTRL_RAD2DEG;
 
-    printf("\n");
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
     printMessage(0,"x_n: %s\tx_d: %s\tdT %g\n",x_n.toString(3,3).c_str(),x_d.toString(3,3).c_str(),dT);
     printMessage(0,"x_0: %s\tx_t: %s\n",       x_0.toString(3,3).c_str(),x_t.toString(3,3).c_str());
