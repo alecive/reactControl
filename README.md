@@ -1,4 +1,4 @@
-#React Control
+#react-control
 
 This is a repo created with the purpose of providing the iCub with a framework for performing a reaching behavior with whole-body obstacle avoidance. It will be deeply linked with the [peripersonal-space repository](https://github.com/robotology/peripersonal-space), but for now it is a completely independent module.
 
