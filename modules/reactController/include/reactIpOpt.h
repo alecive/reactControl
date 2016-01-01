@@ -60,9 +60,6 @@ protected:
 
     iCub::iKin::iKinChain &chain;
 
-    iCub::iKin::iKinLinIneqConstr  noLIC;
-    iCub::iKin::iKinLinIneqConstr *pLIC;
-
     double obj_scaling;
     double x_scaling;
     double g_scaling;
@@ -93,35 +90,6 @@ public:
                const unsigned int verbose=0, bool useHessian=true);
 
     /**
-    * Attach a iKinLinIneqConstr object in order to impose 
-    * constraints of the form lB <= C*q <= uB.
-    * @param lic is the iKinLinIneqConstr object to attach.
-    * @see iKinLinIneqConstr
-    */
-    void attachLIC(iCub::iKin::iKinLinIneqConstr &lic) { pLIC=&lic; }
-
-    /**
-    * Returns a reference to the attached Linear Inequality 
-    * Constraints object.
-    * @return Linear Inequality Constraints pLIC. 
-    * @see iKinLinIneqConstr
-    */
-    iCub::iKin::iKinLinIneqConstr &getLIC() { return *pLIC; }
-
-    /**
-    * Sets Maximum Iteration.
-    * @param max_iter exits if iter>=max_iter (max_iter<0 
-    *                 (IKINCTRL_DISABLED) disables this check).
-    */ 
-    void setMaxIter(const int max_iter);
-
-    /**
-    * Retrieves the current value of Maximum Iteration.
-    * @return max_iter. 
-    */ 
-    int getMaxIter() const;
-
-    /**
     * Sets Tolerance.
     * @param tol exits if norm(xd-x)<tol.
     */
@@ -143,29 +111,11 @@ public:
     void setVerbosity(const unsigned int verbose);
 
     /**
-    * Enables/disables user scaling factors.
-    * @param useUserScaling true if user scaling is enabled. 
-    * @param obj_scaling user scaling factor for the objective 
-    *                    function.
-    * @param x_scaling user scaling factor for variables. 
-    * @param g_scaling user scaling factor for constraints. 
-    */
-    void setUserScaling(const bool useUserScaling, const double _obj_scaling,
-                        const double _x_scaling, const double _g_scaling);
-
-    /**
     * Returns the lower and upper bounds to represent -inf and +inf.
     * @param lower is a reference to return the lower bound.
     * @param upper is a reference to return the upper bound. 
     */
     void getBoundsInf(double &lower, double &upper);
-
-    /**
-    * Sets the lower and upper bounds to represent -inf and +inf.
-    * @param lower is the new lower bound. 
-    * @param upper is the new upper bound. 
-    */
-    void setBoundsInf(const double lower, const double upper);
 
     /**
     * Executes the IpOpt algorithm trying to converge on target. 
@@ -193,7 +143,8 @@ public:
     * @return estimated joint velocities.
     */
     virtual yarp::sig::Vector solve(yarp::sig::Vector &xd, yarp::sig::Vector q_dot_0,
-                                    double &dt, double &vm, const std::vector<collisionPoint_t> & collision_points,double *cpu_time, int *exit_code);
+                                    double &dt, double &vm, const std::vector<collisionPoint_t> &collision_points,
+                                    int *exit_code);
 
     /**
     * Default destructor.

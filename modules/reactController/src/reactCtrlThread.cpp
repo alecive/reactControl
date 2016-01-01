@@ -286,7 +286,6 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     double dT=getRate()/1000.0;
     double t_t=yarp::os::Time::now();
     int    exit_code=-1;
-    double cpu_time=0.0;
 
     // if (t_t>=t_d)
     // {
@@ -316,7 +315,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
     // So, q_dot_0 is in degrees, but I have to convert it in radians before sending it to ipopt
-    Vector res=slv->solve(x_n,q_dot_0*CTRL_DEG2RAD,dT,vMax, collisionPoints, &cpu_time,&exit_code)*CTRL_RAD2DEG;
+    Vector res=slv->solve(x_n,q_dot_0*CTRL_DEG2RAD,dT,vMax,collisionPoints,&exit_code)*CTRL_RAD2DEG;
 
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
     printMessage(0,"x_n: %s\tx_d: %s\tdT %g\n",x_n.toString(3,3).c_str(),x_d.toString(3,3).c_str(),dT);

@@ -56,8 +56,6 @@ protected:
     int verbosity;
     // The chain that will undergo the task
     iKinChain &chain;
-    // The inequality constraints (if available) - for the cable mechanism in the real iCub shoulder assembly
-    iKinLinIneqConstr &LIC;
     // The dimensionality of the task ~ nr DOF in the chain ~ nr. primal variables (for now 7 for arm joints, 10 if torso is enabled)
     unsigned int dim;
 
@@ -145,9 +143,6 @@ protected:
             q_t = chain.getAng();
             cost_func=xd -(x0+dT*J_cst*q_dot);
             grad_cost_func=2.0*cost_func*(-dT*J_cst);
-
-            // if (LIC.isActive())
-            //     linC=LIC.getC()*q_t;
         }
         printMessage(9,"[computeQuantities] OK x: %s\n",IPOPT_Number_toString(x,CTRL_RAD2DEG).c_str());
     }
@@ -396,8 +391,8 @@ public:
     /***** 8 pure virtual functions from TNLP class need to be implemented here **********/
     /************************************************************************/
     react_NLP(iKinChain &c, yarp::sig::Vector &_xd, yarp::sig::Vector &_q_dot_0,
-             double &_dT, double &_vM, const std::vector<collisionPoint_t> & _collision_points, iKinLinIneqConstr &_LIC, int _verbosity) : chain(c),
-             q_dot_0(_q_dot_0), dT(_dT), xd(_xd), collisionPoints(_collision_points), LIC(_LIC), verbosity(_verbosity), V_max(_vM)
+             double &_dT, double &_vM, const std::vector<collisionPoint_t> & _collision_points, int _verbosity) : chain(c),
+             q_dot_0(_q_dot_0), dT(_dT), xd(_xd), collisionPoints(_collision_points), verbosity(_verbosity), V_max(_vM)
     {
         name="react_NLP";
 
@@ -478,20 +473,6 @@ public:
         m=dim+0; // nr constraints - dim(g(x))
         nnz_jac_g=dim; // the jacobian of g has dim non zero entries (the diagonal)
 
-        // if (LIC.isActive())
-        // {
-        //     int lenLower=LIC.getlB().length();
-        //     int lenUpper=LIC.getuB().length();
-
-        //     if (lenLower && (lenLower==lenUpper) && (LIC.getC().cols()==dim))
-        //     {
-        //         m+=lenLower;
-        //         nnz_jac_g+=lenLower*dim;
-        //     }
-        //     else
-        //         LIC.setActive(false);
-        // }
-        
         // nnz_h_lag=(dim*(dim+1))>>1;
         nnz_h_lag=0; //number of nonzero entries in the Hessian
         index_style=TNLP::C_STYLE;
@@ -554,11 +535,6 @@ public:
                 g_l[i]=chain(i).getMin(); //returns joint angle lower bound
                 g_u[i]=chain(i).getMax();  //returns joint angle upper bound
             }
-            // if (i>=dim)
-            // {
-            //     g_l[i]=LIC.getlB()[i-dim];
-            //     g_u[i]=LIC.getuB()[i-dim];
-            // }
         }
         
         printMessage(3,"[get_bounds_info]   x_l: %s\n", IPOPT_Number_toString(x_l,CTRL_RAD2DEG).c_str());
@@ -723,8 +699,7 @@ public:
     }
 
     /************************************************************************/
-    virtual ~react_NLP() { }
-    
+    virtual ~react_NLP() { }  
 };
 
 
@@ -733,8 +708,6 @@ reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
                        const int max_iter, const unsigned int verbose, bool useHessian) :
                        chain(c), verbosity(verbose)
 {
-    pLIC=&noLIC;
-
     chain.setAllConstraints(false); // this is required since IpOpt initially relaxes constraints
 
     App=new IpoptApplication();
@@ -765,29 +738,8 @@ reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
         CAST_IPOPTAPP(App)->Options()->SetStringValue("hessian_approximation","limited-memory");
 
     Ipopt::ApplicationReturnStatus status = CAST_IPOPTAPP(App)->Initialize();
-    if (status != Ipopt::Solve_Succeeded) {
+    if (status != Ipopt::Solve_Succeeded)
         yError("Error during initialization!");
-    }
-}
-
-/************************************************************************/
-void reactIpOpt::setMaxIter(const int max_iter)
-{
-    if (max_iter>0)
-        CAST_IPOPTAPP(App)->Options()->SetIntegerValue("max_iter",max_iter);
-    else
-        CAST_IPOPTAPP(App)->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
-
-    CAST_IPOPTAPP(App)->Initialize();
-}
-
-
-/************************************************************************/
-int reactIpOpt::getMaxIter() const
-{
-    int max_iter;
-    CAST_IPOPTAPP(App)->Options()->GetIntegerValue("max_iter",max_iter,"");
-    return max_iter;
 }
 
 
@@ -820,25 +772,6 @@ void reactIpOpt::setVerbosity(const unsigned int verbose)
 
 
 /************************************************************************/
-void reactIpOpt::setUserScaling(const bool useUserScaling, const double _obj_scaling,
-                                  const double _x_scaling, const double _g_scaling)
-{
-    if (useUserScaling)
-    {
-        obj_scaling=_obj_scaling;
-        x_scaling  =_x_scaling;
-        g_scaling  =_g_scaling;
-
-        CAST_IPOPTAPP(App)->Options()->SetStringValue("nlp_scaling_method","user-scaling");
-    }
-    else
-        CAST_IPOPTAPP(App)->Options()->SetStringValue("nlp_scaling_method","gradient-based");
-
-    CAST_IPOPTAPP(App)->Initialize();
-}
-
-
-/************************************************************************/
 void reactIpOpt::getBoundsInf(double &lower, double &upper)
 {
     CAST_IPOPTAPP(App)->Options()->GetNumericValue("nlp_lower_bound_inf",lower,"");
@@ -847,20 +780,11 @@ void reactIpOpt::getBoundsInf(double &lower, double &upper)
 
 
 /************************************************************************/
-void reactIpOpt::setBoundsInf(const double lower, const double upper)
-{
-    CAST_IPOPTAPP(App)->Options()->SetNumericValue("nlp_lower_bound_inf",lower);
-    CAST_IPOPTAPP(App)->Options()->SetNumericValue("nlp_upper_bound_inf",upper);
-
-    lowerBoundInf=lower;
-    upperBoundInf=upper;
-}
-
-/************************************************************************/
 yarp::sig::Vector reactIpOpt::solve(yarp::sig::Vector &xd, yarp::sig::Vector q_dot_0,
-                                    double &dt, double &vm, const std::vector<collisionPoint_t> & collision_points, double *cpu_time,int *exit_code)
+                                    double &dt, double &vm, const std::vector<collisionPoint_t> &collision_points,
+                                    int *exit_code)
 {
-    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,vm,collision_points,*pLIC,verbosity);
+    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,vm,collision_points,verbosity);
     
     nlp->set_scaling(obj_scaling,x_scaling,g_scaling);
     nlp->set_bound_inf(lowerBoundInf,upperBoundInf);
@@ -870,9 +794,6 @@ yarp::sig::Vector reactIpOpt::solve(yarp::sig::Vector &xd, yarp::sig::Vector q_d
 
     if (exit_code!=NULL)
         *exit_code=status;
-
-    // if (cpu_time!=NULL)
-    //     *cpu_time=
 
     return nlp->get_q_dot_d();
 }
