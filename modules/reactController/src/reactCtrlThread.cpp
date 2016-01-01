@@ -279,7 +279,7 @@ void reactCtrlThread::run()
 
 Vector reactCtrlThread::solveIK(int &_exit_code)
 {
-    slv=new reactIpOpt(*arm->asChain(),tol,100,verbosity,false);
+    slv=new reactIpOpt(*arm->asChain(),tol,verbosity);
     // Next step will be provided iteratively.
     // The equation is x(t_next) = x_t + (x_d - x_t) * (t_next - t_now/T-t_now)
     //                              s.t. t_next = t_now + dT

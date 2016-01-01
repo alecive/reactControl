@@ -60,12 +60,6 @@ protected:
 
     iCub::iKin::iKinChain &chain;
 
-    double obj_scaling;
-    double x_scaling;
-    double g_scaling;
-    double lowerBoundInf;
-    double upperBoundInf;
-
     int verbosity;
 
 public:
@@ -74,20 +68,13 @@ public:
     * @param c is the Chain object on which the control operates. Do 
     *          not change Chain DOF from this point onwards!!
     * @param tol exits if 0.5*norm(xd-x)^2<tol.
-    * @param max_iter exits if iter>=max_iter (max_iter<0 disables
-    *                 this check, IKINCTRL_DISABLED(==-1) by
-    *                 default).
     * @param verbose is a integer number which progressively enables 
     *                different levels of warning messages or status
     *                dump. The larger this value the more detailed
     *                is the output (0=>off by default).
-    * @param useHessian relies on exact Hessian computation or  
-    *                enable Quasi-Newton approximation (true by
-    *                default).
     */
     reactIpOpt(iCub::iKin::iKinChain &c,
-               const double tol, const int max_iter=IKINCTRL_DISABLED,
-               const unsigned int verbose=0, bool useHessian=true);
+               const double tol, const unsigned int verbose=0);
 
     /**
     * Sets Tolerance.

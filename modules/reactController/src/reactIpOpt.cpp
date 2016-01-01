@@ -113,15 +113,7 @@ protected:
     yarp::sig::Vector qGuardMinInt, qGuardMinExt, qGuardMinCOG;
     yarp::sig::Vector qGuardMaxInt, qGuardMaxExt, qGuardMaxCOG;
 
-    yarp::sig::Vector linC;
-
-    double __obj_scaling;
-    double __x_scaling;
-    double __g_scaling;
-    double lowerBoundInf;
-    double upperBoundInf;
-
-    bool   firstGo;
+    bool firstGo;
 
     /************************************************************************/
     virtual void computeQuantities(const Number *x)
@@ -436,34 +428,10 @@ public:
         computeGuard();
 
         firstGo=true;
-
-        __obj_scaling=1.0;
-        __x_scaling  =1.0;
-        __g_scaling  =1.0;
-
-        lowerBoundInf=-std::numeric_limits<double>::max();
-        upperBoundInf=std::numeric_limits<double>::max();
     }
 
     /************************************************************************/
     yarp::sig::Vector get_q_dot_d() { return q_dot_d; }
-
-    /************************************************************************/
-    void set_scaling(double _obj_scaling, double _x_scaling, double _g_scaling)
-    {
-        __obj_scaling=_obj_scaling;
-        __x_scaling  =_x_scaling;
-        __g_scaling  =_g_scaling;
-        printMessage(7,"[set_scaling] OK\n");
-    }
-
-    /************************************************************************/
-    void set_bound_inf(double lower, double upper)
-    {
-        lowerBoundInf=lower;
-        upperBoundInf=upper;
-        printMessage(7,"[set_bound_inf] OK\n");
-    }
 
     /************************************************************************/
     bool get_nlp_info(Index& n, Index& m, Index& nnz_jac_g, Index& nnz_h_lag,
@@ -581,16 +549,8 @@ public:
         computeWeight(q);
 
         for (Index i=0; i<m; i++)
-        {
             if (i<(Index)dim)
-            {
-                g[i]=W[i]*q[i]; //joint position limits are handled here - with a weight, such that they are considered smoothly - not "bang bang"
-            }
-            // if (i>=dim)
-            // {
-            //     g[i]=linC[i-dim];
-            // }
-        }
+                g[i]=W[i]*q[i];
 
         printMessage(7,"[eval_g] OK\t\tq(t+1): %s\n",IPOPT_Number_toString(g,CTRL_RAD2DEG).c_str());
 
@@ -657,27 +617,6 @@ public:
     // }
 
     /************************************************************************/
-    bool get_scaling_parameters(Number& obj_scaling, bool& use_x_scaling, Index n,
-                                Number* x_scaling, bool& use_g_scaling, Index m,
-                                Number* g_scaling)
-    {
-        printMessage(9,"[get_scaling_parameters] START");
-        obj_scaling=__obj_scaling;
-
-        for (Index i=0; i<n; i++)
-            x_scaling[i]=__x_scaling;
-
-        for (Index j=0; j<m; j++)
-            g_scaling[j]=__g_scaling;
-
-        use_x_scaling=use_g_scaling=true;
-
-        printMessage(7,"[get_scaling_parameters] END\n");
-
-        return true;
-    }
-
-    /************************************************************************/
     void finalize_solution(SolverReturn status, Index n, const Number* x,
                            const Number* z_L, const Number* z_U, Index m,
                            const Number* g, const Number* lambda, Number obj_value,
@@ -705,7 +644,7 @@ public:
 
 /************************************************************************/
 reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
-                       const int max_iter, const unsigned int verbose, bool useHessian) :
+                       const unsigned int verbose) :
                        chain(c), verbosity(verbose)
 {
     chain.setAllConstraints(false); // this is required since IpOpt initially relaxes constraints
@@ -727,15 +666,8 @@ reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
     // CAST_IPOPTAPP(App)->Options()->SetStringValue("print_options_documentation","no");
     // CAST_IPOPTAPP(App)->Options()->SetStringValue("skip_finalize_solution_call","yes");
 
-    getBoundsInf(lowerBoundInf,upperBoundInf);
-
-    if (max_iter>0)
-        CAST_IPOPTAPP(App)->Options()->SetIntegerValue("max_iter",max_iter);
-    else
-        CAST_IPOPTAPP(App)->Options()->SetIntegerValue("max_iter",(Index)upperBoundInf);
-
-    if (!useHessian)
-        CAST_IPOPTAPP(App)->Options()->SetStringValue("hessian_approximation","limited-memory");
+    CAST_IPOPTAPP(App)->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
+    CAST_IPOPTAPP(App)->Options()->SetStringValue("hessian_approximation","limited-memory");
 
     Ipopt::ApplicationReturnStatus status = CAST_IPOPTAPP(App)->Initialize();
     if (status != Ipopt::Solve_Succeeded)
@@ -748,7 +680,6 @@ void reactIpOpt::setTol(const double tol)
 {
     CAST_IPOPTAPP(App)->Options()->SetNumericValue("tol",tol);
     CAST_IPOPTAPP(App)->Options()->SetNumericValue("acceptable_tol",tol);
-
     CAST_IPOPTAPP(App)->Initialize();
 }
 
@@ -766,16 +697,7 @@ double reactIpOpt::getTol() const
 void reactIpOpt::setVerbosity(const unsigned int verbose)
 {
     CAST_IPOPTAPP(App)->Options()->SetIntegerValue("print_level",verbose);
-
     CAST_IPOPTAPP(App)->Initialize();
-}
-
-
-/************************************************************************/
-void reactIpOpt::getBoundsInf(double &lower, double &upper)
-{
-    CAST_IPOPTAPP(App)->Options()->GetNumericValue("nlp_lower_bound_inf",lower,"");
-    CAST_IPOPTAPP(App)->Options()->GetNumericValue("nlp_upper_bound_inf",upper,"");
 }
 
 
@@ -786,9 +708,6 @@ yarp::sig::Vector reactIpOpt::solve(yarp::sig::Vector &xd, yarp::sig::Vector q_d
 {
     SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,vm,collision_points,verbosity);
     
-    nlp->set_scaling(obj_scaling,x_scaling,g_scaling);
-    nlp->set_bound_inf(lowerBoundInf,upperBoundInf);
-
     CAST_IPOPTAPP(App)->Options()->SetNumericValue("max_cpu_time",dt);
     ApplicationReturnStatus status=CAST_IPOPTAPP(App)->OptimizeTNLP(GetRawPtr(nlp));
 
