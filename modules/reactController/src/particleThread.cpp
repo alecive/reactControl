@@ -33,11 +33,6 @@ particleThread::particleThread(int _rate, const string &_name, int _verbosity) :
     vel.resize(3,0.0);
 }
 
-bool particleThread::threadInit()
-{
-    return true;
-}
-
 void particleThread::run()
 {
     if (isRunning)

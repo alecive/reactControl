@@ -196,6 +196,7 @@ bool reactCtrlThread::threadInit()
 
 void reactCtrlThread::run()
 {
+    yarp::os::LockGuard lg(mutex);
     updateArmChain();
     
     //debug - see Jacobian
@@ -220,7 +221,6 @@ void reactCtrlThread::run()
     3) right, outermost, proximal triangle - ID 207, row 1 in triangle_centers_CAD_upperPatch_wristFoR8
     ID  x   y   z   n1  n2  n3
     207 -0.027228   -0.054786   -0.0191051  -0.886  0.14    -0.431 */
-   
     
     collisionPoint_t collisionPointStruct;
     collisionPointStruct.skin_part = SKIN_LEFT_FOREARM;
@@ -254,7 +254,7 @@ void reactCtrlThread::run()
             {
                 printf("\n");
                 yDebug(0,"[reactCtrlThread] norm(x_t-x_d) %g\tglobalTol %g\n",norm(x_t-x_d),globalTol);
-                if (!stopControl())
+                if (!stopControlHelper())
                 {
                     yError("[reactCtrlThread] Unable to properly stop the control of the arm!");
                 }
@@ -296,7 +296,6 @@ void reactCtrlThread::run()
 
 Vector reactCtrlThread::solveIK(int &_exit_code)
 {
-    yarp::os::LockGuard lg(mutex);
     slv=new reactIpOpt(*arm->asChain(),tol,100,verbosity,false);
     // Next step will be provided iteratively.
     // The equation is x(t_next) = x_t + (x_d - x_t) * (t_next - t_now/T-t_now)
@@ -352,13 +351,12 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
 
 bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
 {   
-    yarp::os::LockGuard lg(mutex);
     VectorOf<int> jointsToSetA;
     VectorOf<int> jointsToSetT;
     if (!areJointsHealthyAndSet(jointsToSetA,"arm","velocity"))
     {
         yWarning("[reactCtrlThread]Stopping control because arm joints are not healthy!");
-        stopControl();
+        stopControlHelper();
         return false;
     }
 
@@ -367,7 +365,7 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
         if (!areJointsHealthyAndSet(jointsToSetT,"torso","velocity"))
         {
             yWarning("[reactCtrlThread]Stopping control because torso joints are not healthy!");
-            stopControl();
+            stopControlHelper();
             return false;
         }
     }
@@ -453,10 +451,8 @@ void reactCtrlThread::sendData()
     }
 }
 
-bool reactCtrlThread::stopControl()
+bool reactCtrlThread::stopControlHelper()
 {
-    yarp::os::LockGuard lg(mutex);
-
     state=STATE_IDLE;
     if (useTorso)
     {
@@ -464,6 +460,12 @@ bool reactCtrlThread::stopControl()
     }
 
     return ivelA->stop();
+}
+
+bool reactCtrlThread::stopControl()
+{
+    yarp::os::LockGuard lg(mutex);
+    return stopControlHelper();
 }
 
 bool reactCtrlThread::enableTorso()
@@ -621,8 +623,7 @@ bool reactCtrlThread::setNewRelativeTarget(const Vector& _rel_x_d)
 }
 
 void reactCtrlThread::updateArmChain()
-{
-    yarp::os::LockGuard lg(mutex);
+{    
     iencsA->getEncoders(encsA->data());
     Vector qA=encsA->subVector(0,6);
 
@@ -951,8 +952,6 @@ void reactCtrlThread::threadRelease()
         stopControl();
         ddA.close();
         ddT.close();
-        
-           
 }
 
 // empty line to make gcc happy

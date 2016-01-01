@@ -426,10 +426,11 @@ public:
             return false;
         }
 
-        rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity, disableTorso, trajSpeed,
-                                          globalTol, vMax, tol,visualizeTargetInSim, visualizeParticleInSim,visualizeCollisionPointsInSim,prtclThrd);
-        bool strt = rctCtrlThrd->start();
-        if (!strt)
+        rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
+                                          disableTorso, trajSpeed, globalTol, vMax,
+                                          tol, visualizeTargetInSim, visualizeParticleInSim,
+                                          visualizeCollisionPointsInSim, prtclThrd);
+        if (!rctCtrlThrd->start())
         {
             delete rctCtrlThrd;
             rctCtrlThrd = 0;

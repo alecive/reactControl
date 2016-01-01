@@ -223,6 +223,8 @@ protected:
     void convertPosFromLinkToRootFoR(const yarp::sig::Vector &pos,const iCub::skinDynLib::SkinPart skinPart, yarp::sig::Vector &outPos);
         
     void showCollisionPointsInSim();
+
+    bool stopControlHelper();
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & , const string &_ ,

@@ -72,8 +72,6 @@ protected:
 public:
     // CONSTRUCTOR
     particleThread(int , const string & , int );
-    // INIT
-    virtual bool threadInit();
     // RUN
     virtual void run();
     // RELEASE
