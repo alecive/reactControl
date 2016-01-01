@@ -8,7 +8,7 @@ if(COMMAND cmake_policy)
     cmake_policy(SET CMP0003 NEW)
 endif(COMMAND cmake_policy)
 
-project(REACTCONTROLLER)
+project(react-control)
 
 find_package(YARP)
 find_package(ICUB)
@@ -29,8 +29,7 @@ include(YarpInstallationHelpers)   # pick up yarp's cmake scripts
 add_subdirectory(modules)
 
 ## then apps
-#add_subdirectory(app)
+add_subdirectory(app)
 
-#makeicubcontrib_finalize_export($PROJECT_NAME)
 icubcontrib_add_uninstall_target()
 

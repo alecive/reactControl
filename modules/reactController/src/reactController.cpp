@@ -490,7 +490,7 @@ int main(int argc, char * argv[])
 
     ResourceFinder rf;
     rf.setVerbose(true);
-    rf.setDefaultContext("reactController");
+    rf.setDefaultContext("react-control");
     rf.setDefaultConfigFile("reactController.ini");
     rf.configure(argc,argv);
 
