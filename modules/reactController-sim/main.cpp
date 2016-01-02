@@ -18,7 +18,6 @@
 #include <csignal>
 #include <cmath>
 #include <limits>
-#include <algorithm>
 #include <fstream>
 #include <iomanip>
 
@@ -186,8 +185,8 @@ public:
         Matrix w=computeWeight();
         for (Ipopt::Index i=0; i<n; i++)
         {
-            x_l[i]=w(i,0)*std::max(v0[i],v_lim(i,0));
-            x_u[i]=w(i,1)*std::min(v0[i],v_lim(i,1));
+            x_l[i]=w(i,0)*v_lim(i,0);
+            x_u[i]=w(i,1)*v_lim(i,1);
         }
         return true;
     }
@@ -330,9 +329,9 @@ int main()
 
     Vector xee=chain.EndEffPosition();
     Vector xd=xee;
-    xd[0]-=0.1;
-    xd[1]+=0.1;
-    xd[2]+=0.1;
+    xd[0]-=0.2;
+    xd[1]+=0.3;
+    xd[2]+=0.2;
     
     nlp->set_dt(dt);
     nlp->set_v_lim(v_lim);
@@ -374,7 +373,7 @@ int main()
 
         if (e<=1e-4)
         {
-            yWarning("Met termination conditions: exiting ...");
+            yWarning("Termination conditions met: exiting ...");
             break;
         }
         else if (gSignalStatus==SIGINT)
