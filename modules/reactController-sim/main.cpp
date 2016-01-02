@@ -372,7 +372,7 @@ public:
     }
 
     /****************************************************************/
-    Matrix getVLIM(const Obstacle &obstacle, const Matrix &v_lim)
+    Matrix getVLIMVision(const Obstacle &obstacle, const Matrix &v_lim)
     {
         Vector xo=obstacle.getPosition();
         deque<Vector> ctrlPoints=getCtrlPointsPosition();
@@ -396,9 +396,7 @@ public:
             double rho=0.4; double alpha=6.0;
             double f=1.0/(1.0+exp((d*(2.0/rho)-1.0)*alpha));
             Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF());
-
-            Vector s=(d>0.0)?CTRL_RAD2DEG*(f/d)*(J.transposed()*dist):
-                             zeros(chainCtrlPoints[i]->getDOF());
+            Vector s=J.transposed()*dist;
 
             double red=1.0-f;
             for (size_t j=0; j<s.length(); j++)
@@ -412,6 +410,44 @@ public:
                 {
                     double tmp=v_lim(j,0)*red;
                     VLIM(j,0)=std::max(VLIM(j,0),tmp);
+                }
+            }
+        }
+
+        return VLIM;
+    }
+
+    /****************************************************************/
+    Matrix getVLIMPressure(const Obstacle &obstacle, const Matrix &v_lim)
+    {
+        Vector xo=obstacle.getPosition();
+        deque<Vector> ctrlPoints=getCtrlPointsPosition();
+
+        Matrix VLIM=v_lim;
+        for (size_t i=0; i<ctrlPoints.size(); i++)
+        {
+            Vector dist=xo-ctrlPoints[i];
+            double d=norm(dist);
+            if (d>=obstacle.radius)
+                continue;
+
+            double P=obstacle.radius-d;
+            Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF());
+            Vector s=(-P/d)*(J.transposed()*dist);
+
+            double k=1e4;
+            for (size_t j=0; j<s.length(); j++)
+            {
+                double tmp=k*s[j];
+                if (s[j]>=0.0)
+                {
+                    tmp=std::min(v_lim(j,1),tmp);
+                    VLIM(j,0)=std::max(VLIM(j,0),tmp);
+                }
+                else
+                {
+                    tmp=std::max(v_lim(j,0),tmp);
+                    VLIM(j,1)=std::min(VLIM(j,1),tmp);
                 }
             }
         }
@@ -454,8 +490,8 @@ int main()
     {
         lim(r,0)=CTRL_RAD2DEG*chain(r).getMin();
         lim(r,1)=CTRL_RAD2DEG*chain(r).getMax();
-        v_lim(r,0)=-50.0;
-        v_lim(r,1)=+50.0;
+        v_lim(r,0)=-30.0;
+        v_lim(r,1)=+30.0;
     }
     v_lim(1,0)=v_lim(1,1)=0.0;  // disable torso roll
 
@@ -498,8 +534,8 @@ int main()
     xo[1]=0.0;
     xo[2]=0.4;
     Vector vo(3,0.0);
-    vo[2]=-0.05;
-    Obstacle obstacle(xo,0.04,vo,dt);
+    vo[2]=-0.1;
+    Obstacle obstacle(xo,0.08,vo,dt);
 
     ofstream fout;
     fout.open("data.log");
@@ -517,7 +553,8 @@ int main()
         xo=obstacle.move();
 
         avhandler.updateCtrlPoints();
-        Matrix VLIM=avhandler.getVLIM(obstacle,v_lim);
+        //Matrix VLIM=avhandler.getVLIMVision(obstacle,v_lim);
+        Matrix VLIM=avhandler.getVLIMPressure(obstacle,v_lim);
 
         nlp->set_xr(xr);
         nlp->set_v_lim(VLIM);
@@ -530,7 +567,7 @@ int main()
         yInfo()<<"        t [s] = "<<t;
         yInfo()<<"    v [deg/s] = ("<<v.toString(3,3).c_str()<<")";
         yInfo()<<" |xr-xee| [m] = "<<norm(xr-xee);
-        yInfo()<<"";        
+        yInfo()<<"";
 
         ostringstream strCtrlPoints;
         deque<Vector> ctrlPoints=avhandler.getCtrlPointsPosition();
