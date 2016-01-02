@@ -404,6 +404,16 @@ int main()
     xc[0]=-0.35;
     xc[1]=0.0;
     xc[2]=0.1;
+    double rt=0.1;
+
+    Vector xo(3);
+    xo[0]=-0.3;
+    xo[1]=0.0;
+    xo[2]=0.4;
+    double ro=0.04;
+    Vector vo(3,0.0);
+    vo[2]=-0.05;
+    Integrator obstacle(dt,xo);
 
     ofstream fout;
     fout.open("data.log");
@@ -412,11 +422,14 @@ int main()
     for (double t=0.0; t<10.0; t+=dt)
     {
         Vector xd=xc;
-        xd[1]+=0.1*cos(2.0*M_PI*0.3*t);
-        xd[2]+=0.1*sin(2.0*M_PI*0.3*t);
+        xd[1]+=rt*cos(2.0*M_PI*0.3*t);
+        xd[2]+=rt*sin(2.0*M_PI*0.3*t);
 
         target.computeNextValues(xd);
         Vector xr=target.getPos();
+
+        xo=obstacle.integrate(vo);
+
         nlp->set_xr(xr);
         nlp->set_v_lim(v_lim);
         nlp->set_v0(v);
@@ -437,11 +450,13 @@ int main()
             strCtrlPoints<<ctrlPoints[i].toString(3,3).c_str()<<" ";
 
         fout<<t<<" "<<
-            xr.toString(3,3).c_str()<<" "<<
-            v.toString(3,3).c_str()<<" "<<
-            (CTRL_RAD2DEG*chain.getAng()).toString(3,3).c_str()<<" "<<
-            strCtrlPoints.str()<<
-            endl;
+              xr.toString(3,3).c_str()<<" "<<
+              xo.toString(3,3).c_str()<<" "<<
+              ro<<" "<<
+              v.toString(3,3).c_str()<<" "<<
+              (CTRL_RAD2DEG*chain.getAng()).toString(3,3).c_str()<<" "<<
+              strCtrlPoints.str()<<
+              endl;
 
         if (gSignalStatus==SIGINT)
         {

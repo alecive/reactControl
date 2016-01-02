@@ -3,15 +3,16 @@ function run(filein)
 
 global P;
 global t t0;
-global xd q ctrlp;
-global hax hg1 hg2;
+global xd xo q ctrlp;
+global hax hg1 hg2 hg3;
 global tm;
 
 data=importdata(filein);
 t=data(:,1);
 xd=data(:,2:4);
-q=data(:,15:15+10-1);
-ctrlp=data(:,15+10:end);
+xo=data(:,5:8);
+q=data(:,19:19+10-1);
+ctrlp=data(:,19+10:end);
 
 P{1}.A =0.032;      P{1}.D =0;        P{1}.alpha =pi/2;  P{1}.offset =0;
 P{2}.A =0;          P{2}.D =-0.0055;  P{2}.alpha =pi/2;  P{2}.offset =-pi/2;
@@ -43,6 +44,7 @@ quiver3(hax,0,0,0,0,0,A/2,'Color','b','Linewidth',2);
 
 hg1=[];
 hg2=[];
+hg3=[];
 
 set(hfig,'CloseRequestFcn',@Quit);
 tm=timer('Period',0.1,'ExecutionMode','fixedRate',...
@@ -144,8 +146,8 @@ end
 function PlotQuantities(obj,event,string_arg) %#ok<INUSD>
 
 global t t0;
-global xd q ctrlp;
-global hax hg1 hg2;
+global xd xo q ctrlp;
+global hax hg1 hg2 hg3;
 global tm;
 
 dt=cputime-t0;
@@ -164,9 +166,22 @@ if ~isempty(hg2)
     delete(hg2)
 end
 
+if ~isempty(hg3)
+    delete(hg3)
+end
+
 [x,axpoint]=fkin(q(i,:));
 hg1=drawArm(x,axpoint,ctrlp(i,:));
 hg2=plot3(hax,xd(i,1),xd(i,2),xd(i,3),'go','LineWidth',3);
+
+n=8;
+[x,y,z]=sphere(n);
+c(:,:,1)=ones(n);
+c(:,:,2)=zeros(n);
+c(:,:,3)=zeros(n);
+r=xo(i,4);
+hg3=surf(hax,xo(i,1)+r*x,xo(i,2)+r*y,xo(i,3)+r*z,c);
+alpha(hg3,0.1);
 drawnow;
 
 
