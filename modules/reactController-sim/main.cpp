@@ -46,7 +46,6 @@ using namespace iCub::iKin;
 /****************************************************************/
 class ControllerNLP : public Ipopt::TNLP
 {
-protected:
     iKinChain &chain;
 
     Vector xr;
@@ -272,9 +271,44 @@ public:
 
 
 /****************************************************************/
+class Obstacle
+{
+    Integrator I;
+
+public:
+    double radius;
+    Vector v;
+
+    /****************************************************************/
+    Obstacle(const Vector &x0, const double r,
+             const Vector &v0, const double dt) :
+             I(dt,x0), radius(r), v(v0) { }
+
+    /****************************************************************/
+    const Vector& move()
+    {
+        return I.integrate(v);
+    }
+
+    /****************************************************************/
+    const Vector& get() const
+    {
+        return I.get();
+    }
+
+    /****************************************************************/
+    string toString() const
+    {
+        ostringstream str;
+        str<<I.get().toString(3,3).c_str()<<" "<<radius;
+        return str.str();
+    }
+};
+
+
+/****************************************************************/
 class AvoidanceHandler
 {
-protected:
     iKinChain &chain;
     deque<iKinChain*> chainCtrlPoints;
 
@@ -410,10 +444,9 @@ int main()
     xo[0]=-0.3;
     xo[1]=0.0;
     xo[2]=0.4;
-    double ro=0.04;
     Vector vo(3,0.0);
     vo[2]=-0.05;
-    Integrator obstacle(dt,xo);
+    Obstacle obstacle(xo,0.04,vo,dt);
 
     ofstream fout;
     fout.open("data.log");
@@ -428,7 +461,7 @@ int main()
         target.computeNextValues(xd);
         Vector xr=target.getPos();
 
-        xo=obstacle.integrate(vo);
+        xo=obstacle.move();
 
         nlp->set_xr(xr);
         nlp->set_v_lim(v_lim);
@@ -451,8 +484,7 @@ int main()
 
         fout<<t<<" "<<
               xr.toString(3,3).c_str()<<" "<<
-              xo.toString(3,3).c_str()<<" "<<
-              ro<<" "<<
+              obstacle.toString()<<" "<<
               v.toString(3,3).c_str()<<" "<<
               (CTRL_RAD2DEG*chain.getAng()).toString(3,3).c_str()<<" "<<
               strCtrlPoints.str()<<
