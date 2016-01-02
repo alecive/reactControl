@@ -175,11 +175,8 @@ hg1=drawArm(x,axpoint,ctrlp(i,:));
 hg2=plot3(hax,xd(i,1),xd(i,2),xd(i,3),'go','LineWidth',3);
 
 n=8;
-[x,y,z]=sphere(n);
-c(:,:,1)=ones(n);
-c(:,:,2)=zeros(n);
-c(:,:,3)=zeros(n);
-r=xo(i,4);
+[x,y,z]=sphere(n); r=xo(i,4);
+c(:,:,1)=ones(n); c(:,:,2)=zeros(n); c(:,:,3)=zeros(n);
 hg3=surf(hax,xo(i,1)+r*x,xo(i,2)+r*y,xo(i,3)+r*z,c);
 alpha(hg3,0.1);
 drawnow;

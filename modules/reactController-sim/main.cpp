@@ -18,6 +18,7 @@
 #include <csignal>
 #include <cmath>
 #include <limits>
+#include <algorithm>
 #include <sstream>
 #include <fstream>
 #include <iomanip>
@@ -285,13 +286,13 @@ public:
              I(dt,x0), radius(r), v(v0) { }
 
     /****************************************************************/
-    const Vector& move()
+    Vector move()
     {
         return I.integrate(v);
     }
 
     /****************************************************************/
-    const Vector& get() const
+    Vector getPosition() const
     {
         return I.get();
     }
@@ -353,17 +354,72 @@ public:
     }
 
     /****************************************************************/
+    void updateCtrlPoints()
+    {
+        for (size_t i=0; i<chainCtrlPoints.size(); i++)
+            for (size_t j=0; j<chainCtrlPoints[i]->getDOF(); j++)
+                chainCtrlPoints[i]->setAng(j,chain(j).getAng());
+    }
+
+    /****************************************************************/
     deque<Vector> getCtrlPointsPosition()
     {
         deque<Vector> ctrlPoints;
         for (size_t i=0; i<chainCtrlPoints.size(); i++)
-        {
-            for (size_t j=0; j<chainCtrlPoints[i]->getDOF(); j++)
-                chainCtrlPoints[i]->setAng(j,chain(j).getAng());
             ctrlPoints.push_back(chainCtrlPoints[i]->EndEffPosition());
-        }
-        
+
         return ctrlPoints;
+    }
+
+    /****************************************************************/
+    Matrix getVLIM(const Obstacle &obstacle, const Matrix &v_lim)
+    {
+        Vector xo=obstacle.getPosition();
+        deque<Vector> ctrlPoints=getCtrlPointsPosition();
+
+        Matrix VLIM=v_lim;
+        for (size_t i=0; i<ctrlPoints.size(); i++)
+        {
+            Vector dist=xo-ctrlPoints[i];
+            double d=norm(dist);
+            if (d>=obstacle.radius)
+            {
+                dist*=1.0-obstacle.radius/d;
+                d=norm(dist);
+            }
+            else
+            {
+                dist=0.0;
+                d=0.0;
+            }
+
+            double rho=0.4; double alpha=6.0;
+            double f=1.0/(1.0+exp((d*(2.0/rho)-1.0)*alpha));
+            Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF());
+
+            Vector s;
+            if (d>0.0)
+                s=CTRL_RAD2DEG*(f/d)*(J.transposed()*dist);
+            else
+                s=zeros(chainCtrlPoints[i]->getDOF());
+
+            double red=1.0-f;
+            for (size_t j=0; j<s.length(); j++)
+            {
+                if (s[j]>=0.0)
+                {
+                    double tmp=v_lim(j,1)*red;
+                    VLIM(j,1)=std::min(VLIM(j,1),tmp);
+                }
+                else
+                {
+                    double tmp=v_lim(j,0)*red;
+                    VLIM(j,0)=std::max(VLIM(j,0),tmp);
+                }
+            }
+        }
+
+        return VLIM;
     }
 };
 
@@ -404,7 +460,7 @@ int main()
         v_lim(r,0)=-50.0;
         v_lim(r,1)=+50.0;
     }
-    v_lim(1,0)=v_lim(1,1)=0.0; // don't use torso roll
+    v_lim(1,0)=v_lim(1,1)=0.0;  // disable torso roll
 
     Ipopt::SmartPtr<Ipopt::IpoptApplication> app=new Ipopt::IpoptApplication;
     app->Options()->SetNumericValue("tol",1e-6);
@@ -452,7 +508,7 @@ int main()
     fout.open("data.log");
 
     std::signal(SIGINT,signal_handler);
-    for (double t=0.0; t<10.0; t+=dt)
+    for (double t=0.0; t<20.0; t+=dt)
     {
         Vector xd=xc;
         xd[1]+=rt*cos(2.0*M_PI*0.3*t);
@@ -463,20 +519,22 @@ int main()
 
         xo=obstacle.move();
 
+        avhandler.updateCtrlPoints();
+        Matrix VLIM=avhandler.getVLIM(obstacle,v_lim);
+
         nlp->set_xr(xr);
-        nlp->set_v_lim(v_lim);
+        nlp->set_v_lim(VLIM);
         nlp->set_v0(v);
-
         Ipopt::ApplicationReturnStatus status=app->OptimizeTNLP(GetRawPtr(nlp));
-
         v=nlp->get_result();
+
         xee=chain.EndEffPosition(CTRL_DEG2RAD*motors.integrate(v));
 
         yInfo()<<"        t [s] = "<<t;
         yInfo()<<"    v [deg/s] = ("<<v.toString(3,3).c_str()<<")";
         yInfo()<<" |xr-xee| [m] = "<<norm(xr-xee);
-        yInfo()<<"";
-        
+        yInfo()<<"";        
+
         ostringstream strCtrlPoints;
         deque<Vector> ctrlPoints=avhandler.getCtrlPointsPosition();
         for (size_t i=0; i<ctrlPoints.size(); i++)
@@ -500,4 +558,5 @@ int main()
     fout.close();
     return 0;
 }
+
 
