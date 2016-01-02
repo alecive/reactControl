@@ -3,14 +3,15 @@ function run(filein)
 
 global P;
 global t t0;
-global xd q;
+global xd q ctrlp;
 global hax hg1 hg2;
 global tm;
 
 data=importdata(filein);
 t=data(:,1);
 xd=data(:,2:4);
-q=data(:,15:end);
+q=data(:,15:15+10-1);
+ctrlp=data(:,15+10:end);
 
 P{1}.A =0.032;      P{1}.D =0;        P{1}.alpha =pi/2;  P{1}.offset =0;
 P{2}.A =0;          P{2}.D =-0.0055;  P{2}.alpha =pi/2;  P{2}.offset =-pi/2;
@@ -68,9 +69,7 @@ T=[[c_theta -s_theta*c_alpha  s_theta*s_alpha P{n}.A*c_theta];...
 
 
 %--------------------------------------------------------------------------
-function [x,axpoint,ctrlpoint]=fkin(q)
-
-global P;
+function [x,axpoint]=fkin(q)
 
 q=q*pi/180;
 
@@ -101,10 +100,6 @@ x{11}=T10(1:3,4);
 axpoint{1}=T10(1:3,1);
 axpoint{2}=T10(1:3,2);
 axpoint{3}=T10(1:3,3);
-
-z=T7(1:3,3);
-ctrlpoint{1}=x{8}+P{8}.D/2*z;
-ctrlpoint{2}=x{8}+P{8}.D*z;
 
 
 %--------------------------------------------------------------------------
@@ -138,8 +133,8 @@ hg=hggroup;
 set(arm,'Parent',hg);
 set(ax,'Parent',hg);
 
-for i=1:length(ctrlpoint)
-    p=plot3(hax,ctrlpoint{i}(1),ctrlpoint{i}(2),ctrlpoint{i}(3),...
+for i=1:3:length(ctrlpoint)
+    p=plot3(hax,ctrlpoint(i+0),ctrlpoint(i+1),ctrlpoint(i+2),...
             'bo','LineWidth',1.5);
     set(p,'Parent',hg);
 end
@@ -149,7 +144,7 @@ end
 function PlotQuantities(obj,event,string_arg) %#ok<INUSD>
 
 global t t0;
-global xd q;
+global xd q ctrlp;
 global hax hg1 hg2;
 global tm;
 
@@ -169,8 +164,8 @@ if ~isempty(hg2)
     delete(hg2)
 end
 
-[x,axpoint,ctrlpoint]=fkin(q(i,:));
-hg1=drawArm(x,axpoint,ctrlpoint);
+[x,axpoint]=fkin(q(i,:));
+hg1=drawArm(x,axpoint,ctrlp(i,:));
 hg2=plot3(hax,xd(i,1),xd(i,2),xd(i,3),'go','LineWidth',3);
 drawnow;
 

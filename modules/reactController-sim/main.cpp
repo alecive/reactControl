@@ -18,8 +18,10 @@
 #include <csignal>
 #include <cmath>
 #include <limits>
+#include <sstream>
 #include <fstream>
 #include <iomanip>
+#include <deque>
 
 #include <IpTNLP.hpp>
 #include <IpIpoptApplication.hpp>
@@ -270,6 +272,69 @@ public:
 
 
 /****************************************************************/
+class AvoidanceHandler
+{
+protected:
+    iKinChain &chain;
+    deque<iKinChain*> chainCtrlPoints;
+
+public:
+    /****************************************************************/
+    AvoidanceHandler(iKinChain &chain_) : chain(chain_)
+    {
+        iCubArm *arm;
+        Matrix HN=eye(4,4);
+
+        arm=new iCubArm("left");
+        iKinChain *c1=arm->asChain();
+        c1->releaseLink(0);
+        c1->releaseLink(1);
+        c1->releaseLink(2);
+        c1->rmLink(9);
+        c1->rmLink(8);
+        c1->rmLink(7);
+        HN(2,3)=0.1373;
+        c1->setHN(HN);
+
+        arm=new iCubArm("left");
+        iKinChain *c2=arm->asChain();
+        c2->releaseLink(0);
+        c2->releaseLink(1);
+        c2->releaseLink(2);
+        c2->rmLink(9);
+        c2->rmLink(8);
+        c2->rmLink(7);
+        HN(2,3)=0.1373/2.0;
+        c2->setHN(HN);
+
+        chainCtrlPoints.push_back(c1);
+        chainCtrlPoints.push_back(c2);
+    }
+
+    /****************************************************************/
+    ~AvoidanceHandler()
+    {
+        for (size_t i=0; i<chainCtrlPoints.size(); i++)
+            delete chainCtrlPoints[i];
+    }
+
+    /****************************************************************/
+    deque<Vector> getCtrlPointsPosition()
+    {
+        deque<Vector> ctrlPoints;
+        for (size_t i=0; i<chainCtrlPoints.size(); i++)
+        {
+            for (size_t j=0; j<chainCtrlPoints[i]->getDOF(); j++)
+                chainCtrlPoints[i]->setAng(j,chain(j).getAng());
+            ctrlPoints.push_back(chainCtrlPoints[i]->EndEffPosition());
+        }
+        
+        return ctrlPoints;
+    }
+};
+
+
+/****************************************************************/
 namespace
 {
     volatile std::sig_atomic_t gSignalStatus;
@@ -324,6 +389,7 @@ int main()
     app->Initialize();
 
     Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(chain);
+    AvoidanceHandler avhandler(chain);
 
     double dt=0.01;
     double T=1.0;
@@ -364,11 +430,17 @@ int main()
         yInfo()<<"    v [deg/s] = ("<<v.toString(3,3).c_str()<<")";
         yInfo()<<" |xr-xee| [m] = "<<norm(xr-xee);
         yInfo()<<"";
+        
+        ostringstream strCtrlPoints;
+        deque<Vector> ctrlPoints=avhandler.getCtrlPointsPosition();
+        for (size_t i=0; i<ctrlPoints.size(); i++)
+            strCtrlPoints<<ctrlPoints[i].toString(3,3).c_str()<<" ";
 
         fout<<t<<" "<<
             xr.toString(3,3).c_str()<<" "<<
             v.toString(3,3).c_str()<<" "<<
-            (CTRL_RAD2DEG*chain.getAng()).toString(3,3).c_str()<<
+            (CTRL_RAD2DEG*chain.getAng()).toString(3,3).c_str()<<" "<<
+            strCtrlPoints.str()<<
             endl;
 
         if (gSignalStatus==SIGINT)
