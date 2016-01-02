@@ -318,8 +318,8 @@ int main()
     }
 
     Vector xee=chain.EndEffPosition();
-    Vector x1=xee;
-    x1[1]+=0.1;
+    Vector xf=xee;
+    xf[0]-=0.2;
 
     Ipopt::SmartPtr<Ipopt::IpoptApplication> app=new Ipopt::IpoptApplication;
     app->Options()->SetNumericValue("tol",1e-6);
@@ -349,9 +349,9 @@ int main()
     Vector xd=xee;    
 
     std::signal(SIGINT,signal_handler);
-    for (double t=0.0; norm(x1-xee)>1e-3; t+=dt)
+    for (double t=0.0, e=1.0; e>1e-3; t+=dt)
     {
-        xd=target.integrate(2.0*(x1-xd));
+        xd=target.integrate(2.0*(xf-xd));
         nlp->set_xd(xd);
         nlp->set_v0(v);
 
@@ -361,11 +361,12 @@ int main()
 
         v=nlp->get_result();
         xee=chain.EndEffPosition(CTRL_DEG2RAD*motors.integrate(v));
+        e=norm(xf-xee);
 
-        yInfo()<<"            t [s] = "<<t;
-        yInfo()<<"           xd [m] = ("<<xd.toString(3,3).c_str()<<")";
-        yInfo()<<"        v [deg/s] = ("<<v.toString(1,3).c_str()<<")";
-        yInfo()<<" norm(xd-xee) [m] = "<<norm(xd-xee);
+        yInfo()<<"        t [s] = "<<t;
+        yInfo()<<"    v [deg/s] = ("<<v.toString(1,3).c_str()<<")";
+        yInfo()<<" |xd-xee| [m] = "<<norm(xd-xee);
+        yInfo()<<" |xf-xee| [m] = "<<e;
         yInfo()<<"";
 
         if (gSignalStatus==SIGINT)
