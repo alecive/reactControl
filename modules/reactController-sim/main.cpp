@@ -325,22 +325,17 @@ int main()
     Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(chain);
 
     double dt=0.01;
-    double T=2.0;
+    double T=1.5;
 
-    Vector xee=chain.EndEffPosition();
-    Vector xd=xee;
-    xd[0]-=0.2;
-    xd[1]+=0.3;
-    xd[2]+=0.2;
-    
     nlp->set_dt(dt);
     nlp->set_v_lim(v_lim);
 
     Integrator motors(dt,q0,lim);
     Vector v(chain.getDOF(),0.0);
 
+    Vector xee=chain.EndEffPosition();
     minJerkTrajGen target(xee,dt,T);
-    Vector xr=xee;    
+    Vector xc=xee;
 
     ofstream fout;
     fout.open("data.log");
@@ -348,8 +343,12 @@ int main()
     std::signal(SIGINT,signal_handler);
     for (double t=0.0;; t+=dt)
     {
+        Vector xd=xc;
+        xd[1]+=0.2*cos(2.0*M_PI*0.2*t);
+        xd[2]+=0.2*sin(2.0*M_PI*0.2*t);
+
         target.computeNextValues(xd);
-        xr=target.getPos();
+        Vector xr=target.getPos();
         nlp->set_xr(xr);
         nlp->set_v0(v);
 
@@ -357,12 +356,10 @@ int main()
 
         v=nlp->get_result();
         xee=chain.EndEffPosition(CTRL_DEG2RAD*motors.integrate(v));
-        double e=norm(xd-xee);
 
         yInfo()<<"        t [s] = "<<t;
         yInfo()<<"    v [deg/s] = ("<<v.toString(3,3).c_str()<<")";
         yInfo()<<" |xr-xee| [m] = "<<norm(xr-xee);
-        yInfo()<<" |xd-xee| [m] = "<<e;
         yInfo()<<"";
 
         fout<<t<<" "<<
@@ -371,12 +368,7 @@ int main()
             (CTRL_RAD2DEG*chain.getAng()).toString(3,3).c_str()<<
             endl;
 
-        if (e<=1e-4)
-        {
-            yWarning("Termination conditions met: exiting ...");
-            break;
-        }
-        else if (gSignalStatus==SIGINT)
+        if (gSignalStatus==SIGINT)
         {
             yWarning("SIGINT detected: exiting ...");
             break;

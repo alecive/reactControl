@@ -30,6 +30,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include
                     ${YARP_INCLUDE_DIRS}                    
                     ${ICUB_INCLUDE_DIRS})
 
+add_definitions(-D_USE_MATH_DEFINES)
 add_executable(${PROJECT_NAME} ${header_files} ${source_files} ${idl_files})
 target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES} ctrlLib iKin skinDynLib ${IPOPT_LIBRARIES})
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)

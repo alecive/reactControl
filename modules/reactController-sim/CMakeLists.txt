@@ -10,6 +10,7 @@ include_directories(${IPOPT_INCLUDE_DIRS}
                     ${YARP_INCLUDE_DIRS}                    
                     ${ICUB_INCLUDE_DIRS})
 
+add_definitions(-D_USE_MATH_DEFINES)
 add_executable(${PROJECT_NAME} main.cpp)
 target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES} ctrlLib iKin ${IPOPT_LIBRARIES})
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
