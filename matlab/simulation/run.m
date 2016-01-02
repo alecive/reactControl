@@ -1,11 +1,16 @@
-function run(filein)
+function run(filein,varargin)
 % Author: Ugo Pattacini
 
 global P;
 global t t0;
 global xd xo q ctrlp;
 global hax hg1 hg2 hg3;
-global tm;
+global do_movie writer tm;
+
+do_movie=false;
+if nargin>1
+    do_movie=varargin{1};
+end
 
 data=importdata(filein);
 t=data(:,1);
@@ -25,7 +30,7 @@ P{8}.A =0;          P{8}.D =0.1373;   P{8}.alpha =pi/2;  P{8}.offset =-pi/2;
 P{9}.A =0;          P{9}.D =0;        P{9}.alpha =pi/2;  P{9}.offset =pi/2;
 P{10}.A=0.0625;     P{10}.D=-0.016;   P{10}.alpha=0;     P{10}.offset=0;
 
-hfig=figure('Name','iCub Arm');
+hfig=figure('Name','iCub Arm','Color','white');
 set(hfig,'Toolbar','figure');
 hold on; view([-130 30]); grid;
 xlim([-0.5 0.1]); xlabel('x [m]');
@@ -47,8 +52,17 @@ hg2=[];
 hg3=[];
 
 set(hfig,'CloseRequestFcn',@Quit);
-tm=timer('Period',0.1,'ExecutionMode','fixedRate',...
+
+Ts=0.1;
+tm=timer('Period',Ts,'ExecutionMode','fixedRate',...
          'TimerFcn',@PlotQuantities);
+    
+if do_movie
+    writer=VideoWriter('movie','MPEG-4');
+    writer.FrameRate=10;
+    open(writer);
+end
+
 t0=cputime;
 start(tm);
       
@@ -148,7 +162,7 @@ function PlotQuantities(obj,event,string_arg) %#ok<INUSD>
 global t t0;
 global xd xo q ctrlp;
 global hax hg1 hg2 hg3;
-global tm;
+global do_movie writer tm;
 
 dt=cputime-t0;
 i=find(t>=dt,1);
@@ -181,12 +195,23 @@ hg3=surf(hax,xo(i,1)+r*x,xo(i,2)+r*y,xo(i,3)+r*z,c);
 alpha(hg3,0.1);
 drawnow;
 
+if do_movie
+    try
+        frame=getframe(hax);
+        writeVideo(writer,frame);
+    catch
+    end
+end
+
 
 %--------------------------------------------------------------------------
 function Quit(src,eventdata) %#ok<INUSD>
 
-global tm;
+global do_movie writer tm;
 
 stop(tm);
+if do_movie
+    close(writer);
+end
 delete(src);
 
