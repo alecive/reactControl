@@ -27,10 +27,10 @@ P{10}.A=0.0625;     P{10}.D=-0.016;   P{10}.alpha=0;     P{10}.offset=0;
 
 hfig=figure('Name','iCub Arm');
 set(hfig,'Toolbar','figure');
-hold on; view(3); grid;
-xlim([-0.6 0.2]); xlabel('x [m]');
-ylim([-0.6 0.6]); ylabel('y [m]');
-zlim([-0.6 0.6]); zlabel('z [m]');
+hold on; view([-130 30]); grid;
+xlim([-0.5 0.1]); xlabel('x [m]');
+ylim([-0.4 0.4]); ylabel('y [m]');
+zlim([-0.4 0.4]); zlabel('z [m]');
 
 hax=get(hfig,'CurrentAxes');
 set(hax,'DataAspectRatio',[1 1 1]);
