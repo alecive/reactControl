@@ -3,3 +3,4 @@
 # CopyPolicy: Released under the terms of the GNU GPL v2.0.
 
 add_subdirectory(reactController)
+add_subdirectory(reactController-sim)
