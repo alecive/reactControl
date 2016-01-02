@@ -19,6 +19,8 @@
 #include <cmath>
 #include <limits>
 #include <algorithm>
+#include <fstream>
+#include <iomanip>
 
 #include <IpTNLP.hpp>
 #include <IpIpoptApplication.hpp>
@@ -29,6 +31,7 @@
 
 #include <iCub/ctrl/math.h>
 #include <iCub/ctrl/pids.h>
+#include <iCub/ctrl/minJerkCtrl.h>
 #include <iCub/iKin/iKinFwd.h>
 
 using namespace std;
@@ -45,12 +48,11 @@ class ControllerNLP : public Ipopt::TNLP
 protected:
     iKinChain &chain;
 
-    Vector xd;
+    Vector xr;
     Vector x0;
     Vector delta_x;
     Vector v0;
     Matrix v_lim;
-    Matrix dv_lim;
     Matrix J0;
     Vector v;
     double dt;
@@ -118,20 +120,16 @@ public:
     /****************************************************************/
     ControllerNLP(iKinChain &chain_) : chain(chain_)
     {
-        xd.resize(3,0.0);
+        xr.resize(3,0.0);
         delta_x.resize(3,0.0);
         v0.resize(chain.getDOF(),0.0);
         v=v0;
 
         v_lim.resize(chain.getDOF(),2);
-        dv_lim.resize(chain.getDOF(),2);
         for (size_t r=0; r<chain.getDOF(); r++)
         {
             v_lim(r,1)=std::numeric_limits<double>::max();
             v_lim(r,0)=-v_lim(r,1);
-
-            dv_lim(r,1)=std::numeric_limits<double>::max();            
-            dv_lim(r,0)=-dv_lim(r,1); 
         }
 
         computeGuard();
@@ -139,21 +137,15 @@ public:
     }
 
     /****************************************************************/
-    void set_xd(const Vector &xd)
+    void set_xr(const Vector &xr)
     {
-        this->xd=xd;
+        this->xr=xr;
     }
 
     /****************************************************************/
     void set_v_lim(const Matrix &v_lim)
     {
         this->v_lim=CTRL_DEG2RAD*v_lim;
-    }
-
-    /****************************************************************/
-    void set_dv_lim(const Matrix &dv_lim)
-    {
-        this->dv_lim=CTRL_DEG2RAD*dv_lim;
     }
 
     /****************************************************************/
@@ -194,8 +186,8 @@ public:
         Matrix w=computeWeight();
         for (Ipopt::Index i=0; i<n; i++)
         {
-            x_l[i]=w(i,0)*std::max(v0[i]+dv_lim(i,0),v_lim(i,0));
-            x_u[i]=w(i,1)*std::min(v0[i]+dv_lim(i,1),v_lim(i,1));
+            x_l[i]=w(i,0)*std::max(v0[i],v_lim(i,0));
+            x_u[i]=w(i,1)*std::min(v0[i],v_lim(i,1));
         }
         return true;
     }
@@ -217,7 +209,7 @@ public:
         {
             for (size_t i=0; i<v.length(); i++)
                 v[i]=x[i];
-            delta_x=xd-(x0+dt*(J0*v));
+            delta_x=xr-(x0+dt*(J0*v));
         }
     }
 
@@ -305,29 +297,23 @@ int main()
     q0[3]=-25.0; q0[4]=20.0; q0[6]=50.0;
     chain.setAng(CTRL_DEG2RAD*q0);
 
-    double dt=0.01;
     Matrix lim(chain.getDOF(),2);
     Matrix v_lim(chain.getDOF(),2);
-    Matrix dv_lim(chain.getDOF(),2);
     for (size_t r=0; r<chain.getDOF(); r++)
     {
         lim(r,0)=CTRL_RAD2DEG*chain(r).getMin();
         lim(r,1)=CTRL_RAD2DEG*chain(r).getMax();
-        v_lim(r,0)=-50.0;  v_lim(r,1)=+50.0;
-        dv_lim(r,0)=-10.0; dv_lim(r,1)=+10.0;
+        v_lim(r,0)=-50.0;
+        v_lim(r,1)=+50.0;
     }
-
-    Vector xee=chain.EndEffPosition();
-    Vector xf=xee;
-    xf[0]-=0.2;
 
     Ipopt::SmartPtr<Ipopt::IpoptApplication> app=new Ipopt::IpoptApplication;
     app->Options()->SetNumericValue("tol",1e-6);
     app->Options()->SetNumericValue("constr_viol_tol",1e-8);
     app->Options()->SetIntegerValue("acceptable_iter",0);
     app->Options()->SetStringValue("mu_strategy","adaptive");
-    app->Options()->SetIntegerValue("max_iter",1000);
-    app->Options()->SetNumericValue("max_cpu_time",1.0);
+    app->Options()->SetIntegerValue("max_iter",10000);
+    app->Options()->SetNumericValue("max_cpu_time",10.0);
     app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
     app->Options()->SetNumericValue("nlp_scaling_max_gradient",1.0);
     app->Options()->SetNumericValue("nlp_scaling_min_value",1e-6);
@@ -337,45 +323,68 @@ int main()
     app->Options()->SetIntegerValue("print_level",0);
     app->Initialize();
 
-    Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(chain);    
+    Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(chain);
+
+    double dt=0.01;
+    double T=2.0;
+
+    Vector xee=chain.EndEffPosition();
+    Vector xd=xee;
+    xd[0]-=0.1;
+    xd[1]+=0.1;
+    xd[2]+=0.1;
+    
     nlp->set_dt(dt);
     nlp->set_v_lim(v_lim);
-    //nlp->set_dv_lim(dv_lim);
 
     Integrator motors(dt,q0,lim);
     Vector v(chain.getDOF(),0.0);
 
-    Integrator target(dt,xee);
-    Vector xd=xee;    
+    minJerkTrajGen target(xee,dt,T);
+    Vector xr=xee;    
+
+    ofstream fout;
+    fout.open("data.log");
 
     std::signal(SIGINT,signal_handler);
-    for (double t=0.0, e=1.0; e>1e-3; t+=dt)
+    for (double t=0.0;; t+=dt)
     {
-        xd=target.integrate(2.0*(xf-xd));
-        nlp->set_xd(xd);
+        target.computeNextValues(xd);
+        xr=target.getPos();
+        nlp->set_xr(xr);
         nlp->set_v0(v);
 
-        double t0=Time::now();
         Ipopt::ApplicationReturnStatus status=app->OptimizeTNLP(GetRawPtr(nlp));
-        double t1=Time::now();   
 
         v=nlp->get_result();
         xee=chain.EndEffPosition(CTRL_DEG2RAD*motors.integrate(v));
-        e=norm(xf-xee);
+        double e=norm(xd-xee);
 
         yInfo()<<"        t [s] = "<<t;
-        yInfo()<<"    v [deg/s] = ("<<v.toString(1,3).c_str()<<")";
-        yInfo()<<" |xd-xee| [m] = "<<norm(xd-xee);
-        yInfo()<<" |xf-xee| [m] = "<<e;
+        yInfo()<<"    v [deg/s] = ("<<v.toString(3,3).c_str()<<")";
+        yInfo()<<" |xr-xee| [m] = "<<norm(xr-xee);
+        yInfo()<<" |xd-xee| [m] = "<<e;
         yInfo()<<"";
 
-        if (gSignalStatus==SIGINT)
+        fout<<t<<" "<<
+            xr.toString(3,3).c_str()<<" "<<
+            v.toString(3,3).c_str()<<" "<<
+            (CTRL_RAD2DEG*chain.getAng()).toString(3,3).c_str()<<
+            endl;
+
+        if (e<=1e-4)
+        {
+            yWarning("Met termination conditions: exiting ...");
+            break;
+        }
+        else if (gSignalStatus==SIGINT)
         {
             yWarning("SIGINT detected: exiting ...");
             break;
         }
     }
 
+    fout.close();
     return 0;
 }
 
