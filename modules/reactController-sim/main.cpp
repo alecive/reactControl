@@ -305,6 +305,7 @@ int main()
         v_lim(r,0)=-50.0;
         v_lim(r,1)=+50.0;
     }
+    v_lim(1,0)=v_lim(1,1)=0.0; // don't use torso roll
 
     Ipopt::SmartPtr<Ipopt::IpoptApplication> app=new Ipopt::IpoptApplication;
     app->Options()->SetNumericValue("tol",1e-6);
@@ -325,31 +326,33 @@ int main()
     Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(chain);
 
     double dt=0.01;
-    double T=1.5;
+    double T=1.0;
 
     nlp->set_dt(dt);
-    nlp->set_v_lim(v_lim);
-
     Integrator motors(dt,q0,lim);
     Vector v(chain.getDOF(),0.0);
 
     Vector xee=chain.EndEffPosition();
     minJerkTrajGen target(xee,dt,T);
-    Vector xc=xee;
+    Vector xc(3);
+    xc[0]=-0.35;
+    xc[1]=0.0;
+    xc[2]=0.1;
 
     ofstream fout;
     fout.open("data.log");
 
     std::signal(SIGINT,signal_handler);
-    for (double t=0.0;; t+=dt)
+    for (double t=0.0; t<10.0; t+=dt)
     {
         Vector xd=xc;
-        xd[1]+=0.2*cos(2.0*M_PI*0.2*t);
-        xd[2]+=0.2*sin(2.0*M_PI*0.2*t);
+        xd[1]+=0.1*cos(2.0*M_PI*0.3*t);
+        xd[2]+=0.1*sin(2.0*M_PI*0.3*t);
 
         target.computeNextValues(xd);
         Vector xr=target.getPos();
         nlp->set_xr(xr);
+        nlp->set_v_lim(v_lim);
         nlp->set_v0(v);
 
         Ipopt::ApplicationReturnStatus status=app->OptimizeTNLP(GetRawPtr(nlp));

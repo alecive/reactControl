@@ -68,7 +68,9 @@ T=[[c_theta -s_theta*c_alpha  s_theta*s_alpha P{n}.A*c_theta];...
 
 
 %--------------------------------------------------------------------------
-function [x,axpoint]=fkin(q)
+function [x,axpoint,ctrlpoint]=fkin(q)
+
+global P;
 
 q=q*pi/180;
 
@@ -100,9 +102,13 @@ axpoint{1}=T10(1:3,1);
 axpoint{2}=T10(1:3,2);
 axpoint{3}=T10(1:3,3);
 
+z=T7(1:3,3);
+ctrlpoint{1}=x{8}+P{8}.D/2*z;
+ctrlpoint{2}=x{8}+P{8}.D*z;
+
 
 %--------------------------------------------------------------------------
-function hg=drawArm(x,axpoint)
+function hg=drawArm(x,axpoint,ctrlpoint)
 
 global hax;
 
@@ -127,10 +133,16 @@ ax(2)=quiver3(hax,x{end}(1),x{end}(2),x{end}(3),...
 ax(3)=quiver3(hax,x{end}(1),x{end}(2),x{end}(3),...
               axpoint{3}(1),axpoint{3}(2),axpoint{3}(3),...
               'Color','b','Linewidth',2);
-
+       
 hg=hggroup;
 set(arm,'Parent',hg);
 set(ax,'Parent',hg);
+
+for i=1:length(ctrlpoint)
+    p=plot3(hax,ctrlpoint{i}(1),ctrlpoint{i}(2),ctrlpoint{i}(3),...
+            'bo','LineWidth',1.5);
+    set(p,'Parent',hg);
+end
 
 
 %--------------------------------------------------------------------------
@@ -157,8 +169,8 @@ if ~isempty(hg2)
     delete(hg2)
 end
 
-[x,axpoint]=fkin(q(i,:));
-hg1=drawArm(x,axpoint);
+[x,axpoint,ctrlpoint]=fkin(q(i,:));
+hg1=drawArm(x,axpoint,ctrlpoint);
 hg2=plot3(hax,xd(i,1),xd(i,2),xd(i,3),'go','LineWidth',3);
 drawnow;
 
