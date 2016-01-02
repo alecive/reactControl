@@ -397,11 +397,8 @@ public:
             double f=1.0/(1.0+exp((d*(2.0/rho)-1.0)*alpha));
             Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF());
 
-            Vector s;
-            if (d>0.0)
-                s=CTRL_RAD2DEG*(f/d)*(J.transposed()*dist);
-            else
-                s=zeros(chainCtrlPoints[i]->getDOF());
+            Vector s=(d>0.0)?CTRL_RAD2DEG*(f/d)*(J.transposed()*dist):
+                             zeros(chainCtrlPoints[i]->getDOF());
 
             double red=1.0-f;
             for (size_t j=0; j<s.length(); j++)
