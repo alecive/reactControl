@@ -142,12 +142,15 @@ public:
     /****************************************************************/
     void set_xr(const Vector &xr)
     {
+        yAssert(this->xr.length()==xr.length());
         this->xr=xr;
     }
 
     /****************************************************************/
     void set_v_lim(const Matrix &v_lim)
     {
+        yAssert((this->v_lim.rows()==v_lim.rows()) &&
+                (this->v_lim.cols()==v_lim.cols()));
         this->v_lim=CTRL_DEG2RAD*v_lim;
     }
 
@@ -160,6 +163,7 @@ public:
     /****************************************************************/
     void set_v0(const Vector &v0)
     {
+        yAssert(this->v0.length()==v0.length());
         this->v0=CTRL_DEG2RAD*v0;
     }
 
