@@ -470,7 +470,7 @@ public:
             Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF());
             Vector s=(-P/d)*(J.transposed()*dist);
 
-            double k=1e4;
+            double k=1e5;
             for (size_t j=0; j<s.length(); j++)
             {
                 double tmp=k*s[j];
@@ -556,8 +556,8 @@ int main(int argc, char *argv[])
     {
         lim(r,0)=CTRL_RAD2DEG*chain(r).getMin();
         lim(r,1)=CTRL_RAD2DEG*chain(r).getMax();
-        v_lim(r,0)=-30.0;
-        v_lim(r,1)=+30.0;
+        v_lim(r,0)=-50.0;
+        v_lim(r,1)=+50.0;
     }
     v_lim(1,0)=v_lim(1,1)=0.0;  // disable torso roll
 
@@ -567,7 +567,7 @@ int main(int argc, char *argv[])
     app->Options()->SetIntegerValue("acceptable_iter",0);
     app->Options()->SetStringValue("mu_strategy","adaptive");
     app->Options()->SetIntegerValue("max_iter",10000);
-    app->Options()->SetNumericValue("max_cpu_time",10.0);
+    app->Options()->SetNumericValue("max_cpu_time",0.05);
     app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
     app->Options()->SetNumericValue("nlp_scaling_max_gradient",1.0);
     app->Options()->SetNumericValue("nlp_scaling_min_value",1e-6);
@@ -615,7 +615,7 @@ int main(int argc, char *argv[])
     xo[2]=0.4;
     Vector vo(3,0.0);
     vo[2]=-0.1;
-    Obstacle obstacle(xo,0.08,vo,dt);
+    Obstacle obstacle(xo,0.07,vo,dt);
 
     ofstream fout;
     fout.open("data.log");
