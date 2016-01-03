@@ -290,10 +290,9 @@ public:
           I(dt,q0,lim)
     {
         double c=2.0*tau/dt;
-        Vector num(2,1.0), den(2);
-        den[0]=1.0+c;
-        den[1]=1.0-c;
-        F=new Filter(num,den,q0);
+        Vector den(2,1.0);
+        den[0]+=c; den[1]-=c;
+        F=new Filter(Vector(2,1.0),den,q0);
     }
 
     /****************************************************************/
