@@ -572,14 +572,11 @@ void signal_handler(int signal)
 int main(int argc, char *argv[])
 {
     ResourceFinder rf;
-    rf.setDefault("motor-tau",Value(0.0));
-    rf.setDefault("avoidance-type",Value("tactile"));
-    rf.setDefault("sim-time",Value(10.0));
     rf.configure(argc,argv);
 
-    double motor_tau=rf.find("motor-tau").asDouble();
-    string avoidance_type=rf.find("avoidance-type").asString();
-    double sim_time=rf.find("sim-time").asDouble();
+    double motor_tau=rf.check("motor-tau",Value(0.0)).asDouble();
+    string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();
+    double sim_time=rf.check("sim-time",Value(10.0)).asDouble();
 
     iCubArm arm("left");
     iKinChain &chain=*arm.asChain();
@@ -604,14 +601,12 @@ int main(int argc, char *argv[])
 
     Ipopt::SmartPtr<Ipopt::IpoptApplication> app=new Ipopt::IpoptApplication;
     app->Options()->SetNumericValue("tol",1e-6);
-    app->Options()->SetNumericValue("constr_viol_tol",1e-8);
-    app->Options()->SetIntegerValue("acceptable_iter",0);
+    app->Options()->SetNumericValue("acceptable_tol",1e-4);
+    app->Options()->SetIntegerValue("acceptable_iter",10);
     app->Options()->SetStringValue("mu_strategy","adaptive");
     app->Options()->SetIntegerValue("max_iter",10000);
     app->Options()->SetNumericValue("max_cpu_time",0.05);
     app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
-    app->Options()->SetNumericValue("nlp_scaling_max_gradient",1.0);
-    app->Options()->SetNumericValue("nlp_scaling_min_value",1e-6);
     app->Options()->SetStringValue("hessian_approximation","limited-memory");
     app->Options()->SetStringValue("derivative_test","none");
     app->Options()->SetIntegerValue("print_level",0);
