@@ -507,6 +507,7 @@ int main(int argc, char * argv[])
 {
     ResourceFinder rf;
     rf.setDefault("type","pressure-avoidance");
+    rf.setDefault("sim-time","20");
     rf.configure(argc,argv);
 
     iCubArm arm("left");
@@ -589,8 +590,9 @@ int main(int argc, char * argv[])
     ofstream fout;
     fout.open("data.log");
 
+    double sim_time=rf.find("sim-time").asDouble();
     std::signal(SIGINT,signal_handler);
-    for (double t=0.0; t<20.0; t+=dt)
+    for (double t=0.0; t<sim_time; t+=dt)
     {
         Vector xd=xc;
         xd[1]+=rt*cos(2.0*M_PI*0.3*t);
