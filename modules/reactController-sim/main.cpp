@@ -420,7 +420,7 @@ public:
 
             double rho=0.4; double alpha=6.0;
             double f=1.0/(1.0+exp((d*(2.0/rho)-1.0)*alpha));
-            Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF());
+            Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF()-1);
             Vector s=J.transposed()*dist;
 
             double red=1.0-f;
@@ -469,7 +469,7 @@ public:
                 continue;
 
             double P=obstacle.radius-d;
-            Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF());
+            Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF()-1);
             Vector s=(-P/d)*(J.transposed()*dist);
 
             double k=1e5;
@@ -621,7 +621,7 @@ int main(int argc, char *argv[])
 
     ofstream fout;
     fout.open("data.log");
-    
+
     std::signal(SIGINT,signal_handler);
     for (double t=0.0; t<sim_time; t+=dt)
     {
