@@ -340,7 +340,7 @@ public:
     string toString() const
     {
         ostringstream str;
-        str<<I.get().toString(3,3).c_str()<<" "<<radius;
+        str<<I.get().toString(3,3)<<" "<<radius;
         return str.str();
     }
 };
@@ -578,7 +578,7 @@ int main(int argc, char *argv[])
     rf.configure(argc,argv);
 
     double motor_tau=rf.find("motor-tau").asDouble();
-    string avoidance_type=rf.find("avoidance-type").asString().c_str();
+    string avoidance_type=rf.find("avoidance-type").asString();
     double sim_time=rf.find("sim-time").asDouble();
 
     iCubArm arm("left");
@@ -686,20 +686,20 @@ int main(int argc, char *argv[])
         xee=chain.EndEffPosition(CTRL_DEG2RAD*motor.move(v));
 
         yInfo()<<"        t [s] = "<<t;
-        yInfo()<<"    v [deg/s] = ("<<v.toString(3,3).c_str()<<")";
+        yInfo()<<"    v [deg/s] = ("<<v.toString(3,3)<<")";
         yInfo()<<" |xr-xee| [m] = "<<norm(xr-xee);
         yInfo()<<"";
 
         ostringstream strCtrlPoints;
         deque<Vector> ctrlPoints=avhdl->getCtrlPointsPosition();
         for (size_t i=0; i<ctrlPoints.size(); i++)
-            strCtrlPoints<<ctrlPoints[i].toString(3,3).c_str()<<" ";
+            strCtrlPoints<<ctrlPoints[i].toString(3,3)<<" ";
 
         fout<<t<<" "<<
-              xr.toString(3,3).c_str()<<" "<<
+              xr.toString(3,3)<<" "<<
               obstacle.toString()<<" "<<
-              v.toString(3,3).c_str()<<" "<<
-              (CTRL_RAD2DEG*chain.getAng()).toString(3,3).c_str()<<" "<<
+              v.toString(3,3)<<" "<<
+              (CTRL_RAD2DEG*chain.getAng()).toString(3,3)<<" "<<
               strCtrlPoints.str()<<
               endl;
 
