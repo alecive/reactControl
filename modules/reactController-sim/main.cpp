@@ -103,8 +103,16 @@ class ControllerNLP : public Ipopt::TNLP
             double qi=chain(i).getAng();
             if ((qi>=qGuardMinInt[i]) && (qi<=qGuardMaxInt[i]))
                 bounds(i,0)=bounds(i,1)=1.0;
-            else if ((qi<=qGuardMinExt[i]) || (qi>=qGuardMaxExt[i]))
-                bounds(i,i)=0.0;
+            else if (qi<=qGuardMinExt[i])
+            {
+                bounds(i,0)=0.0;
+                bounds(i,1)=1.0;
+            }
+            else if (qi>=qGuardMaxExt[i])
+            {
+                bounds(i,0)=1.0;
+                bounds(i,1)=0.0;
+            }
             else if (qi<qGuardMinInt[i])
             {
                 bounds(i,0)=0.5*(1.0+tanh(+10.0*(qi-qGuardMinCOG[i])/qGuard[i]));
@@ -518,7 +526,7 @@ public:
             if (d>=obstacle.radius)
                 continue;
 
-            double k=1e4;
+            double k=5e4;
             double P=obstacle.radius-d;
             Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF()-1);
             Vector s=(-k*P/d)*(J.transposed()*dist);
