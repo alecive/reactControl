@@ -526,7 +526,7 @@ void signal_handler(int signal)
 
 
 /****************************************************************/
-int main(int argc, char * argv[])
+int main(int argc, char *argv[])
 {
     ResourceFinder rf;
     rf.setDefault("avoidance-type","tactile");
@@ -574,21 +574,21 @@ int main(int argc, char * argv[])
 
     Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(chain);
 
-    AvoidanceHandlerAbstract *avhandler;    
+    AvoidanceHandlerAbstract *avhdl;    
     if (avoidance_type=="none")
-        avhandler=new AvoidanceHandlerAbstract(arm);
+        avhdl=new AvoidanceHandlerAbstract(arm);
     else if (avoidance_type=="visuo")
-        avhandler=new AvoidanceHandlerVisuo(arm);
+        avhdl=new AvoidanceHandlerVisuo(arm);
     else if (avoidance_type=="tactile")
-        avhandler=new AvoidanceHandlerTactile(arm);
+        avhdl=new AvoidanceHandlerTactile(arm);
     else if (avoidance_type=="visuo-tactile")
-        avhandler=new AvoidanceHandlerVisuoTactile(arm); 
+        avhdl=new AvoidanceHandlerVisuoTactile(arm); 
     else
     {
         yError()<<"unrecognized avoidance type! exiting ...";
         return 1;
     }
-    yInfo()<<"Avoidance-Handler=\""<<avhandler->getType()<<"\"";
+    yInfo()<<"Avoidance-Handler="<<avhdl->getType();
 
     double dt=0.01;
     double T=1.0;
@@ -628,8 +628,8 @@ int main(int argc, char * argv[])
 
         xo=obstacle.move();
 
-        avhandler->updateCtrlPoints();
-        Matrix VLIM=avhandler->getVLIM(obstacle,v_lim);
+        avhdl->updateCtrlPoints();
+        Matrix VLIM=avhdl->getVLIM(obstacle,v_lim);
 
         nlp->set_xr(xr);
         nlp->set_v_lim(VLIM);
@@ -645,7 +645,7 @@ int main(int argc, char * argv[])
         yInfo()<<"";
 
         ostringstream strCtrlPoints;
-        deque<Vector> ctrlPoints=avhandler->getCtrlPointsPosition();
+        deque<Vector> ctrlPoints=avhdl->getCtrlPointsPosition();
         for (size_t i=0; i<ctrlPoints.size(); i++)
             strCtrlPoints<<ctrlPoints[i].toString(3,3).c_str()<<" ";
 
@@ -665,7 +665,7 @@ int main(int argc, char * argv[])
     }
 
     fout.close();
-    delete avhandler;
+    delete avhdl;
 
     return 0;
 }
