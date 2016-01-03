@@ -309,7 +309,7 @@ public:
 
 
 /****************************************************************/
-class AvoidanceHandler
+class AvoidanceHandlerAbstract
 {
 protected:
     string type;
@@ -318,7 +318,7 @@ protected:
 
 public:
     /****************************************************************/
-    AvoidanceHandler(iKinLimb &limb) : chain(*limb.asChain())
+    AvoidanceHandlerAbstract(iKinLimb &limb) : chain(*limb.asChain())
     {
         iKinLimb *limb_;
         Matrix HN=eye(4,4);
@@ -338,7 +338,7 @@ public:
         chainCtrlPoints.push_back(c1);
         chainCtrlPoints.push_back(c2);
 
-        type="no-avoidance";
+        type="none";
     }
 
     /****************************************************************/
@@ -372,7 +372,7 @@ public:
     }
 
     /****************************************************************/
-    virtual ~AvoidanceHandler()
+    virtual ~AvoidanceHandlerAbstract()
     {
         for (size_t i=0; i<chainCtrlPoints.size(); i++)
             delete chainCtrlPoints[i];
@@ -381,13 +381,13 @@ public:
 
 
 /****************************************************************/
-class AvoidanceHandlerVision : public AvoidanceHandler
+class AvoidanceHandlerVisuo : public AvoidanceHandlerAbstract
 {
 public:
     /****************************************************************/
-    AvoidanceHandlerVision(iKinLimb &limb) : AvoidanceHandler(limb)
+    AvoidanceHandlerVisuo(iKinLimb &limb) : AvoidanceHandlerAbstract(limb)
     {
-        type="vision-avoidance";
+        type="visuo";
     }
 
     /****************************************************************/
@@ -439,13 +439,13 @@ public:
 
 
 /****************************************************************/
-class AvoidanceHandlerPressure : public AvoidanceHandler
+class AvoidanceHandlerTactile : public AvoidanceHandlerAbstract
 {
 public:
     /****************************************************************/
-    AvoidanceHandlerPressure(iKinLimb &limb) : AvoidanceHandler(limb)
+    AvoidanceHandlerTactile(iKinLimb &limb) : AvoidanceHandlerAbstract(limb)
     {
-        type="pressure-avoidance";
+        type="tactile";
     }
 
     /****************************************************************/
@@ -489,6 +489,80 @@ public:
 
 
 /****************************************************************/
+class AvoidanceHandlerVisuoTactile : public AvoidanceHandlerAbstract
+{
+public:
+    /****************************************************************/
+    AvoidanceHandlerVisuoTactile(iKinLimb &limb) : AvoidanceHandlerAbstract(limb)
+    {
+        type="visuo-tactile";
+    }
+
+    /****************************************************************/
+    Matrix getVLIM(const Obstacle &obstacle, const Matrix &v_lim)
+    {
+        Vector xo=obstacle.getPosition();
+        deque<Vector> ctrlPoints=getCtrlPointsPosition();
+
+        Matrix VLIM=v_lim;
+        for (size_t i=0; i<ctrlPoints.size(); i++)
+        {
+            Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF());
+            Vector dist=xo-ctrlPoints[i];
+            double d=norm(dist);
+            if (d>=obstacle.radius)
+            {
+                dist*=1.0-obstacle.radius/d;
+                d=norm(dist);
+
+                double rho=0.4; double alpha=6.0;
+                double f=1.0/(1.0+exp((d*(2.0/rho)-1.0)*alpha));                
+                Vector s=J.transposed()*dist;
+
+                double red=1.0-f;
+                for (size_t j=0; j<s.length(); j++)
+                {
+                    if (s[j]>=0.0)
+                    {
+                        double tmp=v_lim(j,1)*red;
+                        VLIM(j,1)=std::min(VLIM(j,1),tmp);
+                    }
+                    else
+                    {
+                        double tmp=v_lim(j,0)*red;
+                        VLIM(j,0)=std::max(VLIM(j,0),tmp);
+                    }
+                }
+            }
+            else
+            {
+                double P=obstacle.radius-d;
+                Vector s=(-P/d)*(J.transposed()*dist);
+
+                double k=1e4;
+                for (size_t j=0; j<s.length(); j++)
+                {
+                    double tmp=k*s[j];
+                    if (s[j]>=0.0)
+                    {
+                        tmp=std::min(v_lim(j,1),tmp);
+                        VLIM(j,0)=std::max(VLIM(j,0),tmp);
+                    }
+                    else
+                    {
+                        tmp=std::max(v_lim(j,0),tmp);
+                        VLIM(j,1)=std::min(VLIM(j,1),tmp);
+                    }
+                }
+            }
+        }
+
+        return VLIM;
+    }
+};
+
+
+/****************************************************************/
 namespace
 {
     volatile std::sig_atomic_t gSignalStatus;
@@ -506,7 +580,7 @@ void signal_handler(int signal)
 int main(int argc, char * argv[])
 {
     ResourceFinder rf;
-    rf.setDefault("type","pressure-avoidance");
+    rf.setDefault("avoidance-type","tactile");
     rf.setDefault("sim-time","20");
     rf.configure(argc,argv);
 
@@ -543,20 +617,21 @@ int main(int argc, char * argv[])
     app->Options()->SetNumericValue("nlp_scaling_min_value",1e-6);
     app->Options()->SetStringValue("hessian_approximation","limited-memory");
     app->Options()->SetStringValue("derivative_test","none");
-    //app->Options()->SetStringValue("derivative_test","first-order");
     app->Options()->SetIntegerValue("print_level",0);
     app->Initialize();
 
     Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(chain);
 
-    AvoidanceHandler *avhandler;
-    string type=rf.find("type").asString().c_str();
-    if (type=="pressure-avoidance")
-        avhandler=new AvoidanceHandlerPressure(arm);
-    else if (type=="vision-avoidance")
-        avhandler=new AvoidanceHandlerVision(arm);
-    else if (type=="no-avoidance")
-        avhandler=new AvoidanceHandler(arm); 
+    AvoidanceHandlerAbstract *avhandler;
+    string avoidance_type=rf.find("avoidance-type").asString().c_str();
+    if (avoidance_type=="none")
+        avhandler=new AvoidanceHandlerAbstract(arm);
+    else if (avoidance_type=="visuo")
+        avhandler=new AvoidanceHandlerVisuo(arm);
+    else if (avoidance_type=="tactile")
+        avhandler=new AvoidanceHandlerTactile(arm);
+    else if (avoidance_type=="visuo-tactile")
+        avhandler=new AvoidanceHandlerVisuoTactile(arm); 
     else
     {
         yError()<<"unrecognized avoidance type! exiting ...";
