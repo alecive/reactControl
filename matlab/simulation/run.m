@@ -41,11 +41,11 @@ hax=get(hfig,'CurrentAxes');
 set(hax,'DataAspectRatio',[1 1 1]);
 
 lim=axis;
-A=max(abs(lim))*0.1;
+scale=max(abs(lim))*0.1;
     
-quiver3(hax,0,0,0,1,0,0,A,'Color','r','Linewidth',2);
-quiver3(hax,0,0,0,0,1,0,A,'Color','g','Linewidth',2);
-quiver3(hax,0,0,0,0,0,1,A,'Color','b','Linewidth',2);
+quiver3(hax,0,0,0,1,0,0,scale,'Color','r','Linewidth',2);
+quiver3(hax,0,0,0,0,1,0,scale,'Color','g','Linewidth',2);
+quiver3(hax,0,0,0,0,0,1,scale,'Color','b','Linewidth',2);
 
 hg1=[];
 hg2=[];
@@ -123,22 +123,22 @@ function hg=drawArm(x,axpoint,ctrlpoint)
 
 global hax;
 
-lim=axis(hax);
-A=max(abs(lim))*0.1;
-
 arm=plot3(hax,[x{1}(1) x{2}(1) x{3}(1) x{4}(1) x{5}(1) x{6}(1) x{7}(1) x{8}(1) x{9}(1) x{10}(1) x{11}(1)],...
               [x{1}(2) x{2}(2) x{3}(2) x{4}(2) x{5}(2) x{6}(2) x{7}(2) x{8}(2) x{9}(2) x{10}(2) x{11}(2)],...
               [x{1}(3) x{2}(3) x{3}(3) x{4}(3) x{5}(3) x{6}(3) x{7}(3) x{8}(3) x{9}(3) x{10}(3) x{11}(3)],...
               'Color','k','LineWidth',3);
+          
+lim=axis(hax);
+scale=max(abs(lim))*0.1;
      
 ax(1)=quiver3(hax,x{end}(1),x{end}(2),x{end}(3),...
-              axpoint{1}(1),axpoint{1}(2),axpoint{1}(3),A,...
+              axpoint{1}(1),axpoint{1}(2),axpoint{1}(3),scale,...
               'Color','r','Linewidth',2);
 ax(2)=quiver3(hax,x{end}(1),x{end}(2),x{end}(3),...
-              axpoint{2}(1),axpoint{2}(2),axpoint{2}(3),A,...
+              axpoint{2}(1),axpoint{2}(2),axpoint{2}(3),scale,...
               'Color','g','Linewidth',2);
 ax(3)=quiver3(hax,x{end}(1),x{end}(2),x{end}(3),...
-              axpoint{3}(1),axpoint{3}(2),axpoint{3}(3),A,...
+              axpoint{3}(1),axpoint{3}(2),axpoint{3}(3),scale,...
               'Color','b','Linewidth',2);
        
 hg=hggroup;
