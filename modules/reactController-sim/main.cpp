@@ -34,6 +34,7 @@
 
 #include <iCub/ctrl/math.h>
 #include <iCub/ctrl/pids.h>
+#include <iCub/ctrl/filters.h>
 #include <iCub/ctrl/minJerkCtrl.h>
 #include <iCub/iKin/iKinFwd.h>
 
@@ -272,6 +273,44 @@ public:
     {
         for (Ipopt::Index i=0; i<n; i++)
             v[i]=CTRL_RAD2DEG*x[i];
+    }
+};
+
+
+/****************************************************************/
+class Motor
+{
+    Integrator I;
+    Filter *F;
+
+public:
+    /****************************************************************/
+    Motor(const Vector &q0, const Matrix &lim,
+          const double tau, const double dt) :
+          I(dt,q0,lim)
+    {
+        double c=2.0*tau/dt;
+        Vector num(2,1.0), den(2);
+        den[0]=1.0+c;
+        den[1]=1.0-c;
+        F=new Filter(num,den,q0);
+    }
+
+    /****************************************************************/
+    Vector move(const Vector &v)
+    {
+        return F->filt(I.integrate(v));
+    }
+
+    /****************************************************************/
+    Vector getPosition() const
+    {
+        return F->output();
+    }
+
+    ~Motor()
+    {
+        delete F;
     }
 };
 
@@ -538,10 +577,12 @@ void signal_handler(int signal)
 int main(int argc, char *argv[])
 {
     ResourceFinder rf;
+    rf.setDefault("motor-tau",Value(0.0));
     rf.setDefault("avoidance-type",Value("tactile"));
     rf.setDefault("sim-time",Value(10.0));
     rf.configure(argc,argv);
 
+    double motor_tau=rf.find("motor-tau").asDouble();
     string avoidance_type=rf.find("avoidance-type").asString().c_str();
     double sim_time=rf.find("sim-time").asDouble();
 
@@ -603,7 +644,7 @@ int main(int argc, char *argv[])
     double T=1.0;
 
     nlp->set_dt(dt);
-    Integrator motors(dt,q0,lim);
+    Motor motor(q0,lim,motor_tau,dt);
     Vector v(chain.getDOF(),0.0);
 
     Vector xee=chain.EndEffPosition();
@@ -647,7 +688,7 @@ int main(int argc, char *argv[])
         Ipopt::ApplicationReturnStatus status=app->OptimizeTNLP(GetRawPtr(nlp));
         v=nlp->get_result();
 
-        xee=chain.EndEffPosition(CTRL_DEG2RAD*motors.integrate(v));
+        xee=chain.EndEffPosition(CTRL_DEG2RAD*motor.move(v));
 
         yInfo()<<"        t [s] = "<<t;
         yInfo()<<"    v [deg/s] = ("<<v.toString(3,3).c_str()<<")";
