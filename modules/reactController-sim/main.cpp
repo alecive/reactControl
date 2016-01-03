@@ -478,11 +478,13 @@ public:
                 {
                     double tmp=v_lim(j,1)*red;
                     VLIM(j,1)=std::min(VLIM(j,1),tmp);
+                    VLIM(j,0)=std::min(VLIM(j,0),VLIM(j,1));
                 }
                 else
                 {
                     double tmp=v_lim(j,0)*red;
                     VLIM(j,0)=std::max(VLIM(j,0),tmp);
+                    VLIM(j,1)=std::max(VLIM(j,0),VLIM(j,1));
                 }
             }
         }
@@ -516,7 +518,7 @@ public:
             if (d>=obstacle.radius)
                 continue;
 
-            double k=1e5;
+            double k=1e4;
             double P=obstacle.radius-d;
             Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF()-1);
             Vector s=(-k*P/d)*(J.transposed()*dist);
@@ -527,11 +529,13 @@ public:
                 {
                     s[j]=std::min(v_lim(j,1),s[j]);
                     VLIM(j,0)=std::max(VLIM(j,0),s[j]);
+                    VLIM(j,1)=std::max(VLIM(j,0),VLIM(j,1));
                 }
                 else
                 {
                     s[j]=std::max(v_lim(j,0),s[j]);
                     VLIM(j,1)=std::min(VLIM(j,1),s[j]);
+                    VLIM(j,0)=std::min(VLIM(j,0),VLIM(j,1));
                 }
             }
         }
@@ -611,8 +615,6 @@ int main(int argc, char *argv[])
 
     Ipopt::SmartPtr<Ipopt::IpoptApplication> app=new Ipopt::IpoptApplication;
     app->Options()->SetNumericValue("tol",1e-6);
-    app->Options()->SetNumericValue("acceptable_tol",1e-4);
-    app->Options()->SetIntegerValue("acceptable_iter",10);
     app->Options()->SetStringValue("mu_strategy","adaptive");
     app->Options()->SetIntegerValue("max_iter",10000);
     app->Options()->SetNumericValue("max_cpu_time",0.05);
