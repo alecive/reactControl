@@ -339,7 +339,8 @@ public:
         HN(2,3)=0.1373/2.0;
         c2->setHN(HN);
 
-        // the first item is the original chain (be careful)
+        // the first item is the original chain
+        // used to account for the end-effector
         chainCtrlPoints.push_back(&chain);
         chainCtrlPoints.push_back(c1);
         chainCtrlPoints.push_back(c2);
@@ -356,6 +357,7 @@ public:
     /****************************************************************/
     void updateCtrlPoints()
     {
+        // i>0: original chain is up-to-date
         for (size_t i=1; i<chainCtrlPoints.size(); i++)
             for (size_t j=0; j<chainCtrlPoints[i]->getDOF(); j++)
                 chainCtrlPoints[i]->setAng(j,chain(j).getAng());
@@ -380,6 +382,7 @@ public:
     /****************************************************************/
     virtual ~AvoidanceHandlerAbstract()
     {
+        // i>0: don't dispose original chain
         for (size_t i=1; i<chainCtrlPoints.size(); i++)
             delete chainCtrlPoints[i];
     }
