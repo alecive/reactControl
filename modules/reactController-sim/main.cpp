@@ -19,6 +19,7 @@
 #include <cmath>
 #include <limits>
 #include <algorithm>
+#include <string>
 #include <sstream>
 #include <fstream>
 #include <iomanip>
@@ -310,44 +311,44 @@ public:
 /****************************************************************/
 class AvoidanceHandler
 {
+protected:
+    string type;
     iKinChain &chain;
     deque<iKinChain*> chainCtrlPoints;
 
 public:
     /****************************************************************/
-    AvoidanceHandler(iKinChain &chain_) : chain(chain_)
+    AvoidanceHandler(iKinLimb &limb) : chain(*limb.asChain())
     {
-        iCubArm *arm;
+        iKinLimb *limb_;
         Matrix HN=eye(4,4);
 
-        arm=new iCubArm("left");
-        iKinChain *c1=arm->asChain();
-        c1->releaseLink(0);
-        c1->releaseLink(1);
-        c1->releaseLink(2);
-        c1->rmLink(9);
-        c1->rmLink(8);
-        c1->rmLink(7);
+        limb_=new iKinLimb(limb);
+        iKinChain *c1=limb_->asChain();
+        c1->rmLink(9); c1->rmLink(8); c1->rmLink(7);
         HN(2,3)=0.1373;
         c1->setHN(HN);
 
-        arm=new iCubArm("left");
-        iKinChain *c2=arm->asChain();
-        c2->releaseLink(0);
-        c2->releaseLink(1);
-        c2->releaseLink(2);
-        c2->rmLink(9);
-        c2->rmLink(8);
-        c2->rmLink(7);
+        limb_=new iKinLimb(limb);
+        iKinChain *c2=limb_->asChain();
+        c2->rmLink(9); c2->rmLink(8); c2->rmLink(7);
         HN(2,3)=0.1373/2.0;
         c2->setHN(HN);
 
         chainCtrlPoints.push_back(c1);
         chainCtrlPoints.push_back(c2);
+
+        type="no-avoidance";
     }
 
     /****************************************************************/
-    ~AvoidanceHandler()
+    string getType() const
+    {
+        return type;
+    }
+
+    /****************************************************************/
+    virtual ~AvoidanceHandler()
     {
         for (size_t i=0; i<chainCtrlPoints.size(); i++)
             delete chainCtrlPoints[i];
@@ -372,7 +373,25 @@ public:
     }
 
     /****************************************************************/
-    Matrix getVLIMVision(const Obstacle &obstacle, const Matrix &v_lim)
+    virtual Matrix getVLIM(const Obstacle &obstacle, const Matrix &v_lim)
+    {
+        return v_lim;
+    }
+};
+
+
+/****************************************************************/
+class AvoidanceHandlerVision : public AvoidanceHandler
+{
+public:
+    /****************************************************************/
+    AvoidanceHandlerVision(iKinLimb &limb) : AvoidanceHandler(limb)
+    {
+        type="vision-avoidance";
+    }
+
+    /****************************************************************/
+    Matrix getVLIM(const Obstacle &obstacle, const Matrix &v_lim)
     {
         Vector xo=obstacle.getPosition();
         deque<Vector> ctrlPoints=getCtrlPointsPosition();
@@ -416,9 +435,21 @@ public:
 
         return VLIM;
     }
+};
+
+
+/****************************************************************/
+class AvoidanceHandlerPressure : public AvoidanceHandler
+{
+public:
+    /****************************************************************/
+    AvoidanceHandlerPressure(iKinLimb &limb) : AvoidanceHandler(limb)
+    {
+        type="pressure-avoidance";
+    }
 
     /****************************************************************/
-    Matrix getVLIMPressure(const Obstacle &obstacle, const Matrix &v_lim)
+    Matrix getVLIM(const Obstacle &obstacle, const Matrix &v_lim)
     {
         Vector xo=obstacle.getPosition();
         deque<Vector> ctrlPoints=getCtrlPointsPosition();
@@ -472,8 +503,12 @@ void signal_handler(int signal)
 
 
 /****************************************************************/
-int main()
+int main(int argc, char * argv[])
 {
+    ResourceFinder rf;
+    rf.setDefault("type","pressure-avoidance");
+    rf.configure(argc,argv);
+
     iCubArm arm("left");
     iKinChain &chain=*arm.asChain();
     chain.releaseLink(0);
@@ -512,7 +547,21 @@ int main()
     app->Initialize();
 
     Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(chain);
-    AvoidanceHandler avhandler(chain);
+
+    AvoidanceHandler *avhandler;
+    string type=rf.find("type").asString().c_str();
+    if (type=="pressure-avoidance")
+        avhandler=new AvoidanceHandlerPressure(arm);
+    else if (type=="vision-avoidance")
+        avhandler=new AvoidanceHandlerVision(arm);
+    else if (type=="no-avoidance")
+        avhandler=new AvoidanceHandler(arm); 
+    else
+    {
+        yError()<<"unrecognized avoidance type! exiting ...";
+        return 1;
+    }
+    yInfo()<<"Avoidance-Handler=\""<<avhandler->getType()<<"\"";
 
     double dt=0.01;
     double T=1.0;
@@ -535,7 +584,7 @@ int main()
     xo[2]=0.4;
     Vector vo(3,0.0);
     vo[2]=-0.1;
-    Obstacle obstacle(xo,0.08,vo,dt);
+    Obstacle obstacle(xo,0.05,vo,dt);
 
     ofstream fout;
     fout.open("data.log");
@@ -552,9 +601,8 @@ int main()
 
         xo=obstacle.move();
 
-        avhandler.updateCtrlPoints();
-        //Matrix VLIM=avhandler.getVLIMVision(obstacle,v_lim);
-        Matrix VLIM=avhandler.getVLIMPressure(obstacle,v_lim);
+        avhandler->updateCtrlPoints();
+        Matrix VLIM=avhandler->getVLIM(obstacle,v_lim);
 
         nlp->set_xr(xr);
         nlp->set_v_lim(VLIM);
@@ -570,7 +618,7 @@ int main()
         yInfo()<<"";
 
         ostringstream strCtrlPoints;
-        deque<Vector> ctrlPoints=avhandler.getCtrlPointsPosition();
+        deque<Vector> ctrlPoints=avhandler->getCtrlPointsPosition();
         for (size_t i=0; i<ctrlPoints.size(); i++)
             strCtrlPoints<<ctrlPoints[i].toString(3,3).c_str()<<" ";
 
@@ -590,6 +638,8 @@ int main()
     }
 
     fout.close();
+    delete avhandler;
+
     return 0;
 }
 
