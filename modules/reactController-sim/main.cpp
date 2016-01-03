@@ -574,9 +574,9 @@ int main(int argc, char *argv[])
     ResourceFinder rf;
     rf.configure(argc,argv);
 
-    double motor_tau=rf.check("motor-tau",Value(0.0)).asDouble();
-    string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();
     double sim_time=rf.check("sim-time",Value(10.0)).asDouble();
+    double motor_tau=rf.check("motor-tau",Value(0.0)).asDouble();
+    string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();    
 
     iCubArm arm("left");
     iKinChain &chain=*arm.asChain();
