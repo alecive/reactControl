@@ -516,23 +516,22 @@ public:
             if (d>=obstacle.radius)
                 continue;
 
+            double k=1e5;
             double P=obstacle.radius-d;
             Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF()-1);
-            Vector s=(-P/d)*(J.transposed()*dist);
-
-            double k=1e5;
+            Vector s=(-k*P/d)*(J.transposed()*dist);
+            
             for (size_t j=0; j<s.length(); j++)
             {
-                double tmp=k*s[j];
                 if (s[j]>=0.0)
                 {
-                    tmp=std::min(v_lim(j,1),tmp);
-                    VLIM(j,0)=std::max(VLIM(j,0),tmp);
+                    s[j]=std::min(v_lim(j,1),s[j]);
+                    VLIM(j,0)=std::max(VLIM(j,0),s[j]);
                 }
                 else
                 {
-                    tmp=std::max(v_lim(j,0),tmp);
-                    VLIM(j,1)=std::min(VLIM(j,1),tmp);
+                    s[j]=std::max(v_lim(j,0),s[j]);
+                    VLIM(j,1)=std::min(VLIM(j,1),s[j]);
                 }
             }
         }
