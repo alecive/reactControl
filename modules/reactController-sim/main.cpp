@@ -56,6 +56,7 @@ class ControllerNLP : public Ipopt::TNLP
     Vector delta_x;
     Vector v0;
     Matrix v_lim;
+    Matrix bounds;
     Matrix J0;
     Vector v;
     double dt;
@@ -95,28 +96,32 @@ class ControllerNLP : public Ipopt::TNLP
     }
 
     /****************************************************************/
-    Matrix computeWeight()
+    void computeBounds()
     {
-        Matrix w(chain.getDOF(),2);
         for (size_t i=0; i<chain.getDOF(); i++)
         {
             double qi=chain(i).getAng();
             if ((qi>=qGuardMinInt[i]) && (qi<=qGuardMaxInt[i]))
-                w(i,0)=w(i,1)=1.0;
+                bounds(i,0)=bounds(i,1)=1.0;
             else if ((qi<=qGuardMinExt[i]) || (qi>=qGuardMaxExt[i]))
-                w(i,i)=0.0;
+                bounds(i,i)=0.0;
             else if (qi<qGuardMinInt[i])
             {
-                w(i,0)=0.5*(1.0+tanh(+10.0*(qi-qGuardMinCOG[i])/qGuard[i]));
-                w(i,1)=1.0;
+                bounds(i,0)=0.5*(1.0+tanh(+10.0*(qi-qGuardMinCOG[i])/qGuard[i]));
+                bounds(i,1)=1.0;
             }
             else
             {
-                w(i,0)=1.0;
-                w(i,1)=0.5*(1.0+tanh(-10.0*(qi-qGuardMaxCOG[i])/qGuard[i]));
+                bounds(i,0)=1.0;
+                bounds(i,1)=0.5*(1.0+tanh(-10.0*(qi-qGuardMaxCOG[i])/qGuard[i]));
             }
         }
-        return w;
+        
+        for (size_t i=0; i<chain.getDOF(); i++)
+        {
+            bounds(i,0)*=v_lim(i,0);
+            bounds(i,1)*=v_lim(i,1);
+        }
     }
 
 public:
@@ -134,6 +139,7 @@ public:
             v_lim(r,1)=std::numeric_limits<double>::max();
             v_lim(r,0)=-v_lim(r,1);
         }
+        bounds=v_lim;
 
         computeGuard();
         dt=0.0;
@@ -151,12 +157,17 @@ public:
     {
         yAssert((this->v_lim.rows()==v_lim.rows()) &&
                 (this->v_lim.cols()==v_lim.cols()));
+
+        for (int r=0; r<v_lim.rows(); r++)
+            yAssert(v_lim(r,0)<=v_lim(r,1));
+
         this->v_lim=CTRL_DEG2RAD*v_lim;
     }
 
     /****************************************************************/
     void set_dt(const double dt)
     {
+        yAssert(dt>0.0);
         this->dt=dt;
     }
 
@@ -172,6 +183,7 @@ public:
     {
         x0=chain.EndEffPosition();
         J0=chain.GeoJacobian().submatrix(0,2,0,chain.getDOF()-1);
+        computeBounds();
     }
 
     /****************************************************************/
@@ -194,11 +206,10 @@ public:
     bool get_bounds_info(Ipopt::Index n, Ipopt::Number *x_l, Ipopt::Number *x_u,
                          Ipopt::Index m, Ipopt::Number *g_l, Ipopt::Number *g_u)
     {
-        Matrix w=computeWeight();
         for (Ipopt::Index i=0; i<n; i++)
         {
-            x_l[i]=w(i,0)*v_lim(i,0);
-            x_u[i]=w(i,1)*v_lim(i,1);
+            x_l[i]=bounds(i,0);
+            x_u[i]=bounds(i,1);
         }
         return true;
     }
@@ -209,7 +220,7 @@ public:
                             Ipopt::Index m, bool init_lambda, Ipopt::Number *lambda)
     {
         for (Ipopt::Index i=0; i<n; i++)
-            x[i]=v0[i];
+            x[i]=std::min(std::max(bounds(i,0),v0[i]),bounds(i,1));
         return true;
     }
 
