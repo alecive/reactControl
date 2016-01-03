@@ -504,8 +504,7 @@ public:
     /****************************************************************/
     Matrix getVLIM(const Obstacle &obstacle, const Matrix &v_lim)
     {
-        Matrix VLIM=v_lim;
-        VLIM=AvoidanceHandlerVisuo::getVLIM(obstacle,VLIM);
+        Matrix VLIM=AvoidanceHandlerVisuo::getVLIM(obstacle,v_lim);
         VLIM=AvoidanceHandlerTactile::getVLIM(obstacle,VLIM);
         return VLIM;
     }
