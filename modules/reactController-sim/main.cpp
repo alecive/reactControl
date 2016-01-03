@@ -529,8 +529,8 @@ void signal_handler(int signal)
 int main(int argc, char *argv[])
 {
     ResourceFinder rf;
-    rf.setDefault("avoidance-type","tactile");
-    rf.setDefault("sim-time","20");
+    rf.setDefault("avoidance-type",Value("tactile"));
+    rf.setDefault("sim-time",Value(10.0));
     rf.configure(argc,argv);
 
     string avoidance_type=rf.find("avoidance-type").asString().c_str();
@@ -611,7 +611,7 @@ int main(int argc, char *argv[])
     xo[2]=0.4;
     Vector vo(3,0.0);
     vo[2]=-0.1;
-    Obstacle obstacle(xo,0.05,vo,dt);
+    Obstacle obstacle(xo,0.08,vo,dt);
 
     ofstream fout;
     fout.open("data.log");
