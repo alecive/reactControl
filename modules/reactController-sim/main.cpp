@@ -381,7 +381,7 @@ public:
 
 
 /****************************************************************/
-class AvoidanceHandlerVisuo : public AvoidanceHandlerAbstract
+class AvoidanceHandlerVisuo : public virtual AvoidanceHandlerAbstract
 {
 public:
     /****************************************************************/
@@ -439,7 +439,7 @@ public:
 
 
 /****************************************************************/
-class AvoidanceHandlerTactile : public AvoidanceHandlerAbstract
+class AvoidanceHandlerTactile : public virtual AvoidanceHandlerAbstract
 {
 public:
     /****************************************************************/
@@ -489,11 +489,14 @@ public:
 
 
 /****************************************************************/
-class AvoidanceHandlerVisuoTactile : public AvoidanceHandlerAbstract
+class AvoidanceHandlerVisuoTactile : public AvoidanceHandlerVisuo,
+                                     public AvoidanceHandlerTactile
 {
 public:
     /****************************************************************/
-    AvoidanceHandlerVisuoTactile(iKinLimb &limb) : AvoidanceHandlerAbstract(limb)
+    AvoidanceHandlerVisuoTactile(iKinLimb &limb) : AvoidanceHandlerAbstract(limb),
+                                                   AvoidanceHandlerVisuo(limb),
+                                                   AvoidanceHandlerTactile(limb)
     {
         type="visuo-tactile";
     }
@@ -501,62 +504,9 @@ public:
     /****************************************************************/
     Matrix getVLIM(const Obstacle &obstacle, const Matrix &v_lim)
     {
-        Vector xo=obstacle.getPosition();
-        deque<Vector> ctrlPoints=getCtrlPointsPosition();
-
         Matrix VLIM=v_lim;
-        for (size_t i=0; i<ctrlPoints.size(); i++)
-        {
-            Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF());
-            Vector dist=xo-ctrlPoints[i];
-            double d=norm(dist);
-            if (d>=obstacle.radius)
-            {
-                dist*=1.0-obstacle.radius/d;
-                d=norm(dist);
-
-                double rho=0.4; double alpha=6.0;
-                double f=1.0/(1.0+exp((d*(2.0/rho)-1.0)*alpha));                
-                Vector s=J.transposed()*dist;
-
-                double red=1.0-f;
-                for (size_t j=0; j<s.length(); j++)
-                {
-                    if (s[j]>=0.0)
-                    {
-                        double tmp=v_lim(j,1)*red;
-                        VLIM(j,1)=std::min(VLIM(j,1),tmp);
-                    }
-                    else
-                    {
-                        double tmp=v_lim(j,0)*red;
-                        VLIM(j,0)=std::max(VLIM(j,0),tmp);
-                    }
-                }
-            }
-            else
-            {
-                double P=obstacle.radius-d;
-                Vector s=(-P/d)*(J.transposed()*dist);
-
-                double k=1e4;
-                for (size_t j=0; j<s.length(); j++)
-                {
-                    double tmp=k*s[j];
-                    if (s[j]>=0.0)
-                    {
-                        tmp=std::min(v_lim(j,1),tmp);
-                        VLIM(j,0)=std::max(VLIM(j,0),tmp);
-                    }
-                    else
-                    {
-                        tmp=std::max(v_lim(j,0),tmp);
-                        VLIM(j,1)=std::min(VLIM(j,1),tmp);
-                    }
-                }
-            }
-        }
-
+        VLIM=AvoidanceHandlerVisuo::getVLIM(obstacle,VLIM);
+        VLIM=AvoidanceHandlerTactile::getVLIM(obstacle,VLIM);
         return VLIM;
     }
 };
