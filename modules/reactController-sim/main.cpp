@@ -348,13 +348,6 @@ public:
     }
 
     /****************************************************************/
-    virtual ~AvoidanceHandler()
-    {
-        for (size_t i=0; i<chainCtrlPoints.size(); i++)
-            delete chainCtrlPoints[i];
-    }
-
-    /****************************************************************/
     void updateCtrlPoints()
     {
         for (size_t i=0; i<chainCtrlPoints.size(); i++)
@@ -376,6 +369,13 @@ public:
     virtual Matrix getVLIM(const Obstacle &obstacle, const Matrix &v_lim)
     {
         return v_lim;
+    }
+
+    /****************************************************************/
+    virtual ~AvoidanceHandler()
+    {
+        for (size_t i=0; i<chainCtrlPoints.size(); i++)
+            delete chainCtrlPoints[i];
     }
 };
 
