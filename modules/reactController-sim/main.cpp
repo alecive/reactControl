@@ -163,6 +163,13 @@ public:
     }
 
     /****************************************************************/
+    void init()
+    {
+        x0=chain.EndEffPosition();
+        J0=chain.GeoJacobian().submatrix(0,2,0,chain.getDOF()-1);
+    }
+
+    /****************************************************************/
     Vector get_result() const
     {
         return v;
@@ -175,9 +182,6 @@ public:
         n=chain.getDOF();
         m=nnz_jac_g=nnz_h_lag=0;
         index_style=TNLP::C_STYLE;
-
-        x0=chain.EndEffPosition();
-        J0=chain.GeoJacobian().submatrix(0,2,0,chain.getDOF()-1);
         return true;
     }
 
@@ -634,6 +638,7 @@ int main(int argc, char *argv[])
         nlp->set_xr(xr);
         nlp->set_v_lim(VLIM);
         nlp->set_v0(v);
+        nlp->init();
         Ipopt::ApplicationReturnStatus status=app->OptimizeTNLP(GetRawPtr(nlp));
         v=nlp->get_result();
 
