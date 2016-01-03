@@ -247,7 +247,7 @@ public:
     bool eval_g(Ipopt::Index n, const Ipopt::Number *x, bool new_x,
                 Ipopt::Index m, Ipopt::Number *g)
     {
-        return true;
+        return false;
     }
 
     /****************************************************************/
@@ -255,16 +255,7 @@ public:
                     Ipopt::Index m, Ipopt::Index nele_jac, Ipopt::Index *iRow,
                     Ipopt::Index *jCol, Ipopt::Number *values)
     {
-        return true;
-    }
-
-    /****************************************************************/
-    bool eval_h(Ipopt::Index n, const Ipopt::Number *x, bool new_x,
-                Ipopt::Number obj_factor, Ipopt::Index m, const Ipopt::Number *lambda,
-                bool new_lambda, Ipopt::Index nele_hess, Ipopt::Index *iRow,
-                Ipopt::Index *jCol, Ipopt::Number *values)
-    {
-        return true;
+        return false;
     }
 
     /****************************************************************/
