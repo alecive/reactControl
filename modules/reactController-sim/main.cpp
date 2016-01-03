@@ -533,6 +533,9 @@ int main(int argc, char * argv[])
     rf.setDefault("sim-time","20");
     rf.configure(argc,argv);
 
+    string avoidance_type=rf.find("avoidance-type").asString().c_str();
+    double sim_time=rf.find("sim-time").asDouble();
+
     iCubArm arm("left");
     iKinChain &chain=*arm.asChain();
     chain.releaseLink(0);
@@ -571,8 +574,7 @@ int main(int argc, char * argv[])
 
     Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(chain);
 
-    AvoidanceHandlerAbstract *avhandler;
-    string avoidance_type=rf.find("avoidance-type").asString().c_str();
+    AvoidanceHandlerAbstract *avhandler;    
     if (avoidance_type=="none")
         avhandler=new AvoidanceHandlerAbstract(arm);
     else if (avoidance_type=="visuo")
@@ -613,8 +615,7 @@ int main(int argc, char * argv[])
 
     ofstream fout;
     fout.open("data.log");
-
-    double sim_time=rf.find("sim-time").asDouble();
+    
     std::signal(SIGINT,signal_handler);
     for (double t=0.0; t<sim_time; t+=dt)
     {
