@@ -31,9 +31,9 @@ legend({'none','vision','tactile'});
 
 n=10;
 [x,y,z]=sphere(n);
-c(:,:,1)=ones(n);
+c(:,:,1)=zeros(n);
 c(:,:,2)=zeros(n);
-c(:,:,3)=zeros(n);
+c(:,:,3)=ones(n);
 for i=1:10:L
     r=d_n(i,8);
     h=surf(d_n(i,5)+r*x,d_n(i,6)+r*y,d_n(i,7)+r*z,c,'EdgeColor','none');

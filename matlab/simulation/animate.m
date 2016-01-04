@@ -5,11 +5,17 @@ global P;
 global t t0;
 global xd xo q ctrlp;
 global hax hg1 hg2 hg3;
-global do_movie writer tm;
+global save_movie save_pics writer tm;
 
-do_movie=false;
+save_movie=false;
+save_pics=false;
 if nargin>1
-    do_movie=varargin{1};
+    mode=varargin{1};
+    if strcmpi(mode,'save-movie')
+        save_movie=true;
+    elseif strcmpi(mode,'save-pics')
+        save_pics=true;
+    end    
 end
 
 data=importdata(filein);
@@ -57,15 +63,20 @@ Ts=0.1;
 tm=timer('Period',Ts,'ExecutionMode','fixedRate',...
          'TimerFcn',@PlotQuantities);
     
-if do_movie
+if save_movie
     writer=VideoWriter('movie','MPEG-4');
     writer.FrameRate=10;
     open(writer);
 end
 
+if save_pics
+    [~]=rmdir('./pics','s');
+    mkdir('./pics');
+end
+
 t0=cputime;
 start(tm);
-      
+
 
 %--------------------------------------------------------------------------
 function T=DH(n,theta)
@@ -158,7 +169,7 @@ function PlotQuantities(obj,event,string_arg) %#ok<INUSD>
 global t t0;
 global xd xo q ctrlp;
 global hax hg1 hg2 hg3;
-global do_movie writer tm;
+global save_movie save_pics writer tm;
 
 dt=cputime-t0;
 i=find(t>=dt,1);
@@ -191,10 +202,19 @@ hg3=surf(hax,xo(i,1)+r*x,xo(i,2)+r*y,xo(i,3)+r*z,c,'EdgeColor','none');
 alpha(hg3,0.2);
 drawnow;
 
-if do_movie
+if save_movie
     try
         frame=getframe(hax);
         writeVideo(writer,frame);
+    catch
+    end
+end
+
+if save_pics
+    try
+        frame=getframe(hax);
+        img=frame2im(frame);
+        imwrite(img,sprintf('./pics/img_%.8d.ppm',i));
     catch
     end
 end
@@ -203,10 +223,10 @@ end
 %--------------------------------------------------------------------------
 function Quit(src,eventdata) %#ok<INUSD>
 
-global do_movie writer tm;
+global save_movie writer tm;
 
 stop(tm);
-if do_movie
+if save_movie
     close(writer);
 end
 delete(src);
