@@ -526,7 +526,7 @@ public:
             if (d>=obstacle.radius)
                 continue;
 
-            double k=5e4;
+            double k=50.0/0.001;    // produce 50 deg/s repulsive velocity for 1 mm of penetration
             double P=obstacle.radius-d;
             Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF()-1);
             Vector s=(-k*P/d)*(J.transposed()*dist);
