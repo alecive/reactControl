@@ -1,4 +1,4 @@
-function run(filein,varargin)
+function animate(filein,varargin)
 % Author: Ugo Pattacini
 
 global P;
@@ -184,11 +184,11 @@ end
 hg1=drawArm(x,axpoint,ctrlp(i,:));
 hg2=plot3(hax,xd(i,1),xd(i,2),xd(i,3),'go','LineWidth',3);
 
-n=8;
+n=10;
 [x,y,z]=sphere(n); r=xo(i,4);
 c(:,:,1)=ones(n); c(:,:,2)=zeros(n); c(:,:,3)=zeros(n);
-hg3=surf(hax,xo(i,1)+r*x,xo(i,2)+r*y,xo(i,3)+r*z,c);
-alpha(hg3,0.1);
+hg3=surf(hax,xo(i,1)+r*x,xo(i,2)+r*y,xo(i,3)+r*z,c,'EdgeColor','none');
+alpha(hg3,0.2);
 drawnow;
 
 if do_movie
