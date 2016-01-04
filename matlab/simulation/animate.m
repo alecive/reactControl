@@ -214,7 +214,7 @@ if save_pics
     try
         frame=getframe(hax);
         img=frame2im(frame);
-        imwrite(img,sprintf('./pics/img_%.8d.ppm',i));
+        imwrite(img,sprintf('./pics/img_%.8d.png',i));
     catch
     end
 end
