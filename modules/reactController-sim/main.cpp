@@ -137,7 +137,6 @@ public:
     ControllerNLP(iKinChain &chain_) : chain(chain_)
     {
         xr.resize(3,0.0);
-        delta_x.resize(3,0.0);
         v0.resize(chain.getDOF(),0.0);
         v=v0;
 
