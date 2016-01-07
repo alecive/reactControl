@@ -103,16 +103,8 @@ class ControllerNLP : public Ipopt::TNLP
             double qi=chain(i).getAng();
             if ((qi>=qGuardMinInt[i]) && (qi<=qGuardMaxInt[i]))
                 bounds(i,0)=bounds(i,1)=1.0;
-            else if (qi<=qGuardMinExt[i])
-            {
-                bounds(i,0)=0.0;
-                bounds(i,1)=1.0;
-            }
-            else if (qi>=qGuardMaxExt[i])
-            {
-                bounds(i,0)=1.0;
-                bounds(i,1)=0.0;
-            }
+            else if ((qi<=qGuardMinExt[i]) || (qi>=qGuardMaxExt[i]))
+                bounds(i,0)=bounds(i,1)=0.0;
             else if (qi<qGuardMinInt[i])
             {
                 bounds(i,0)=0.5*(1.0+tanh(+10.0*(qi-qGuardMinCOG[i])/qGuard[i]));
@@ -526,9 +518,9 @@ public:
                 continue;
 
             double k=50.0/0.001;    // produce 50 deg/s repulsive velocity for 1 mm of penetration
-            double P=obstacle.radius-d;
+            double f=k*(obstacle.radius-d);
             Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF()-1);
-            Vector s=(-k*P/d)*(J.transposed()*dist);
+            Vector s=(-f/d)*(J.transposed()*dist);
             
             for (size_t j=0; j<s.length(); j++)
             {
