@@ -363,6 +363,7 @@ protected:
     string type;
     iKinChain &chain;
     deque<iKinChain*> chainCtrlPoints;
+    Property parameters;
 
 public:
     /****************************************************************/
@@ -396,6 +397,18 @@ public:
     string getType() const
     {
         return type;
+    }
+
+    /****************************************************************/
+    virtual Property getParameters() const
+    {
+        return parameters;
+    }
+
+    /****************************************************************/
+    virtual void setParameters(const Property &parameters)
+    {
+        this->parameters=parameters;
     }
 
     /****************************************************************/
@@ -436,11 +449,41 @@ public:
 /****************************************************************/
 class AvoidanceHandlerVisuo : public virtual AvoidanceHandlerAbstract
 {
+protected:
+    double rho;
+    double alpha;
+
 public:
     /****************************************************************/
     AvoidanceHandlerVisuo(iKinLimb &limb) : AvoidanceHandlerAbstract(limb)
     {
         type="visuo";
+        rho=0.4;
+        alpha=6.0;
+
+        parameters.unput("rho");
+        parameters.put("rho",rho);
+
+        parameters.unput("alpha");
+        parameters.put("alpha",alpha);
+    }
+
+    /****************************************************************/
+    void setParameters(const Property &parameters)
+    {
+        if (parameters.check("rho"))
+        {
+            rho=parameters.find("rho").asDouble();
+            this->parameters.unput("rho");
+            this->parameters.put("rho",rho);
+        }
+
+        if (parameters.check("alpha"))
+        {
+            alpha=parameters.find("alpha").asDouble();
+            this->parameters.unput("alpha");
+            this->parameters.put("alpha",alpha);
+        }
     }
 
     /****************************************************************/
@@ -464,8 +507,7 @@ public:
                 dist=0.0;
                 d=0.0;
             }
-
-            double rho=0.4; double alpha=6.0;
+            
             double f=1.0/(1.0+exp((d*(2.0/rho)-1.0)*alpha));
             Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF()-1);
             Vector s=J.transposed()*dist;
@@ -496,11 +538,32 @@ public:
 /****************************************************************/
 class AvoidanceHandlerTactile : public virtual AvoidanceHandlerAbstract
 {
+protected:
+    double k;
+
 public:
     /****************************************************************/
     AvoidanceHandlerTactile(iKinLimb &limb) : AvoidanceHandlerAbstract(limb)
     {
         type="tactile";
+
+        // produce 50 deg/s repulsive
+        // velocity for 1 mm of penetration
+        k=50.0/0.001;
+
+        parameters.unput("k");
+        parameters.put("k",k);
+    }
+
+    /****************************************************************/
+    void setParameters(const Property &parameters)
+    {
+        if (parameters.check("k"))
+        {
+            k=parameters.find("k").asDouble();
+            this->parameters.unput("k");
+            this->parameters.put("k",k);
+        }
     }
 
     /****************************************************************/
@@ -516,8 +579,7 @@ public:
             double d=norm(dist);
             if (d>=obstacle.radius)
                 continue;
-
-            double k=50.0/0.001;    // produce 50 deg/s repulsive velocity for 1 mm of penetration
+            
             double f=k*(obstacle.radius-d);
             Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF()-1);
             Vector s=(-f/d)*(J.transposed()*dist);
@@ -555,6 +617,13 @@ public:
                                                    AvoidanceHandlerTactile(limb)
     {
         type="visuo-tactile";
+    }
+
+    /****************************************************************/
+    void setParameters(const Property &parameters)
+    {
+        AvoidanceHandlerVisuo::setParameters(parameters);
+        AvoidanceHandlerTactile::setParameters(parameters);
     }
 
     /****************************************************************/
@@ -640,6 +709,7 @@ int main(int argc, char *argv[])
         return 1;
     }
     yInfo()<<"Avoidance-Handler="<<avhdl->getType();
+    yInfo()<<"Avoidance Parameters="<<avhdl->getParameters().toString();
 
     double dt=0.01;
     double T=1.0;
