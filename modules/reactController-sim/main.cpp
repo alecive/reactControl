@@ -229,8 +229,8 @@ public:
         if (new_x)
         {
             for (size_t i=0; i<v.length(); i++)
-                v[i]=x[i];
-            delta_x=xr-(x0+dt*(J0*v));
+                v[i]=x[i]; //x are the primal variables optimized by Ipopt - in this case they are the joint velocities
+            delta_x=xr-(x0+dt*(J0*v)); //difference between target position and new end-eff position
         }
     }
 
@@ -414,10 +414,11 @@ public:
     /****************************************************************/
     void updateCtrlPoints()
     {
-        // i>0: original chain is up-to-date
+        // i>0: original chain (one to the end-effector) is up-to-date
         for (size_t i=1; i<chainCtrlPoints.size(); i++)
             for (size_t j=0; j<chainCtrlPoints[i]->getDOF(); j++)
-                chainCtrlPoints[i]->setAng(j,chain(j).getAng());
+                chainCtrlPoints[i]->setAng(j,chain(j).getAng()); //updating the local chains with current config of the orig chain - 
+                //only for joint values in the local (possibly shorter) chain
     }
 
     /****************************************************************/
@@ -662,12 +663,12 @@ int main(int argc, char *argv[])
 
     iCubArm arm("left");
     iKinChain &chain=*arm.asChain();
-    chain.releaseLink(0);
+    chain.releaseLink(0); //releasing torso links that are blocked by dafault
     chain.releaseLink(1);
     chain.releaseLink(2);
 
     Vector q0(chain.getDOF(),0.0);
-    q0[3]=-25.0; q0[4]=20.0; q0[6]=50.0;
+    q0[3]=-25.0; q0[4]=20.0; q0[6]=50.0; //setting shoulder position
     chain.setAng(CTRL_DEG2RAD*q0);
 
     Matrix lim(chain.getDOF(),2);
@@ -757,7 +758,7 @@ int main(int argc, char *argv[])
         nlp->set_v0(v);
         nlp->init();
         Ipopt::ApplicationReturnStatus status=app->OptimizeTNLP(GetRawPtr(nlp));
-        v=nlp->get_result();
+        v=nlp->get_result(); //updating the joint velocities with the output from optimizer
 
         xee=chain.EndEffPosition(CTRL_DEG2RAD*motor.move(v));
 
