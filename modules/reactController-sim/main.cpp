@@ -51,13 +51,13 @@ class ControllerNLP : public Ipopt::TNLP
 {
     iKinChain &chain;
 
-    Vector xr;
-    Vector x0;
+    Vector xr; //target position
+    Vector x0; // current end-effector position
     Vector delta_x;
     Vector v0;
-    Matrix v_lim;
+    Matrix v_lim; //velocity limits, #rows ~ #DOF, first column minima, 2nd column maxima; in radians 
     Matrix bounds;
-    Matrix J0;
+    Matrix J0; //end-effector Jacobian for position (leaving orientation aside)
     Vector v;
     double dt;
 
@@ -181,7 +181,7 @@ public:
     void init()
     {
         x0=chain.EndEffPosition();
-        J0=chain.GeoJacobian().submatrix(0,2,0,chain.getDOF()-1);
+        J0=chain.GeoJacobian().submatrix(0,2,0,chain.getDOF()-1); //first 3 rows ~ delta position; 
         computeBounds();
     }
 
