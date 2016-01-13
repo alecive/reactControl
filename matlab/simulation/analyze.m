@@ -1,6 +1,7 @@
 % Author: Ugo Pattacini
 
-% param file - columns: 1:#DOF, then joint pos min max for every DOF
+% param file - columns: 1:#DOF, then joint pos min max for every DOF, then
+% joint vel limits for every DOF
 d_params=importdata('param.log');
 % data file -  in columns on the output for 10 DOF case: 1:time, 2:4 target, 5:8 obstacle, 9:18 joint velocities, 19:28 joint pos, 29:end - control points   
 d_n=importdata('none.log');
@@ -102,9 +103,9 @@ plot([t(1) t(end)],[r r],'r--');
 %% joint values vs. joint limits
 if(d_params(1) == 10) % 10 DOF situation - 3 torso, 7 arm
     data = [];
-    f3 = figure(3); set(f3,'Color','white','Name','No avoidance'); clf(f3); 
-    f4 = figure(4); set(f4,'Color','white','Name','Visual avoidance'); clf(f4); 
-    f5 = figure(5); set(f5,'Color','white','Name','Tactile avoidance'); clf(f5); 
+    f3 = figure(3); clf(f3); set(f3,'Color','white','Name','No avoidance');  
+    f4 = figure(4); clf(f4); set(f4,'Color','white','Name','Visual avoidance');  
+    f5 = figure(5); clf(f5); set(f5,'Color','white','Name','Tactile avoidance');  
 
     for i=1:3 % for all variants of the simulation
         switch i
@@ -210,6 +211,124 @@ if(d_params(1) == 10) % 10 DOF situation - 3 torso, 7 arm
         plot(data(:,1),d_params(21),'r--'); % max joint pos limit
         xlabel('t [s]');
         ylabel('angle [deg]');
+        title('2nd wrist joint');
+        hold off;
+    end
+    
+end
+
+
+%% joint velocities vs. joint vel limits
+if(d_params(1) == 10) % 10 DOF situation - 3 torso, 7 arm
+    data = [];
+    f6 = figure(6); clf(f6); set(f6,'Color','white','Name','No avoidance');  
+    f7 = figure(7); clf(f7); set(f7,'Color','white','Name','Visual avoidance');  
+    f8 = figure(8); clf(f8); set(f8,'Color','white','Name','Tactile avoidance');  
+
+    for i=1:3 % for all variants of the simulation
+        switch i
+            case 1 
+                set(0, 'currentfigure', f6); 
+                data = d_n;
+            case 2 
+                set(0, 'currentfigure', f7); 
+                data = d_v;
+            case 3 
+                set(0, 'currentfigure', f8); 
+                data = d_t;
+        end
+        
+        %torso joints
+        subplot(4,3,1); hold on;
+        plot(data(:,1),data(:,9));
+        plot(data(:,1),d_params(22),'r--'); % min joint pos limit
+        plot(data(:,1),d_params(23),'r--'); % max joint pos limit
+        %xlabel('t [s]');
+        ylabel('joint velocity [deg/s]');
+        title('1st torso joint (pitch)');
+        hold off;
+        
+        subplot(4,3,2); hold on;
+        plot(data(:,1),data(:,10));
+        plot(data(:,1),d_params(24),'r--'); % min joint pos limit
+        plot(data(:,1),d_params(25),'r--'); % max joint pos limit
+        xlabel('t [s]');
+        %ylabel('joint velocity [deg/s]');
+        title('2nd torso joint (roll)');
+        hold off;
+        
+        subplot(4,3,3); hold on;
+        plot(data(:,1),data(:,11));
+        plot(data(:,1),d_params(26),'r--'); % min joint pos limit
+        plot(data(:,1),d_params(27),'r--'); % max joint pos limit
+        %xlabel('t [s]');
+        %ylabel('joint velocity [deg/s]');
+        title('3rd torso joint (yaw)');
+        hold off;
+        
+        %shoulder joints
+        subplot(4,3,4); hold on;
+        plot(data(:,1),data(:,12));
+        plot(data(:,1),d_params(28),'r--'); % min joint pos limit
+        plot(data(:,1),d_params(29),'r--'); % max joint pos limit
+        %xlabel('t [s]');
+        ylabel('joint velocity [deg/s]');
+        title('1st shoulder joint');
+        hold off;
+        
+        subplot(4,3,5); hold on;
+        plot(data(:,1),data(:,13));
+        plot(data(:,1),d_params(30),'r--'); % min joint pos limit
+        plot(data(:,1),d_params(31),'r--'); % max joint pos limit
+        %xlabel('t [s]');
+        %ylabel('joint velocity [deg/s]');
+        title('2nd shoulder joint');
+        hold off;
+        
+        subplot(4,3,6); hold on;
+        plot(data(:,1),data(:,14));
+        plot(data(:,1),d_params(32),'r--'); % min joint pos limit
+        plot(data(:,1),d_params(33),'r--'); % max joint pos limit
+        xlabel('t [s]');
+        %ylabel('joint velocity [deg/s]');
+        title('3rd shoulder joint');
+        hold off;
+        
+        % elbow joints
+        subplot(4,3,7); hold on;
+        plot(data(:,1),data(:,15));
+        plot(data(:,1),d_params(34),'r--'); % min joint pos limit
+        plot(data(:,1),d_params(35),'r--'); % max joint pos limit
+        xlabel('t [s]');
+        ylabel('joint velocity [deg/s]');
+        title('1st elbow joint');
+        hold off;
+        
+        subplot(4,3,8); hold on;
+        plot(data(:,1),data(:,16));
+        plot(data(:,1),d_params(36),'r--'); % min joint pos limit
+        plot(data(:,1),d_params(37),'r--'); % max joint pos limit
+        xlabel('t [s]');
+        ylabel('angle [deg]');
+        title('2nd elbow joint');
+        hold off;
+      
+        %wrist joints
+        subplot(4,3,10); hold on;
+        plot(data(:,1),data(:,17));
+        plot(data(:,1),d_params(38),'r--'); % min joint pos limit
+        plot(data(:,1),d_params(39),'r--'); % max joint pos limit
+        xlabel('t [s]');
+        ylabel('joint velocity [deg/s]');
+        title('1st wrist joint');
+        hold off;
+        
+        subplot(4,3,11); hold on;
+        plot(data(:,1),data(:,18));
+        plot(data(:,1),d_params(40),'r--'); % min joint pos limit
+        plot(data(:,1),d_params(41),'r--'); % max joint pos limit
+        xlabel('t [s]');
+        ylabel('joint velocity [deg/s]');
         title('2nd wrist joint');
         hold off;
     end

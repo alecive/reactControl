@@ -747,6 +747,12 @@ int main(int argc, char *argv[])
         fout_param<<CTRL_RAD2DEG*chain(i).getMin()<<" ";
         fout_param<<CTRL_RAD2DEG*chain(i).getMax()<<" ";
     }
+    for (size_t i=0; i<chain.getDOF(); i++)
+    {
+        fout_param<<v_lim(i,0)<<" ";
+        fout_param<<v_lim(i,1)<<" ";
+    }
+    
             
     std::signal(SIGINT,signal_handler);
     for (double t=0.0; t<sim_time; t+=dt)
