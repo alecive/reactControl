@@ -744,8 +744,8 @@ int main(int argc, char *argv[])
     fout_param<<chain.getDOF()<<" ";
     for (size_t i=0; i<chain.getDOF(); i++)
     {
-        fout_param<<chain(i).getMin()<<" ";
-        fout_param<<chain(i).getMax()<<" ";
+        fout_param<<CTRL_RAD2DEG*chain(i).getMin()<<" ";
+        fout_param<<CTRL_RAD2DEG*chain(i).getMax()<<" ";
     }
             
     std::signal(SIGINT,signal_handler);
@@ -789,7 +789,7 @@ int main(int argc, char *argv[])
               (CTRL_RAD2DEG*chain.getAng()).toString(3,3)<<" "<<
               strCtrlPoints.str()<<
               endl;
-
+              //in columns on the output for 10 DOF case: 1:time, 2:4 target, 5:8 obstacle, 9:18 joint velocities, 19:28 joint pos, 29:end - control points     
         if (gSignalStatus==SIGINT)
         {
             yWarning("SIGINT detected: exiting ...");
