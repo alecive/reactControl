@@ -735,9 +735,19 @@ int main(int argc, char *argv[])
     vo[2]=-0.1;
     Obstacle obstacle(xo,0.07,vo,dt);
 
-    ofstream fout;
+    ofstream fout_param; //log parameters that stay constant during the simulation, but are important for analysis - e.g. joint limits 
+    ofstream fout; //to log data every iteration
+    
+    fout_param.open("param.log");
     fout.open("data.log");
-
+    
+    fout_param<<chain.getDOF()<<" ";
+    for (size_t i=0; i<chain.getDOF(); i++)
+    {
+        fout_param<<chain(i).getMin()<<" ";
+        fout_param<<chain(i).getMax()<<" ";
+    }
+            
     std::signal(SIGINT,signal_handler);
     for (double t=0.0; t<sim_time; t+=dt)
     {
