@@ -661,11 +661,13 @@ int main(int argc, char *argv[])
     rf.setDefaultConfigFile("reactController-sim.ini");
     rf.configure(argc,argv);
 
+    int verbosity = rf.check("verbosity",Value(0)).asInt();
     double sim_time=rf.check("sim-time",Value(10.0)).asDouble();
-    double motor_tau=rf.check("motor-tau",Value(0.0)).asDouble();
-    string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();    
+    double motor_tau=rf.check("motor-tau",Value(0.0)).asDouble(); //motor transfer function
+    string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();   //none | visuo | tactile 
+    string target_type=rf.check("target-type",Value("moving-circular")).asString(); // moving-circular | static
 
-    yInfo("Starting with the following parameters: \n sim-time: %f \n motor-tau: %f \n avoidance-type: %s \n",sim_time,motor_tau,avoidance_type.c_str());
+    yInfo("Starting with the following parameters: \n verbosity: %d \n sim-time: %f \n motor-tau: %f \n avoidance-type: %s \n target-type: %s \n",verbosity,sim_time,motor_tau,avoidance_type.c_str(),target_type.c_str());
     
     if (!yarp.checkNetwork())
     {
@@ -733,12 +735,15 @@ int main(int argc, char *argv[])
 
     Vector xee=chain.EndEffPosition();
     minJerkTrajGen target(xee,dt,T);
-    Vector xc(3);
+    Vector xc(3); //center of target
     xc[0]=-0.35;
     xc[1]=0.0;
     xc[2]=0.1;
-    double rt=0.1;
-
+    double rt=1.0; //target will be moving along circular trajectory with this radius
+    //if (target_type == "moving-circular") double rt=0.1; 
+    if (target_type == "static")
+        rt=0.0; //static target will be "moving" along a trajectory with 0 radius
+    
     Vector xo(3);
     xo[0]=-0.3;
     xo[1]=0.0;
@@ -790,10 +795,12 @@ int main(int argc, char *argv[])
 
         xee=chain.EndEffPosition(CTRL_DEG2RAD*motor.move(v));
 
-        yInfo()<<"        t [s] = "<<t;
-        yInfo()<<"    v [deg/s] = ("<<v.toString(3,3)<<")";
-        yInfo()<<" |xr-xee| [m] = "<<norm(xr-xee);
-        yInfo()<<"";
+        if (verbosity>0){ //this is probably not the right way to do it
+            yInfo()<<"        t [s] = "<<t;
+            yInfo()<<"    v [deg/s] = ("<<v.toString(3,3)<<")";
+            yInfo()<<" |xr-xee| [m] = "<<norm(xr-xee);
+            yInfo()<<"";
+        }
 
         ostringstream strCtrlPoints;
         deque<Vector> ctrlPoints=avhdl->getCtrlPointsPosition();
