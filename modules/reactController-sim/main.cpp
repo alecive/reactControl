@@ -654,16 +654,28 @@ void signal_handler(int signal)
 /****************************************************************/
 int main(int argc, char *argv[])
 {
+    yarp::os::Network yarp;
     ResourceFinder rf;
+    rf.setVerbose(true);
+    rf.setDefaultContext("react-control");
+    rf.setDefaultConfigFile("reactController-sim.ini");
     rf.configure(argc,argv);
 
     double sim_time=rf.check("sim-time",Value(10.0)).asDouble();
     double motor_tau=rf.check("motor-tau",Value(0.0)).asDouble();
     string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();    
 
+    yInfo("Starting with the following parameters: \n sim-time: %f \n motor-tau: %f \n avoidance-type: %s \n",sim_time,motor_tau,avoidance_type.c_str());
+    
+    if (!yarp.checkNetwork())
+    {
+        yError("No Network!!!");
+        return -1;
+    }
+    
     iCubArm arm("left");
     iKinChain &chain=*arm.asChain();
-    chain.releaseLink(0); //releasing torso links that are blocked by dafault
+    chain.releaseLink(0); //releasing torso links that are blocked by default
     chain.releaseLink(1);
     chain.releaseLink(2);
 
@@ -762,7 +774,7 @@ int main(int argc, char *argv[])
         xd[2]+=rt*sin(2.0*M_PI*0.3*t);
 
         target.computeNextValues(xd);
-        Vector xr=target.getPos();
+        Vector xr=target.getPos(); //target for end-effector
 
         xo=obstacle.move();
 
