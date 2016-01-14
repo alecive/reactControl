@@ -757,7 +757,7 @@ int main(int argc, char *argv[])
     std::signal(SIGINT,signal_handler);
     for (double t=0.0; t<sim_time; t+=dt)
     {
-        Vector xd=xc;
+        Vector xd=xc; //target moving along circular trajectory
         xd[1]+=rt*cos(2.0*M_PI*0.3*t);
         xd[2]+=rt*sin(2.0*M_PI*0.3*t);
 

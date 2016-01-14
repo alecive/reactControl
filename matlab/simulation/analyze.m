@@ -117,9 +117,9 @@ plot([t(1) t(end)],[r r],'r--');
 %% joint values vs. joint limits
 if(d_params(1) == 10) % 10 DOF situation - 3 torso, 7 arm
     data = [];
-    f3 = figure(3); clf(f3); set(f3,'Color','white','Name','No avoidance');  
-    f4 = figure(4); clf(f4); set(f4,'Color','white','Name','Visual avoidance');  
-    f5 = figure(5); clf(f5); set(f5,'Color','white','Name','Tactile avoidance');  
+    f3 = figure(3); clf(f3); set(f3,'Color','white','Name','Joint positions - No avoidance');  
+    f4 = figure(4); clf(f4); set(f4,'Color','white','Name','Joint positions - Visual avoidance');  
+    f5 = figure(5); clf(f5); set(f5,'Color','white','Name','Joint positions - Tactile avoidance');  
 
     for i=1:3 % for all variants of the simulation
         switch i
@@ -237,9 +237,9 @@ end
 %% joint velocities vs. joint vel limits
 if(d_params(1) == 10) % 10 DOF situation - 3 torso, 7 arm
     data = [];
-    f6 = figure(6); clf(f6); set(f6,'Color','white','Name','No avoidance');  
-    f7 = figure(7); clf(f7); set(f7,'Color','white','Name','Visual avoidance');  
-    f8 = figure(8); clf(f8); set(f8,'Color','white','Name','Tactile avoidance');  
+    f6 = figure(6); clf(f6); set(f6,'Color','white','Name','Joint velocities - No avoidance');  
+    f7 = figure(7); clf(f7); set(f7,'Color','white','Name','Joint velocities - Visual avoidance');  
+    f8 = figure(8); clf(f8); set(f8,'Color','white','Name','Joint velocities - Tactile avoidance');  
 
     for i=1:3 % for all variants of the simulation
         switch i
