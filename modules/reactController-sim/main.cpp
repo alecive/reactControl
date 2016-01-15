@@ -739,7 +739,7 @@ int main(int argc, char *argv[])
     xc[0]=-0.35;
     xc[1]=0.0;
     xc[2]=0.1;
-    double rt=1.0; //target will be moving along circular trajectory with this radius
+    double rt=.1; //target will be moving along circular trajectory with this radius
     //if (target_type == "moving-circular") double rt=0.1; 
     if (target_type == "static")
         rt=0.0; //static target will be "moving" along a trajectory with 0 radius
@@ -779,7 +779,7 @@ int main(int argc, char *argv[])
         xd[2]+=rt*sin(2.0*M_PI*0.3*t);
 
         target.computeNextValues(xd);
-        Vector xr=target.getPos(); //target for end-effector
+        Vector xr=target.getPos(); //target for end-effector - from minJerkTrajGen - lowpassed
 
         xo=obstacle.move();
 
@@ -808,13 +808,14 @@ int main(int argc, char *argv[])
             strCtrlPoints<<ctrlPoints[i].toString(3,3)<<" ";
 
         fout<<t<<" "<<
-              xr.toString(3,3)<<" "<<
+              xd.toString(3,3)<<" "<<
               obstacle.toString()<<" "<<
+              xr.toString(3,3)<<" "<<
               v.toString(3,3)<<" "<<
               (CTRL_RAD2DEG*chain.getAng()).toString(3,3)<<" "<<
               strCtrlPoints.str()<<
               endl;
-              //in columns on the output for 10 DOF case: 1:time, 2:4 target, 5:8 obstacle, 9:18 joint velocities, 19:28 joint pos, 29:end - control points     
+              //in columns on the output for 10 DOF case: 1:time, 2:4 target, 5:8 obstacle, 9:11 end-eff target, 12:21 joint velocities, 22:31 joint pos, 32:end - control points     
         if (gSignalStatus==SIGINT)
         {
             yWarning("SIGINT detected: exiting ...");
