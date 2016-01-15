@@ -24,6 +24,7 @@
 #include <fstream>
 #include <iomanip>
 #include <deque>
+#include <set>
 
 #include <IpTNLP.hpp>
 #include <IpIpoptApplication.hpp>
@@ -347,6 +348,24 @@ public:
     }
 
     /****************************************************************/
+    void setPosition(const Vector &x)
+    {
+        I.reset(x);
+    }
+    
+    /****************************************************************/
+    void setVelocity(const Vector &_v)
+    {
+        v = _v;
+    }
+
+    /****************************************************************/
+    void setRadius(const double r)
+    {
+        radius = r;
+    }
+ 
+    /****************************************************************/
     string toString() const
     {
         ostringstream str;
@@ -666,8 +685,9 @@ int main(int argc, char *argv[])
     double motor_tau=rf.check("motor-tau",Value(0.0)).asDouble(); //motor transfer function
     string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();   //none | visuo | tactile 
     string target_type=rf.check("target-type",Value("moving-circular")).asString(); // moving-circular | static
-
-    yInfo("Starting with the following parameters: \n verbosity: %d \n sim-time: %f \n motor-tau: %f \n avoidance-type: %s \n target-type: %s \n",verbosity,sim_time,motor_tau,avoidance_type.c_str(),target_type.c_str());
+    string obstacle_type=rf.check("obstacle-type",Value("falling")).asString(); //falling | static
+    
+    yInfo("Starting with the following parameters: \n verbosity: %d \n sim-time: %f \n motor-tau: %f \n avoidance-type: %s \n target-type: %s \n obstacle-type: %s \n",verbosity,sim_time,motor_tau,avoidance_type.c_str(),target_type.c_str(),obstacle_type.c_str());
     
     if (!yarp.checkNetwork())
     {
@@ -734,7 +754,7 @@ int main(int argc, char *argv[])
     Vector v(chain.getDOF(),0.0);
 
     Vector xee=chain.EndEffPosition();
-    minJerkTrajGen target(xee,dt,T);
+    //actual target
     Vector xc(3); //center of target
     xc[0]=-0.35;
     xc[1]=0.0;
@@ -744,13 +764,28 @@ int main(int argc, char *argv[])
     if (target_type == "static")
         rt=0.0; //static target will be "moving" along a trajectory with 0 radius
     
-    Vector xo(3);
-    xo[0]=-0.3;
-    xo[1]=0.0;
-    xo[2]=0.4;
-    Vector vo(3,0.0);
-    vo[2]=-0.1;
+    minJerkTrajGen target(xee,dt,T); //target for end-effector
+    
+    
+    Vector xo(3); //obstacle position
+    Vector vo(3,0.0); //obstacle velocity
     Obstacle obstacle(xo,0.07,vo,dt);
+    if (obstacle_type == "falling"){
+        xo[0]=-0.3;
+        xo[1]=0.0;
+        xo[2]=0.4;
+        vo[2]=-0.1;
+        obstacle.setPosition(xo);
+        obstacle.setVelocity(vo);
+    }
+    else if(obstacle_type == "static"){
+        xo[0]=-0.35;
+        xo[1]=-0.05;
+        xo[2]=0.02;
+        obstacle.setPosition(xo);
+        obstacle.setRadius(0.04);
+    }
+    
 
     ofstream fout_param; //log parameters that stay constant during the simulation, but are important for analysis - e.g. joint limits 
     ofstream fout; //to log data every iteration
@@ -779,7 +814,7 @@ int main(int argc, char *argv[])
         xd[2]+=rt*sin(2.0*M_PI*0.3*t);
 
         target.computeNextValues(xd);
-        Vector xr=target.getPos(); //target for end-effector - from minJerkTrajGen - lowpassed
+        Vector xr=target.getPos(); //target for end-effector - from minJerkTrajGen
 
         xo=obstacle.move();
 
