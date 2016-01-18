@@ -27,7 +27,7 @@ xd=data(:,2:4); % target
 xo=data(:,5:8); % obstacle
 xr=data(:,9:11); % end-effector target
 q=data(:,22:22+10-1); % joint angles
-ctrlp=data(:,22+10:end); % ctrl points
+ctrlp=data(:,52:end); % ctrl points
 
 P{1}.A =0.032;      P{1}.D =0;        P{1}.alpha =pi/2;  P{1}.offset =0;
 P{2}.A =0;          P{2}.D =-0.0055;  P{2}.alpha =pi/2;  P{2}.offset =-pi/2;
