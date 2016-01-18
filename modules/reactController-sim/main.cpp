@@ -781,7 +781,7 @@ int main(int argc, char *argv[])
     else if(obstacle_type == "static"){
         xo[0]=-0.35;
         xo[1]=-0.05;
-        xo[2]=0.02;
+        xo[2]=0.04;
         obstacle.setPosition(xo);
         obstacle.setRadius(0.04);
     }
@@ -837,20 +837,27 @@ int main(int argc, char *argv[])
             yInfo()<<"";
         }
 
+        ostringstream strVLIM;
+        for (size_t i=0; i<VLIM.rows(); i++)
+            strVLIM<<VLIM.getRow(i).toString()<<" ";
+        
         ostringstream strCtrlPoints;
         deque<Vector> ctrlPoints=avhdl->getCtrlPointsPosition();
         for (size_t i=0; i<ctrlPoints.size(); i++)
             strCtrlPoints<<ctrlPoints[i].toString(3,3)<<" ";
 
+        fout.setf(std::ios::fixed, std::ios::floatfield);
+        fout<<setprecision(3);
         fout<<t<<" "<<
               xd.toString(3,3)<<" "<<
               obstacle.toString()<<" "<<
               xr.toString(3,3)<<" "<<
               v.toString(3,3)<<" "<<
               (CTRL_RAD2DEG*chain.getAng()).toString(3,3)<<" "<<
+              strVLIM.str()<<
               strCtrlPoints.str()<<
               endl;
-              //in columns on the output for 10 DOF case: 1:time, 2:4 target, 5:8 obstacle, 9:11 end-eff target, 12:21 joint velocities, 22:31 joint pos, 32:end - control points     
+              //in columns on the output for 10 DOF case: 1:time, 2:4 target, 5:8 obstacle, 9:11 end-eff target, 12:21 joint velocities, 22:31 joint pos,   32:51 joint vel limits set by avoidance handler (joint1_min, joint1_max, joint2_min, ...., joint10_min, joint10_max) , 52:end - current control points' (x,y,z) pos in Root FoR for each control point
         if (gSignalStatus==SIGINT)
         {
             yWarning("SIGINT detected: exiting ...");

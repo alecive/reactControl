@@ -65,7 +65,9 @@ hg4=[];
 set(hfig,'CloseRequestFcn',@Quit);
 
 if save_movie
-    writer=VideoWriter('movie','MPEG-4');
+    %writer=VideoWriter('movie','MPEG-4');
+    writer=VideoWriter('movie','Motion JPEG AVI');
+    %writer=VideoWriter('movie','Uncompressed AVI');
     writer.FrameRate=10;
     open(writer);
 end
@@ -184,7 +186,7 @@ function PlotQuantities(obj,event,string_arg) %#ok<INUSD>
 
 global t t0;
 global xd xo xr q ctrlp;
-global hax hg1 hg2 hg3;
+global hax hg1 hg2 hg3 hg4;
 global save_movie save_pics writer tm;
 
 dt=cputime-t0;
@@ -207,6 +209,11 @@ if ~isempty(hg3)
     delete(hg3)
 end
 
+
+if ~isempty(hg4)
+    delete(hg4)
+end
+
 [x,axpoint]=fkin(q(i,:));
 hg1=drawArm(x,axpoint,ctrlp(i,:)); % draws the whole "arm" - in fact whole chain from root to end-eff
 hg2=plot3(hax,xr(i,1),xr(i,2),xr(i,3),'go','LineWidth',5); % plots the enf-eff target
@@ -214,8 +221,11 @@ hg2=plot3(hax,xr(i,1),xr(i,2),xr(i,3),'go','LineWidth',5); % plots the enf-eff t
 n=10;
 [x,y,z]=sphere(n); r=xo(i,4);
 c(:,:,1)=ones(n); c(:,:,2)=zeros(n); c(:,:,3)=zeros(n);
-hg3=surf(hax,xo(i,1)+r*x,xo(i,2)+r*y,xo(i,3)+r*z,c,'EdgeColor','none');
+hg3=surf(hax,xo(i,1)+r*x,xo(i,2)+r*y,xo(i,3)+r*z,c,'EdgeColor','none'); % plots the end-eff target
 alpha(hg3,0.2);
+
+hg4=plot3(hax,xd(i,1),xd(i,2),xd(i,3),'go','LineWidth',10); % plots the actual target
+
 drawnow;
 
 if save_movie
