@@ -8,6 +8,7 @@ save_figs = true;
 
 %path_prefix = 'circular_target/'; %'static_target/';
 path_prefix = 'staticTarget_staticObst/obstRad_0.04_pos_-0.35_-0.05_0.04/';
+%path_prefix = 'staticTarget_staticObst/obstRad_0.04_pos_-0.35_-0.05_0.02/';
 
 if save_figs
   mkdir('output'); 
@@ -18,7 +19,8 @@ end
 d_params=importdata([path_prefix 'param.log']);
 % data file -  in columns on the output for 10 DOF case: 1:time, 2:4 target, 5:8 obstacle, 9:11 end-eff target, 12:21 joint velocities, 22:31 joint pos, 32:end - control points
 d_n=importdata([path_prefix 'none.log']);
-d_v=importdata([path_prefix 'visuo.log']);
+d_v=importdata([path_prefix 'visuoSscalingGain4.log']);
+%d_v=importdata([path_prefix 'visuo.log']);
 d_t=importdata([path_prefix 'tactile.log']);
 
 if(d_params(1) == 10) % 10 DOF situation - 3 torso, 7 arm
@@ -69,9 +71,9 @@ end
 
 n=10;
 [x,y,z]=sphere(n);
-c(:,:,1)=ones(n); c(:,:,1) = c(:,:,1) * .8; % make the obstacle 'pale red' 
-c(:,:,2)=ones(n); c(:,:,2) = c(:,:,2) * .5;
-c(:,:,3)=ones(n); c(:,:,3) = c(:,:,3) * .5;
+c(:,:,1)=ones(n); c(:,:,1) = c(:,:,1) * .9; % make the obstacle 'pale red' 
+c(:,:,2)=ones(n); c(:,:,2) = c(:,:,2) * .7;
+c(:,:,3)=ones(n); c(:,:,3) = c(:,:,3) * .7;
 % obstacle
 for i=1:10:L
     r=d_n(i,8);
