@@ -520,7 +520,7 @@ public:
         double sScalingGain = 4.0;
 
         Matrix VLIM=v_lim;
-        yDebug("AvoidanceHandlerVisuo::getVLIM: adapting VLIM: \n");
+        //yDebug("AvoidanceHandlerVisuo::getVLIM: adapting VLIM: \n");
         for (size_t i=0; i<ctrlPoints.size(); i++)
         {
             Vector dist=xo-ctrlPoints[i];
@@ -544,38 +544,39 @@ public:
             Vector s=J.transposed()*(distNormalized); //Matej: adding the normalization of distance- Eq. 13 in Flacco
 
             yAssert((f>=0.0) && (f<=1.0));
-            printf("    control point %d:  collision risk (f): %f, \n   J: \n %s \ns = J.transposed * distNormalized\n   (%s)T = \n (%s) * \n (%s)T\n",i,f,J.toString(3,3).c_str(),s.toString(3,3).c_str(),J.transposed().toString(3,3).c_str(),distNormalized.toString(3,3).c_str());
+            //printf("    control point %d:  collision risk (f): %f, \n   J: \n %s \ns = J.transposed * distNormalized\n   (%s)T = \n (%s) * \n (%s)T\n",i,f,J.toString(3,3).c_str(),s.toString(3,3).c_str(),J.transposed().toString(3,3).c_str(),distNormalized.toString(3,3).c_str());
             Vector rowNorms(J.rows(),0.0);
         
-            if(scalingBySnorm)
+            if(scalingBySnorm){
                 sNorm = norm(s);
-            printf("norm s: %f \n",norm(s));
+                //printf("norm s: %f \n",norm(s));
+            }
             for (size_t j=0; j<s.length(); j++)
             {
-                printf("        Joint: %d, s[j]: %f, limits before: Min: %f, Max: %f\n",j,s[j],VLIM(j,0),VLIM(j,1));
+                //printf("        Joint: %d, s[j]: %f, limits before: Min: %f, Max: %f\n",j,s[j],VLIM(j,0),VLIM(j,1));
                 if (s[j]>=0.0)
                 {
                     if(scalingBySnorm){
                         sScaling = std::min(1.0,abs(s[j]) / sNorm * sScalingGain);
-                        printf("            s>=0 clause, scaling of f term min(1, abs(s[j])/sNorm*sScalingGain)  = %f = min(1.0, %f * %f) = min(1.0,%f)\n",sScaling,abs(s[j])/sNorm,sScalingGain,abs(s[j])/sNorm*sScalingGain);
+                        //printf("            s>=0 clause, scaling of f term min(1, abs(s[j])/sNorm*sScalingGain)  = %f = min(1.0, %f * %f) = min(1.0,%f)\n",sScaling,abs(s[j])/sNorm,sScalingGain,abs(s[j])/sNorm*sScalingGain);
                     }
                     double tmp=v_lim(j,1)*(1.0 - f*sScaling);
-                    printf("        New max limit candidate: %f = %f * (1 - %f * %f) = %f * (1-%f),",tmp,v_lim(j,1),f,sScaling,v_lim(j,1),f*sScaling);
+                    //printf("        New max limit candidate: %f = %f * (1 - %f * %f) = %f * (1-%f),",tmp,v_lim(j,1),f,sScaling,v_lim(j,1),f*sScaling);
                     VLIM(j,1)=std::min(VLIM(j,1),tmp);
                     VLIM(j,0)=std::min(VLIM(j,0),VLIM(j,1));
-                    printf("            s>=0 clause, limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
+                    //printf("            s>=0 clause, limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
                 }
                 else
                 {
                     if(scalingBySnorm){
                         sScaling = std::min(1.0,abs(s[j]) / sNorm * sScalingGain);
-                        printf("        s<0 clause, scaling of f term min(1, abs(s[j])/sNorm*sScalingGain)  = %f = min(1.0, %f * %f) = min(1.0,%f)\n",sScaling,abs(s[j])/sNorm,sScalingGain,abs(s[j])/sNorm*sScalingGain);
+                        //printf("        s<0 clause, scaling of f term min(1, abs(s[j])/sNorm*sScalingGain)  = %f = min(1.0, %f * %f) = min(1.0,%f)\n",sScaling,abs(s[j])/sNorm,sScalingGain,abs(s[j])/sNorm*sScalingGain);
                     }
                     double tmp=v_lim(j,0)*(1.0 - f*sScaling);
-                    printf("            New min limit candidate: %f = %f * (1 - %f * %f) = %f * (1-%f),",tmp,v_lim(j,0),f,sScaling,v_lim(j,0),f*sScaling);
+                    //printf("            New min limit candidate: %f = %f * (1 - %f * %f) = %f * (1-%f),",tmp,v_lim(j,0),f,sScaling,v_lim(j,0),f*sScaling);
                     VLIM(j,0)=std::max(VLIM(j,0),tmp);
                     VLIM(j,1)=std::max(VLIM(j,0),VLIM(j,1));
-                    printf("            s<0 clause, limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
+                    //printf("            s<0 clause, limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
                 }
             }
         }
@@ -841,7 +842,7 @@ int main(int argc, char *argv[])
     std::signal(SIGINT,signal_handler);
     for (double t=0.0; t<sim_time; t+=dt)
     {
-        yDebug("\n**************************************\n main loop:t: %f s \n",t);
+        //printf("\n**************************************\n main loop:t: %f s \n",t);
         Vector xd=xc; //target moving along circular trajectory
         xd[1]+=rt*cos(2.0*M_PI*0.3*t);
         xd[2]+=rt*sin(2.0*M_PI*0.3*t);

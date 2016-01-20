@@ -7,8 +7,8 @@ visualize_single_joint_in_detail = true;
 save_figs = true;
 
 %path_prefix = 'circular_target/'; %'static_target/';
-path_prefix = 'staticTarget_staticObst/obstRad_0.04_pos_-0.35_-0.05_0.04/';
-%path_prefix = 'staticTarget_staticObst/obstRad_0.04_pos_-0.35_-0.05_0.02/';
+%path_prefix = 'staticTarget_staticObst/obstRad_0.04_pos_-0.35_-0.05_0.04/';
+path_prefix = 'staticTarget_staticObst/obstRad_0.04_pos_-0.35_-0.05_0.02/';
 
 if save_figs
   mkdir('output'); 
