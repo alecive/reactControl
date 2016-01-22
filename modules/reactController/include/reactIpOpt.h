@@ -32,13 +32,7 @@
 
 #include <iCub/skinDynLib/common.h>
 
-struct collisionPoint_t{
-        iCub::skinDynLib::SkinPart skin_part;
-        yarp::sig::Vector x; //position (x,y,z) in the FoR of the respective skin part
-        yarp::sig::Vector n; //normal vector at that point - derived from taxel normals, pointing out of the skin
-        double magnitude; // ~ activation level from probabilistic representation in pps - likelihood of collision
-};
-    
+   
 
 /**
 *

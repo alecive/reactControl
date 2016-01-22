@@ -311,7 +311,14 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
         convertPosFromRootToSimFoR(x_n,x_n_sim);
         moveSphere(2,x_n_sim); //sphere created as second (particle) will keep the index 2  
     }
-         
+    
+    TODO here we should do something like 
+      avhdl->updateCtrlPoints();
+        Matrix VLIM=avhdl->getVLIM(obstacle,v_lim);
+
+        nlp->set_xr(xr);
+        nlp->set_v_lim(VLIM);
+    
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
     // So, q_dot_0 is in degrees, but I have to convert it in radians before sending it to ipopt
