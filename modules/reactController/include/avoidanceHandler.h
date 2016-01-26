@@ -21,12 +21,19 @@
 #ifndef __AVOIDANCEHANDLER_H__
 #define __AVOIDANCEHANDLER_H__
 
+#include <vector>
+#include <deque>
+
+#include <stdarg.h>
+#include <string>
+
 #include <yarp/sig/all.h>
 #include <yarp/math/Math.h>
+#include <yarp/os/Property.h>
 
 #include <iCub/iKin/iKinFwd.h>
+#include <iCub/skinDynLib/common.h>
 
-#include <vector>
 
 struct collisionPoint_t{
         iCub::skinDynLib::SkinPart skin_part;
@@ -38,29 +45,40 @@ struct collisionPoint_t{
 /****************************************************************/
 class AvoidanceHandlerAbstract
 {
-protected:
-    string type;
-    iKinChain &chain;
-    std::vector<collisionPoint_t> &collisionPoints;
-    deque<iKinChain*> chainCtrlPoints;
-    Property parameters;
+
 
 public:
-    AvoidanceHandlerAbstract(iKinLimb &limb, const std::vector<collisionPoint_t> &_collisionPoints);
+    AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_collisionPoints, const unsigned int _verbosity=0);
     
-    string getType() const;
+    std::string getType() const;
 
-    virtual Property getParameters() const;
+    virtual yarp::os::Property getParameters() const;
     
-    virtual void setParameters(const Property &parameters);
+    virtual void setParameters(const yarp::os::Property &parameters);
     
-    void updateCtrlPoints();
+    std::deque<yarp::sig::Vector> getCtrlPointsPosition();
     
-    deque<Vector> getCtrlPointsPosition();
-    
-    virtual Matrix getVLIM(const Matrix &v_lim);
+    virtual yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim);
     
     virtual ~AvoidanceHandlerAbstract();
+    
+ protected:
+    unsigned int verbosity;
+    std::string type;
+    iCub::iKin::iKinChain chain;
+    const std::vector<collisionPoint_t> &collisionPoints;
+    std::deque<iCub::iKin::iKinChain*> chainCtrlPoints;
+    yarp::os::Property parameters;
+    
+    bool computeFoR(const yarp::sig::Vector &pos, const yarp::sig::Vector &norm, yarp::sig::Matrix &FoR);
+    
+    /**
+    * Prints a message according to the verbosity level:
+    * @param l is the level of verbosity: if verbosity >= l, something is printed
+    * @param f is the text. Please use c standard (like printf)
+    */
+    int printMessage(const int l, const char *f, ...) const;
+    
 };
 
 
@@ -68,14 +86,16 @@ public:
 /****************************************************************/
 class AvoidanceHandlerTactile : public virtual AvoidanceHandlerAbstract
 {
-protected:
-    double avoidingVelocity;
 
 public:
-    AvoidanceHandlerTactile(iKinLimb &limb,const std::vector<collisionPoint_t> &_collisionPoints);
-    void setParameters(const Property &parameters);
-    Matrix getVLIM(const Matrix &v_lim);
-   
+    AvoidanceHandlerTactile(const iCub::iKin::iKinChain &_chain,const std::vector<collisionPoint_t> &_collisionPoints,const unsigned int _verbosity=0);
+    void setParameters(const yarp::os::Property &parameters);
+    yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim);
+
+protected:
+    double avoidingSpeed;
+
+    
 };
 
 

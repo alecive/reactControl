@@ -60,26 +60,27 @@ protected:
     unsigned int dim;
 
     // The desired position to attain
-    yarp::sig::Vector &xd;
+    yarp::sig::Vector xd;
     // The current position
     yarp::sig::Vector x0;
 
     // The delta T with which ipopt needs to solve the task - time in the task, not comp. time - delta x = delta T * J * q_dot 
-    double &dT;
+    double dT;
 
-    // The maximum allowed speed at the joints
-    double V_max;
-    
+  
+    //N.B. Here within IPOPT, we will keep everyting in radians - joint pos in rad, joint vel in rad/s; same for limits 
     // The desired final joint velocities - the solution of this iteration 
     yarp::sig::Vector q_dot_d;
     // The initial joint velocities - solution from prev. step 
     yarp::sig::Vector q_dot_0;
     // The current joint velocities - for internal steps of ipopt, not carrying a particular meaning
     yarp::sig::Vector q_dot;
-
     // The current joint configuration
     yarp::sig::Vector q_t;
-
+    // The maximum allowed speed at the joints; joints in rows; first col minima, second col maxima
+    //They may be set adaptively by avoidanceHandler from the outside
+    yarp::sig::Matrix v_lim;
+    
     // The cost function
     yarp::sig::Vector cost_func;
     // The gradient of the cost function
@@ -209,42 +210,6 @@ protected:
     }
     
     
-    //creates a full transform as given by a DCM matrix at the pos and norm w.r.t. the original frame, from the pos and norm (one axis set arbitrarily)  
-    bool computeFoR(const yarp::sig::Vector &pos, const yarp::sig::Vector &norm, yarp::sig::Matrix &FoR)
-    {
-        if (norm == zeros(3))
-        {
-            FoR=eye(4);
-            return false;
-        }
-        
-        // Set the proper orientation for the touching end-effector
-        yarp::sig::Vector x(3,0.0), z(3,0.0), y(3,0.0);
-
-        z = norm;
-        if (z[0] == 0.0)
-        {
-            z[0] = 0.00000001;    // Avoid the division by 0
-        }
-        y[0] = -z[2]/z[0]; //y is in normal plane
-        y[2] = 1; //this setting is arbitrary
-        x = -1*(cross(z,y));
-
-        // Let's make them unitary vectors:
-        x = x / yarp::math::norm(x);
-        y = y / yarp::math::norm(y);
-        z = z / yarp::math::norm(z);
-
-        FoR=eye(4);
-        FoR.setSubcol(x,0,0);
-        FoR.setSubcol(y,0,1);
-        FoR.setSubcol(z,0,2);
-        FoR.setSubcol(pos,0,3);
-
-        return true;
-    }
-    
-
     /********to ensure joint pos limits but in a smooth way around the limits****************************************/
     void computeGuard()
     {
@@ -293,9 +258,9 @@ protected:
 public:
     /***** 8 pure virtual functions from TNLP class need to be implemented here **********/
     /************************************************************************/
-    react_NLP(iKinChain &c, yarp::sig::Vector &_xd, yarp::sig::Vector &_q_dot_0,
-             double &_dT, double &_vM, const std::vector<collisionPoint_t> & _collision_points, int _verbosity) : chain(c),
-             q_dot_0(_q_dot_0), dT(_dT), xd(_xd), collisionPoints(_collision_points), verbosity(_verbosity), V_max(_vM)
+    react_NLP(iKinChain &c, const yarp::sig::Vector &_xd, const yarp::sig::Vector &_q_dot_0,
+             double _dT, const yarp::sig::Matrix &_v_lim, const std::vector<collisionPoint_t> & _collision_points, int _verbosity) : chain(c),
+             xd(_xd), q_dot_0(_q_dot_0), dT(_dT), v_lim(_v_lim), collisionPoints(_collision_points), verbosity(_verbosity) 
     {
         name="react_NLP";
 
@@ -309,7 +274,7 @@ public:
         yarp::sig::Matrix H=chain.getH();
         x0=H.subcol(0,3,3);
 
-        dim=chain.getDOF(); //e.g. 7 for the arm joints, 10 if torso is included
+        dim=chain.getDOF(); //only active (not blocked) joints - e.g. 7 for the arm joints, 10 if torso is included
         if (!((dim == 7) || (dim == 10)) ){ 
             yError("react_NLP(): unexpected nr DOF on the chain : %d\n",dim);
         }
@@ -384,22 +349,19 @@ public:
                          Number* g_u)
     {
         //x_l, x_u - limits for the primal variables - in our case joint velocities
-        setSafetyMarginJointVelLimits(); //will go through the avoidanceVectors and set the jointVelMinimaForSafetyMargin / jointVelMaximaForSafetyMargin
-
+  
         for (Index i=0; i<n; i++)
         {
             // The joints velocities will be constrained by the V_min / V_max constraints and 
             // and the previous state (that is our current initial state), in order to avoid abrupt changes
-            x_l[i]=max(-V_max*CTRL_DEG2RAD,q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD); //lower bound
-            x_u[i]=min(+V_max*CTRL_DEG2RAD,q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD); //upper bound
+            x_l[i]=max(v_lim(i,0),q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD); //lower bound
+            x_u[i]=min(v_lim(i,1),q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD); //upper bound
             
-            //TODO Ugo integrate the additional limits from  jointVelMinimaForSafetyMargin / jointVelMaximaForSafetyMargin;
-                
-            
+                 
             if (n==10 && i<3) //special handling of torso joints - should be moving less
             {
-                x_l[i]=max(-V_max*CTRL_DEG2RAD/torsoReduction,q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD);
-                x_u[i]=min(+V_max*CTRL_DEG2RAD/torsoReduction,q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD);
+                x_l[i]=max(v_lim(i,0)/torsoReduction,q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD);
+                x_u[i]=min(v_lim(i,1)/torsoReduction,q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD);
             }
 
             // printf("-V_max*CTRL_DEG2RAD %g\tq_dot_0[i]-boundSmoothness*CTRL_DEG2RAD %g\n",
@@ -554,11 +516,13 @@ public:
 
 
 /************************************************************************/
-reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
+reactIpOpt::reactIpOpt(const iKinChain &c, const double tol,
                        const unsigned int verbose) :
                        chain(c), verbosity(verbose)
 {
+    //reactIpOpt makes a copy of the original chain; then it will be passed as reference to react_NLP in reactIpOpt::solve
     chain.setAllConstraints(false); // this is required since IpOpt initially relaxes constraints
+    //note that this is about limits not about joints being blocked (which is preserved)
 
     App=new IpoptApplication();
 
@@ -582,13 +546,6 @@ reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
 
     Ipopt::ApplicationReturnStatus status = CAST_IPOPTAPP(App)->Initialize();
     if (status != Ipopt::Solve_Succeeded)
-        yError("Error during initialization!");
-}
-
-
-/************************************************************************/
-void reactIpOpt::setTol(const double tol)
-{
     CAST_IPOPTAPP(App)->Options()->SetNumericValue("tol",tol);
     CAST_IPOPTAPP(App)->Options()->SetNumericValue("acceptable_tol",tol);
     CAST_IPOPTAPP(App)->Initialize();
@@ -613,11 +570,11 @@ void reactIpOpt::setVerbosity(const unsigned int verbose)
 
 
 /************************************************************************/
-yarp::sig::Vector reactIpOpt::solve(yarp::sig::Vector &xd, yarp::sig::Vector q_dot_0,
-                                    double &dt, double &vm, const std::vector<collisionPoint_t> &collision_points,
+yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_dot_0,
+                                    double dt, const yarp::sig::Matrix &v_lim, const std::vector<collisionPoint_t> &collision_points,
                                     int *exit_code)
 {
-    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,vm,collision_points,verbosity);
+    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,v_lim,collision_points,verbosity);
     
     CAST_IPOPTAPP(App)->Options()->SetNumericValue("max_cpu_time",dt);
     ApplicationReturnStatus status=CAST_IPOPTAPP(App)->OptimizeTNLP(GetRawPtr(nlp));

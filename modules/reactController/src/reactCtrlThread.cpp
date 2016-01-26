@@ -25,9 +25,9 @@
 
 #include <yarp/os/Time.h>
 #include <iCub/ctrl/math.h>
-#include <iCub/skinDynLib/common.h>
 
 #include "reactCtrlThread.h"
+
 
 using namespace yarp::sig;
 using namespace yarp::math;
@@ -48,7 +48,12 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
                                  visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim)
 {
-    prtclThrd=_pT;
+   prtclThrd=_pT;
+}
+
+bool reactCtrlThread::threadInit()
+{
+   
     state=STATE_WAIT;
 
     if (part=="left_arm")
@@ -59,33 +64,9 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
     {
         part_short="right";
     }
-    arm = new iCub::iKin::iCubArm(part_short.c_str());
-    q_dot_0.resize(arm->getDOF(),0.0);
-
-    // Block torso links
-    for (int i = 0; i < 3; i++)
-    {
-        if (useTorso)
-        {
-            arm->releaseLink(i);
-        }
-        else
-        {
-            arm->blockLink(i,0.0);
-        }
-    }
-
-    slv=NULL;
-    x_0.resize(3,0.0);
-    x_t.resize(3,0.0);
-    x_n.resize(3,0.0);
-    x_d.resize(3,0.0);
     
-    H.resize(4,4);
-}
-
-bool reactCtrlThread::threadInit()
-{
+    /*****  Drivers, interfaces, control boards etc. ***********************************************************/
+    
     yarp::os::Property OptA;
     OptA.put("robot",  robot.c_str());
     OptA.put("part",   part.c_str());
@@ -152,8 +133,56 @@ bool reactCtrlThread::threadInit()
         return false;
     }
 
+    /******** iKin chain and variables, and transforms init *************************/
+   
+    arm = new iCub::iKin::iCubArm(part_short.c_str());
+    // Release / block torso links (blocked by default)
+    for (int i = 0; i < 3; i++)
+    {
+        if (useTorso)
+        {
+            arm->releaseLink(i);
+        }
+        else
+        {
+            arm->blockLink(i,0.0);
+        }
+    }
+
+    //we set up the variables based on the current DOF - that is without torso joints if torso is blocked
+    chainActiveDOF = arm->getDOF();
+    q_dot_0.resize(chainActiveDOF,0.0);
+    vLimNominal.resize(chainActiveDOF,2);
+    for (size_t r=0; r<chainActiveDOF; r++)
+    {
+        vLimNominal(r,0)=-vMax;
+        vLimNominal(r,1)=vMax;
+    }
+    //optionally: if (useTorso) vLimNominal(1,0)=vLimNominal(1,1)=0.0;  // disable torso roll
+         
+    H.resize(4,4);
+
+    T_world_root = zeros(4,4); 
+    T_world_root(0,1)=-1;
+    T_world_root(1,2)=1; T_world_root(1,3)=0.5976;
+    T_world_root(2,0)=-1; T_world_root(2,3)=-0.026;
+    T_world_root(3,3)=1;
+    //iT_world_root=SE3inv(T_world_root);
+    
+    /************ variables related to the optimization problem for ipopt *******/
+   
+    slv=NULL;
+   
+    x_0.resize(3,0.0);
+    x_t.resize(3,0.0);
+    x_n.resize(3,0.0);
+    x_d.resize(3,0.0);
+  
+    /***************** ports *************************************************************************************/
+    
     outPort.open("/"+name +"/data:o");
     
+    /**** visualizing targets and collision points in simulator ***************************/
     if((robot == "icubSim") && (visualizeTargetInSim || visualizeParticleInSim || visualizeCollisionPointsInSim) ){ 
         string port2icubsim = "/" + name + "/sim:o";
         if (!portToSimWorld.open(port2icubsim.c_str())) {
@@ -176,17 +205,6 @@ bool reactCtrlThread::threadInit()
         collisionPointsSimReservoirPos(2)=0.0;
     
     }    
-    
-    //homo transform between root and simulator FoR
-    T = zeros(4,4); 
-    T(0,1)=-1;
-    T(1,2)=1;
-    T(1,3)=0.5976;
-    T(2,0)=-1;
-    T(2,3)=-0.026;
-    T(3,3)=1;
-    //iT=SE3inv(T);
-    
     firstTarget = true;
     
     yarp::os::Time::delay(0.2);
@@ -231,7 +249,7 @@ void reactCtrlThread::run()
     collisionPointStruct.magnitude = 1.0; //~ "probability of collision"
     //getAvoidanceVectorsFromPort(); we'll do that later - see WYSIWYD/ppsAllostatic/cartControlReachAvoid/cartControlReachAvoidThread
     //filterSkinPartsFromOtherChains(); TODO - we should send only those corresponding to the chosen part in reactControl (part_short)
-    //collisionPoints.push_back(collisionPointStruct);
+    collisionPoints.push_back(collisionPointStruct);
     
     if (visualizeCollisionPointsInSim)
         showCollisionPointsInSim();
@@ -312,17 +330,14 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
         moveSphere(2,x_n_sim); //sphere created as second (particle) will keep the index 2  
     }
     
-    TODO here we should do something like 
-      avhdl->updateCtrlPoints();
-        Matrix VLIM=avhdl->getVLIM(obstacle,v_lim);
+    AvoidanceHandlerAbstract *avhdl; 
+    avhdl = new AvoidanceHandlerAbstract(*arm->asChain(),collisionPoints,verbosity);
+    Matrix vLimAdapted=avhdl->getVLIM(vLimNominal);
 
-        nlp->set_xr(xr);
-        nlp->set_v_lim(VLIM);
-    
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
     // So, q_dot_0 is in degrees, but I have to convert it in radians before sending it to ipopt
-    Vector res=slv->solve(x_n,q_dot_0*CTRL_DEG2RAD,dT,vMax,collisionPoints,&exit_code)*CTRL_RAD2DEG;
+    Vector res=slv->solve(x_n,q_dot_0*CTRL_DEG2RAD,dT,vLimAdapted*CTRL_DEG2RAD,collisionPoints,&exit_code)*CTRL_RAD2DEG;
 
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
     printMessage(0,"x_n: %s\tx_d: %s\tdT %g\n",x_n.toString(3,3).c_str(),x_d.toString(3,3).c_str(),dT);
@@ -377,16 +392,16 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
     if (useTorso)
     {
         Vector velsT(3,0.0);
-        velsT[0] = _vels[2];
+        velsT[0] = _vels[2]; //swapping pitch and yaw as per iKin vs. motor interface convention
         velsT[1] = _vels[1];
-        velsT[2] = _vels[0];
+        velsT[2] = _vels[0]; //swapping pitch and yaw as per iKin vs. motor interface convention
         
         ivelT->velocityMove(velsT.data());
-        ivelA->velocityMove(_vels.subVector(3,9).data());
+        ivelA->velocityMove(_vels.subVector(3,9).data()); //indexes 3 to 9 are the arm joints velocities
     }
     else
     {
-        ivelA->velocityMove(_vels.data());
+        ivelA->velocityMove(_vels.data()); //if there is not torso, _vels has only the 7 arm joints
     }
 
     return true;
@@ -838,7 +853,7 @@ void reactCtrlThread::convertPosFromRootToSimFoR(const Vector &pos, Vector &outP
     //printf("convertPosFromRootToSimFoR: pos in icub root resized to 4, with last value set to 1:%s\n",pos_temp.toString().c_str());
     
     outPos.resize(4,0.0); 
-    outPos = T * pos_temp;
+    outPos = T_world_root * pos_temp;
     //printf("convertPosFromRootToSimFoR: outPos in simulator FoR:%s\n",outPos.toString().c_str());
     outPos.resize(3); 
     //printf("convertPosFromRootToSimFoR: outPos after resizing back to 3 values:%s\n",outPos.toString().c_str());

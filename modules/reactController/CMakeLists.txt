@@ -10,12 +10,12 @@ include(YarpIDL)
 
 set(header_files ${CMAKE_CURRENT_SOURCE_DIR}/include/reactIpOpt.h
                  ${CMAKE_CURRENT_SOURCE_DIR}/include/reactCtrlThread.h
-                 ${CMAKE_CURRENT_SOURCE_DIR}/include/particleThread.h)
+                 ${CMAKE_CURRENT_SOURCE_DIR}/include/particleThread.h
                  ${CMAKE_CURRENT_SOURCE_DIR}/include/avoidanceHandler.h)
 set(source_files ${CMAKE_CURRENT_SOURCE_DIR}/src/reactIpOpt.cpp
                  ${CMAKE_CURRENT_SOURCE_DIR}/src/reactCtrlThread.cpp
                  ${CMAKE_CURRENT_SOURCE_DIR}/src/particleThread.cpp
-                 ${CMAKE_CURRENT_SOURCE_DIR}/src/reactController.cpp)
+                 ${CMAKE_CURRENT_SOURCE_DIR}/src/reactController.cpp
                  ${CMAKE_CURRENT_SOURCE_DIR}/src/avoidanceHandler.cpp)
 set(idl_files    ${PROJECT_NAME}.thrift)
 

@@ -393,13 +393,13 @@ public:
 
         limb_=new iKinLimb(limb);
         iKinChain *c1=limb_->asChain();
-        c1->rmLink(9); c1->rmLink(8); c1->rmLink(7);
+        c1->rmLink(9); c1->rmLink(8); c1->rmLink(7); //TODO for forearm skin, the link 7 should probably remain there
         HN(2,3)=0.1373;
         c1->setHN(HN);
 
         limb_=new iKinLimb(limb);
         iKinChain *c2=limb_->asChain();
-        c2->rmLink(9); c2->rmLink(8); c2->rmLink(7);
+        c2->rmLink(9); c2->rmLink(8); c2->rmLink(7); //TODO for forearm skin, the link 7 should probably remain there
         HN(2,3)=0.1373/2.0;
         c2->setHN(HN);
 
@@ -737,8 +737,8 @@ int main(int argc, char *argv[])
     q0[3]=-25.0; q0[4]=20.0; q0[6]=50.0; //setting shoulder position
     chain.setAng(CTRL_DEG2RAD*q0);
 
-    Matrix lim(chain.getDOF(),2);
-    Matrix v_lim(chain.getDOF(),2);
+    Matrix lim(chain.getDOF(),2); //joint position limits, in degrees
+    Matrix v_lim(chain.getDOF(),2); //joint velocity limits, in degrees/s
     for (size_t r=0; r<chain.getDOF(); r++)
     {
         lim(r,0)=CTRL_RAD2DEG*chain(r).getMin();
@@ -856,7 +856,7 @@ int main(int argc, char *argv[])
         Matrix VLIM=avhdl->getVLIM(obstacle,v_lim);
 
         nlp->set_xr(xr);
-        nlp->set_v_lim(VLIM);
+        nlp->set_v_lim(VLIM); //VLIM in deg/s; set_v_lim converts to radians/s
         nlp->set_v0(v);
         nlp->init();
         Ipopt::ApplicationReturnStatus status=app->OptimizeTNLP(GetRawPtr(nlp));

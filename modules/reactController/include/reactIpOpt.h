@@ -32,7 +32,7 @@
 
 #include <iCub/skinDynLib/common.h>
 
-   
+#include "avoidanceHandler.h" //is needed for the collisionPoint_t definition
 
 /**
 *
@@ -52,7 +52,7 @@ protected:
     // The IpOpt application that supposedly will solve the task
     void *App;
 
-    iCub::iKin::iKinChain &chain;
+    iCub::iKin::iKinChain chain;
 
     int verbosity;
 
@@ -67,7 +67,7 @@ public:
     *                dump. The larger this value the more detailed
     *                is the output (0=>off by default).
     */
-    reactIpOpt(iCub::iKin::iKinChain &c,
+    reactIpOpt(const iCub::iKin::iKinChain &c,
                const double tol, const unsigned int verbose=0);
 
     /**
@@ -123,8 +123,8 @@ public:
     *                   INTERNAL_ERROR
     * @return estimated joint velocities.
     */
-    virtual yarp::sig::Vector solve(yarp::sig::Vector &xd, yarp::sig::Vector q_dot_0,
-                                    double &dt, double &vm, const std::vector<collisionPoint_t> &collision_points,
+    virtual yarp::sig::Vector solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_dot_0,
+                                    double dt, const yarp::sig::Matrix &v_lim, const std::vector<collisionPoint_t> &collision_points,
                                     int *exit_code);
 
     /**
