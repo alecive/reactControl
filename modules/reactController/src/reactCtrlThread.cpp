@@ -54,6 +54,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
 bool reactCtrlThread::threadInit()
 {
    
+    printMessage(5,"[reactCtrlThread] threadInit()\n");
     state=STATE_WAIT;
 
     if (part=="left_arm")
@@ -64,6 +65,42 @@ bool reactCtrlThread::threadInit()
     {
         part_short="right";
     }
+    
+   /******** iKin chain and variables, and transforms init *************************/
+   
+    arm = new iCub::iKin::iCubArm(part_short.c_str());
+    // Release / block torso links (blocked by default)
+    for (int i = 0; i < 3; i++)
+    {
+        if (useTorso)
+        {
+            arm->releaseLink(i);
+        }
+        else
+        {
+            arm->blockLink(i,0.0);
+        }
+    }
+
+    //we set up the variables based on the current DOF - that is without torso joints if torso is blocked
+    chainActiveDOF = arm->getDOF();
+    q_dot_0.resize(chainActiveDOF,0.0);
+    vLimNominal.resize(chainActiveDOF,2);
+    for (size_t r=0; r<chainActiveDOF; r++)
+    {
+        vLimNominal(r,0)=-vMax;
+        vLimNominal(r,1)=vMax;
+    }
+    //optionally: if (useTorso) vLimNominal(1,0)=vLimNominal(1,1)=0.0;  // disable torso roll
+         
+    H.resize(4,4);
+
+    T_world_root = zeros(4,4); 
+    T_world_root(0,1)=-1;
+    T_world_root(1,2)=1; T_world_root(1,3)=0.5976;
+    T_world_root(2,0)=-1; T_world_root(2,3)=-0.026;
+    T_world_root(3,3)=1;
+    //iT_world_root=SE3inv(T_world_root);
     
     /*****  Drivers, interfaces, control boards etc. ***********************************************************/
     
@@ -132,43 +169,7 @@ bool reactCtrlThread::threadInit()
         yError("[reactCtrlThread]alignJointsBounds failed!!!\n");
         return false;
     }
-
-    /******** iKin chain and variables, and transforms init *************************/
    
-    arm = new iCub::iKin::iCubArm(part_short.c_str());
-    // Release / block torso links (blocked by default)
-    for (int i = 0; i < 3; i++)
-    {
-        if (useTorso)
-        {
-            arm->releaseLink(i);
-        }
-        else
-        {
-            arm->blockLink(i,0.0);
-        }
-    }
-
-    //we set up the variables based on the current DOF - that is without torso joints if torso is blocked
-    chainActiveDOF = arm->getDOF();
-    q_dot_0.resize(chainActiveDOF,0.0);
-    vLimNominal.resize(chainActiveDOF,2);
-    for (size_t r=0; r<chainActiveDOF; r++)
-    {
-        vLimNominal(r,0)=-vMax;
-        vLimNominal(r,1)=vMax;
-    }
-    //optionally: if (useTorso) vLimNominal(1,0)=vLimNominal(1,1)=0.0;  // disable torso roll
-         
-    H.resize(4,4);
-
-    T_world_root = zeros(4,4); 
-    T_world_root(0,1)=-1;
-    T_world_root(1,2)=1; T_world_root(1,3)=0.5976;
-    T_world_root(2,0)=-1; T_world_root(2,3)=-0.026;
-    T_world_root(3,3)=1;
-    //iT_world_root=SE3inv(T_world_root);
-    
     /************ variables related to the optimization problem for ipopt *******/
    
     slv=NULL;
@@ -206,7 +207,7 @@ bool reactCtrlThread::threadInit()
     
     }    
     firstTarget = true;
-    
+    printMessage(5,"[reactCtrlThread] threadInit() finished.\n");
     yarp::os::Time::delay(0.2);
 
     return true;
@@ -249,7 +250,7 @@ void reactCtrlThread::run()
     collisionPointStruct.magnitude = 1.0; //~ "probability of collision"
     //getAvoidanceVectorsFromPort(); we'll do that later - see WYSIWYD/ppsAllostatic/cartControlReachAvoid/cartControlReachAvoidThread
     //filterSkinPartsFromOtherChains(); TODO - we should send only those corresponding to the chosen part in reactControl (part_short)
-    collisionPoints.push_back(collisionPointStruct);
+    //collisionPoints.push_back(collisionPointStruct);
     
     if (visualizeCollisionPointsInSim)
         showCollisionPointsInSim();
