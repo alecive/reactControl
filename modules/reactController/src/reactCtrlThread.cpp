@@ -250,7 +250,7 @@ void reactCtrlThread::run()
     collisionPointStruct.magnitude = 1.0; //~ "probability of collision"
     //getAvoidanceVectorsFromPort(); we'll do that later - see WYSIWYD/ppsAllostatic/cartControlReachAvoid/cartControlReachAvoidThread
     //filterSkinPartsFromOtherChains(); TODO - we should send only those corresponding to the chosen part in reactControl (part_short)
-    //collisionPoints.push_back(collisionPointStruct);
+    collisionPoints.push_back(collisionPointStruct);
     
     if (visualizeCollisionPointsInSim)
         showCollisionPointsInSim();
@@ -332,7 +332,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     }
     
     AvoidanceHandlerAbstract *avhdl; 
-    avhdl = new AvoidanceHandlerAbstract(*arm->asChain(),collisionPoints,verbosity);
+    avhdl = new AvoidanceHandlerTactile(*arm->asChain(),collisionPoints,verbosity);
     Matrix vLimAdapted=avhdl->getVLIM(vLimNominal);
 
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.

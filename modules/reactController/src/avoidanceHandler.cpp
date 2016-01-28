@@ -33,20 +33,20 @@ AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &
         if (!collisionPoints.empty()){
             for(std::vector<collisionPoint_t>::const_iterator it = collisionPoints.begin(); it != collisionPoints.end(); ++it) {
                 size_t dim = chain.getDOF();
-                iKinChain customChain= chain;
+                iKinChain customChain= chain; //instantiates a new chain, copying from the old (full) one
                    
                 if (verbosity >= 5){
                     printf("Full chain has %d DOF \n",chain.getDOF());
-                    printf("chain.getH(): \n %s \n",chain.getH().toString(3,3).c_str());
+                    printf("chain.getH() (end-effector): \n %s \n",chain.getH().toString(3,3).c_str());
                     int linkNrForCurrentSkinPartFrame = 0;
                     if (dim ==7){
-                        printf("SkinPart %s, linkNum %d, chain.getH(): \n %s \n",SkinPart_s[(*it).skin_part].c_str(),SkinPart_2_LinkNum[(*it).skin_part].linkNum,chain.getH(SkinPart_2_LinkNum[(*it).skin_part].linkNum).toString(3,3).c_str());
+                        printf("SkinPart %s, linkNum %d, chain.getH() (skin part frame): \n %s \n",SkinPart_s[(*it).skin_part].c_str(),SkinPart_2_LinkNum[(*it).skin_part].linkNum,chain.getH(SkinPart_2_LinkNum[(*it).skin_part].linkNum).toString(3,3).c_str());
                     }
                     else if (dim == 10){
-                         printf("SkinPart %s, linkNum %d + 3, chain.getH(): \n %s \n",SkinPart_s[(*it).skin_part].c_str(),SkinPart_2_LinkNum[(*it).skin_part].linkNum,chain.getH(SkinPart_2_LinkNum[(*it).skin_part].linkNum + 3).toString(3,3).c_str());
+                         printf("SkinPart %s, linkNum %d + 3, chain.getH() (skin part frame): \n %s \n",SkinPart_s[(*it).skin_part].c_str(),SkinPart_2_LinkNum[(*it).skin_part].linkNum,chain.getH(SkinPart_2_LinkNum[(*it).skin_part].linkNum + 3).toString(3,3).c_str());
                     }
                     yarp::sig::Matrix JfullChain = chain.GeoJacobian(); //6 rows, n columns for every active DOF
-                    printMessage(5,"GeoJacobian matrix for canonical end-effector (palm): \n %s \n",JfullChain.toString(3,3).c_str());
+                    printf("GeoJacobian matrix for canonical end-effector (palm): \n %s \n",JfullChain.toString(3,3).c_str());
                 }
                  
                 // Remove all the more distal links after the collision point 
@@ -55,24 +55,24 @@ AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &
                     if(dim == 10){
                         customChain.rmLink(9); customChain.rmLink(8); 
                         // we keep link 7 from elbow to wrist - it is getH(7) that is the FoR at the wrist in which forearm skin is expressed; and we want to keep the elbow joint part of the game
-                        printMessage(4,"obstacle threatening skin part %s, blocking links 8 and 9 on subchain for avoidance\n",SkinPart_s[(*it).skin_part].c_str());
+                        printMessage(2,"obstacle threatening skin part %s, blocking links 8 and 9 on subchain for avoidance\n",SkinPart_s[(*it).skin_part].c_str());
                     }
                     else if(dim==7){
                         customChain.rmLink(6); customChain.rmLink(5); 
                         // we keep link 4 from elbow to wrist - it is getH(4) that is the FoR at the wrist in which forearm skin is expressed; and we want to keep the elbow joint part of the game
                         customChain.blockLink(6); customChain.blockLink(5);//wrist joints
-                        printMessage(4,"obstacle threatening skin part %s, blocking links 5 and 6 on subchain for avoidance\n",SkinPart_s[(*it).skin_part].c_str());
+                        printMessage(2,"obstacle threatening skin part %s, blocking links 5 and 6 on subchain for avoidance\n",SkinPart_s[(*it).skin_part].c_str());
                    
                     }
                 }
                 else if (((*it).skin_part == SKIN_LEFT_UPPER_ARM) ||  ((*it).skin_part == SKIN_RIGHT_UPPER_ARM)){
                     if(dim == 10){
                         customChain.rmLink(9); customChain.rmLink(8);customChain.rmLink(7);customChain.rmLink(6); 
-                        printMessage(4,"obstacle threatening skin part %s, blocking links 6-9 on subchain for avoidance\n",SkinPart_s[(*it).skin_part].c_str());
+                        printMessage(2,"obstacle threatening skin part %s, blocking links 6-9 on subchain for avoidance\n",SkinPart_s[(*it).skin_part].c_str());
                     }
                     else if(dim==7){
                         customChain.rmLink(6); customChain.rmLink(5);customChain.rmLink(4);customChain.rmLink(3); 
-                        printMessage(4,"obstacle threatening skin part %s, blocking links 3-6 on subchain for avoidance\n",SkinPart_s[(*it).skin_part].c_str());
+                        printMessage(2,"obstacle threatening skin part %s, blocking links 3-6 on subchain for avoidance\n",SkinPart_s[(*it).skin_part].c_str());
                     }
                 }
               
@@ -96,8 +96,9 @@ AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &
                 //yarp::sig::Vector normalAtCollisionInEndEffFrame(4,0.0);
                 //normalAtCollisionInEndEffFrame(2) = 1.0; //z-axis ~ normal
                 //yarp::sig::Vector normalAtCollisionInRootFoR_2 = chain_local.getHN() * normalAtCollisionInEndEffFrame;
-                   
-                chainCtrlPoints.push_back(&customChain);
+                
+                ctrlPointChains.push_back(customChain);
+                
             }
         }
         type="none";
@@ -127,8 +128,8 @@ void AvoidanceHandlerAbstract::setParameters(const Property &parameters)
 deque<Vector> AvoidanceHandlerAbstract::getCtrlPointsPosition()
 {
     deque<Vector> ctrlPoints;
-    for (size_t i=0; i<chainCtrlPoints.size(); i++)
-        ctrlPoints.push_back(chainCtrlPoints[i]->EndEffPosition());
+    for (size_t i=0; i<ctrlPointChains.size(); i++)
+        ctrlPoints.push_back(ctrlPointChains[i].EndEffPosition());
     return ctrlPoints;
 }
 
@@ -141,8 +142,7 @@ Matrix AvoidanceHandlerAbstract::getVLIM(const Matrix &v_lim)
 /****************************************************************/
 AvoidanceHandlerAbstract::~AvoidanceHandlerAbstract()
 {
-    for (size_t i=0; i<chainCtrlPoints.size(); i++)
-        delete chainCtrlPoints[i];
+    ctrlPointChains.clear();
 }
 
 
@@ -226,27 +226,37 @@ void AvoidanceHandlerTactile::setParameters(const Property &parameters)
 /****************************************************************/
 Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim)
 {
-        
+        printMessage(2,"AvoidanceHandlerTactile::getVLIM\n");
         Matrix VLIM=v_lim;
-        for (size_t i=0; i<chainCtrlPoints.size(); i++)
+        for (size_t i=0; i<ctrlPointChains.size(); i++)
         {
-            Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF()-1);
-            Vector normal = chainCtrlPoints[i]->getHN().getCol(2).subVector(0,2); //get the end-effector frame of the standard or custom chain (control point derived from skin), takes the z-axis (3rd column in transform matrix) ~ normal, only its first three elements of the 4 in the homogenous transf. format
+            printMessage(2,"Chain with control point - index %d (last index %d), nDOF: %d.\n",i,ctrlPointChains.size()-1,ctrlPointChains[i].getDOF());
+            Matrix J=ctrlPointChains[i].GeoJacobian().submatrix(0,2,0,ctrlPointChains[i].getDOF()-1); //first 3 rows ~ dPosition/dJoints 
+            Vector normal = ctrlPointChains[i].getHN().getCol(2).subVector(0,2); //get the end-effector frame of the standard or custom chain (control point derived from skin), takes the z-axis (3rd column in transform matrix) ~ normal, only its first three elements of the 4 in the homogenous transf. format
             Vector s=(J.transposed()*normal) * avoidingSpeed * collisionPoints[i].magnitude; //project movement along the normal into joint velocity space and scale by default avoidingSpeed and magnitude of skin (or PPS) activation
+            if (verbosity>=2){
+                printf("J for positions at control point:\n %s \nJ.transposed:\n %s \nNormal at control point: %s \n",J.toString(3,3).c_str(),J.transposed().toString(3,3).c_str(), normal.toString(3,3).c_str());
+                printf("s = (J.transposed()*normal) * avoidingSpeed * collisionPoints[i].magnitude \n (%s)T = (%s)T * %f * %f\n",s.toString(3,3).c_str(),(J.transposed()*normal).toString(3,3).c_str(),avoidingSpeed,collisionPoints[i].magnitude);
+            }    
             s = s * -1.0; //we reverse the direction to obtain joint velocities that bring about avoidance
+            printMessage(2,"s * (-1) -> joint contributions toward avoidance: \n %s \n",s.toString(3,3).c_str());    
+                     
             for (size_t j=0; j<s.length(); j++)
             {
+                printMessage(2,"        Joint: %d, s[j]: %f, limits before: Min: %f, Max: %f\n",j,s[j],VLIM(j,0),VLIM(j,1));
                 if (s[j]>=0.0) //joint contributes to avoidance, we will set the min velocity accordingly 
                 {
                     s[j]=std::min(v_lim(j,1),s[j]); //make sure min vel is <= max vel
                     VLIM(j,0)=std::max(VLIM(j,0),s[j]); // set min vel to the s[j] ~ avoiding action
                     VLIM(j,1)=std::max(VLIM(j,0),VLIM(j,1)); //range check
+                    printMessage(2,"            s>=0 clause, limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
                 }
                 else //joint acts to bring control point toward obstacle - we will shape the max vel
                 {
                     s[j]=std::max(v_lim(j,0),s[j]);
                     VLIM(j,1)=std::min(VLIM(j,1),s[j]);
                     VLIM(j,0)=std::min(VLIM(j,0),VLIM(j,1));
+                    printMessage(2,"            s<0 clause, limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
                 }
             }
         }

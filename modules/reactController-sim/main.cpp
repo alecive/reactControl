@@ -393,13 +393,13 @@ public:
 
         limb_=new iKinLimb(limb);
         iKinChain *c1=limb_->asChain();
-        c1->rmLink(9); c1->rmLink(8); c1->rmLink(7); //TODO for forearm skin, the link 7 should probably remain there
+        c1->rmLink(9); c1->rmLink(8); c1->rmLink(7); //TODO for forearm skin, the link 7 should probably remain there; but then the HN will have to be adapted appropriately to set the translation from the new frame (wrist instead of elbow it seems)
         HN(2,3)=0.1373;
         c1->setHN(HN);
 
         limb_=new iKinLimb(limb);
         iKinChain *c2=limb_->asChain();
-        c2->rmLink(9); c2->rmLink(8); c2->rmLink(7); //TODO for forearm skin, the link 7 should probably remain there
+        c2->rmLink(9); c2->rmLink(8); c2->rmLink(7); //TODO for forearm skin, the link 7 should probably remain there; but then the HN will have to be adapted appropriately to set the translation from the new frame (wrist instead of elbow it seems)
         HN(2,3)=0.1373/2.0;
         c2->setHN(HN);
 

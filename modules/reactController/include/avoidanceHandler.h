@@ -67,7 +67,7 @@ public:
     std::string type;
     iCub::iKin::iKinChain chain;
     const std::vector<collisionPoint_t> &collisionPoints;
-    std::deque<iCub::iKin::iKinChain*> chainCtrlPoints;
+    std::deque<iCub::iKin::iKinChain> ctrlPointChains;
     yarp::os::Property parameters;
     
     bool computeFoR(const yarp::sig::Vector &pos, const yarp::sig::Vector &norm, yarp::sig::Matrix &FoR);
