@@ -232,14 +232,14 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim)
         {
             printMessage(2,"Chain with control point - index %d (last index %d), nDOF: %d.\n",i,ctrlPointChains.size()-1,ctrlPointChains[i].getDOF());
             Matrix J=ctrlPointChains[i].GeoJacobian().submatrix(0,2,0,ctrlPointChains[i].getDOF()-1); //first 3 rows ~ dPosition/dJoints 
-            Vector normal = ctrlPointChains[i].getHN().getCol(2).subVector(0,2); //get the end-effector frame of the standard or custom chain (control point derived from skin), takes the z-axis (3rd column in transform matrix) ~ normal, only its first three elements of the 4 in the homogenous transf. format
+            Vector normal = ctrlPointChains[i].getH().getCol(2).subVector(0,2); //get the end-effector frame of the standard or custom chain (control point derived from skin), takes the z-axis (3rd column in transform matrix) ~ normal, only its first three elements of the 4 in the homogenous transf. format
             Vector s=(J.transposed()*normal) * avoidingSpeed * collisionPoints[i].magnitude; //project movement along the normal into joint velocity space and scale by default avoidingSpeed and magnitude of skin (or PPS) activation
             if (verbosity>=2){
                 printf("J for positions at control point:\n %s \nJ.transposed:\n %s \nNormal at control point: %s \n",J.toString(3,3).c_str(),J.transposed().toString(3,3).c_str(), normal.toString(3,3).c_str());
                 printf("s = (J.transposed()*normal) * avoidingSpeed * collisionPoints[i].magnitude \n (%s)T = (%s)T * %f * %f\n",s.toString(3,3).c_str(),(J.transposed()*normal).toString(3,3).c_str(),avoidingSpeed,collisionPoints[i].magnitude);
             }    
             s = s * -1.0; //we reverse the direction to obtain joint velocities that bring about avoidance
-            printMessage(2,"s * (-1) -> joint contributions toward avoidance: \n %s \n",s.toString(3,3).c_str());    
+            printMessage(2,"s * (-1) -> joint contributions toward avoidance: \n (%s) \n",s.toString(3,3).c_str());    
                      
             for (size_t j=0; j<s.length(); j++)
             {
@@ -249,14 +249,14 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim)
                     s[j]=std::min(v_lim(j,1),s[j]); //make sure min vel is <= max vel
                     VLIM(j,0)=std::max(VLIM(j,0),s[j]); // set min vel to the s[j] ~ avoiding action
                     VLIM(j,1)=std::max(VLIM(j,0),VLIM(j,1)); //range check
-                    printMessage(2,"            s>=0 clause, limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
+                    printMessage(2,"            s>=0 clause, joint contributes to avoidance, adjusting Min; limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
                 }
                 else //joint acts to bring control point toward obstacle - we will shape the max vel
                 {
                     s[j]=std::max(v_lim(j,0),s[j]);
                     VLIM(j,1)=std::min(VLIM(j,1),s[j]);
                     VLIM(j,0)=std::min(VLIM(j,0),VLIM(j,1));
-                    printMessage(2,"            s<0 clause, limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
+                    printMessage(2,"            s<0 clause, joint contributes to approach, adjusting Max; limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
                 }
             }
         }
