@@ -247,7 +247,7 @@ void reactCtrlThread::run()
     collisionPointStruct.n.resize(3,0.0);
     collisionPointStruct.x(0) = -0.0002;  collisionPointStruct.x(1) = -0.0131; collisionPointStruct.x(2) = -0.0258434;
     collisionPointStruct.n(0) = -0.005; collisionPointStruct.n(1) = 0.238; collisionPointStruct.n(2) = -0.971;
-    collisionPointStruct.magnitude = 1.0; //~ "probability of collision"
+    collisionPointStruct.magnitude = 0.1; //~ "probability of collision"
     //getAvoidanceVectorsFromPort(); we'll do that later - see WYSIWYD/ppsAllostatic/cartControlReachAvoid/cartControlReachAvoidThread
     //filterSkinPartsFromOtherChains(); TODO - we should send only those corresponding to the chosen part in reactControl (part_short)
     collisionPoints.push_back(collisionPointStruct);
