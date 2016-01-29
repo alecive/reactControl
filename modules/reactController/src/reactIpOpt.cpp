@@ -103,7 +103,7 @@ protected:
     double torsoReduction;  
     //for smooth changes in joint velocities
     bool boundSmoothnessOn; 
-    double boundSmoothness;
+    double boundSmoothness; //new joint vel can differ by max boundSmoothness from the previous one (rad)
     
     //joint position limits handled in a smooth way - see Pattacini et al. 2010 - iCub Cart. control - Fig. 8
     yarp::sig::Vector qGuard;
@@ -287,7 +287,7 @@ public:
         guardRatio=0.4;
 
         torsoReduction=3.0;
-        boundSmoothness=10.0;
+        boundSmoothness=10.0*CTRL_DEG2RAD;
 
         qGuard.resize(dim,0.0);
         qGuardMinInt.resize(dim,0.0);
@@ -352,14 +352,17 @@ public:
             {
                 // The joints velocities will be constrained by the v_lim constraints (after possible external modification by avoidanceHandlers) and 
                 // and the previous state (that is our current initial state), in order to avoid abrupt changes
-                x_l[i]=max(v_lim(i,0),q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD); //lower bound
-                x_u[i]=min(v_lim(i,1),q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD); //upper bound
+                double smoothnessMin = std::min(v_lim(i,1),q_dot_0[i]-boundSmoothness); //the smooth min vel should not be bigger than max vel
+                double smoothnessMax = std::max(v_lim(i,0),q_dot_0[i]+boundSmoothness); //the smooth max vel should not be smaller than min vel
                 
-                    
+                x_l[i]=max(v_lim(i,0),smoothnessMin); //lower bound
+                x_u[i]=min(v_lim(i,1),smoothnessMax); //upper bound
+                
+                
                 if (n==10 && i<3) //special handling of torso joints - should be moving less
                 {
-                    x_l[i]=max(v_lim(i,0)/torsoReduction,q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD);
-                    x_u[i]=min(v_lim(i,1)/torsoReduction,q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD);
+                    x_l[i]=max(v_lim(i,0)/torsoReduction,smoothnessMin);
+                    x_u[i]=min(v_lim(i,1)/torsoReduction,smoothnessMax);
                 }
 
                 // printf("-V_max*CTRL_DEG2RAD %g\tq_dot_0[i]-boundSmoothness*CTRL_DEG2RAD %g\n",

@@ -173,7 +173,7 @@ bool reactCtrlThread::threadInit()
     /************ variables related to the optimization problem for ipopt *******/
    
     slv=NULL;
-    ipoptBoundSmoothnessOn = false;
+    ipoptBoundSmoothnessOn = true;
     x_0.resize(3,0.0);
     x_t.resize(3,0.0);
     x_n.resize(3,0.0);
