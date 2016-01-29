@@ -104,11 +104,6 @@ protected:
     //for smooth changes in joint velocities
     double boundSmoothness;
     
-    vector<collisionPoint_t> collisionPoints; //list of "avoidance vectors" from peripersonal space / safety margin
-    /* every (potential) collision point will be converted into a set of joint velocity limits in the subchain   above the threat - 
-     - the unaffected joints (more distal and those with opposite sign of Jacobian inverse) will be set to their maxima/minima */
-    vector<yarp::sig::Vector> jointVelMinimaForSafetyMargin;
-    vector<yarp::sig::Vector> jointVelMaximaForSafetyMargin;
     //joint position limits handled in a smooth way - see Pattacini et al. 2010 - iCub Cart. control - Fig. 8
     yarp::sig::Vector qGuard;
     yarp::sig::Vector qGuardMinInt, qGuardMinExt, qGuardMinCOG;
@@ -259,8 +254,8 @@ public:
     /***** 8 pure virtual functions from TNLP class need to be implemented here **********/
     /************************************************************************/
     react_NLP(iKinChain &c, const yarp::sig::Vector &_xd, const yarp::sig::Vector &_q_dot_0,
-             double _dT, const yarp::sig::Matrix &_v_lim, const std::vector<collisionPoint_t> & _collision_points, int _verbosity) : chain(c),
-             xd(_xd), q_dot_0(_q_dot_0), dT(_dT), v_lim(_v_lim), collisionPoints(_collision_points), verbosity(_verbosity) 
+             double _dT, const yarp::sig::Matrix &_v_lim, int _verbosity) : chain(c),
+             xd(_xd), q_dot_0(_q_dot_0), dT(_dT), v_lim(_v_lim), verbosity(_verbosity) 
     {
         name="react_NLP";
 
@@ -571,10 +566,9 @@ void reactIpOpt::setVerbosity(const unsigned int verbose)
 
 /************************************************************************/
 yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_dot_0,
-                                    double dt, const yarp::sig::Matrix &v_lim, const std::vector<collisionPoint_t> &collision_points,
-                                    int *exit_code)
+                                    double dt, const yarp::sig::Matrix &v_lim, int *exit_code)
 {
-    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,v_lim,collision_points,verbosity);
+    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,v_lim,verbosity);
     
     CAST_IPOPTAPP(App)->Options()->SetNumericValue("max_cpu_time",dt);
     ApplicationReturnStatus status=CAST_IPOPTAPP(App)->OptimizeTNLP(GetRawPtr(nlp));

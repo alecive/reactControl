@@ -38,17 +38,17 @@ AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &
                 if (verbosity >= 5){
                     printf("Full chain has %d DOF \n",chain.getDOF());
                     printf("chain.getH() (end-effector): \n %s \n",chain.getH().toString(3,3).c_str());
-                    int linkNrForCurrentSkinPartFrame = 0;
-                    if (dim ==7){
-                        printf("SkinPart %s, linkNum %d, chain.getH() (skin part frame): \n %s \n",SkinPart_s[(*it).skin_part].c_str(),SkinPart_2_LinkNum[(*it).skin_part].linkNum,chain.getH(SkinPart_2_LinkNum[(*it).skin_part].linkNum).toString(3,3).c_str());
-                    }
-                    else if (dim == 10){
-                         printf("SkinPart %s, linkNum %d + 3, chain.getH() (skin part frame): \n %s \n",SkinPart_s[(*it).skin_part].c_str(),SkinPart_2_LinkNum[(*it).skin_part].linkNum,chain.getH(SkinPart_2_LinkNum[(*it).skin_part].linkNum + 3).toString(3,3).c_str());
-                    }
-                    yarp::sig::Matrix JfullChain = chain.GeoJacobian(); //6 rows, n columns for every active DOF
-                    printf("GeoJacobian matrix for canonical end-effector (palm): \n %s \n",JfullChain.toString(3,3).c_str());
                 }
-                 
+                int linkNrForCurrentSkinPartFrame = 0;
+                if (dim ==7){
+                    printf("SkinPart %s, linkNum %d, chain.getH() (skin part frame): \n %s \n",SkinPart_s[(*it).skin_part].c_str(),SkinPart_2_LinkNum[(*it).skin_part].linkNum,chain.getH(SkinPart_2_LinkNum[(*it).skin_part].linkNum).toString(3,3).c_str());
+                }
+                else if (dim == 10){
+                    printf("SkinPart %s, linkNum %d + 3, chain.getH() (skin part frame): \n %s \n",SkinPart_s[(*it).skin_part].c_str(),SkinPart_2_LinkNum[(*it).skin_part].linkNum,chain.getH(SkinPart_2_LinkNum[(*it).skin_part].linkNum + 3).toString(3,3).c_str());
+                }      
+                yarp::sig::Matrix JfullChain = chain.GeoJacobian(); //6 rows, n columns for every active DOF
+                printf("GeoJacobian matrix for canonical end-effector (palm): \n %s \n",JfullChain.toString(3,3).c_str());
+                                 
                 // Remove all the more distal links after the collision point 
                 // if the skin part is a hand, no need to remove any links from the chain
                 if (((*it).skin_part == SKIN_LEFT_FOREARM) ||  ((*it).skin_part == SKIN_RIGHT_FOREARM)){
@@ -172,7 +172,6 @@ bool AvoidanceHandlerAbstract::computeFoR(const yarp::sig::Vector &pos, const ya
         return false;
     }
         
-    // Set the proper orientation for the touching end-effector
     yarp::sig::Vector x(3,0.0), z(3,0.0), y(3,0.0);
 
     z = norm;
@@ -188,7 +187,7 @@ bool AvoidanceHandlerAbstract::computeFoR(const yarp::sig::Vector &pos, const ya
     x = x / yarp::math::norm(x);
     y = y / yarp::math::norm(y);
     z = z / yarp::math::norm(z);
-
+ 
     FoR=eye(4);
     FoR.setSubcol(x,0,0);
     FoR.setSubcol(y,0,1);
@@ -235,7 +234,7 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim)
             Vector normal = ctrlPointChains[i].getH().getCol(2).subVector(0,2); //get the end-effector frame of the standard or custom chain (control point derived from skin), takes the z-axis (3rd column in transform matrix) ~ normal, only its first three elements of the 4 in the homogenous transf. format
             Vector s=(J.transposed()*normal) * avoidingSpeed * collisionPoints[i].magnitude; //project movement along the normal into joint velocity space and scale by default avoidingSpeed and magnitude of skin (or PPS) activation
             if (verbosity>=2){
-                printf("J for positions at control point:\n %s \nJ.transposed:\n %s \nNormal at control point: %s \n",J.toString(3,3).c_str(),J.transposed().toString(3,3).c_str(), normal.toString(3,3).c_str());
+                printf("J for positions at control point:\n %s \nJ.transposed:\n %s \nNormal at control point: (%s), norm: %f \n",J.toString(3,3).c_str(),J.transposed().toString(3,3).c_str(), normal.toString(3,3).c_str(),norm(normal));
                 printf("s = (J.transposed()*normal) * avoidingSpeed * collisionPoints[i].magnitude \n (%s)T = (%s)T * %f * %f\n",s.toString(3,3).c_str(),(J.transposed()*normal).toString(3,3).c_str(),avoidingSpeed,collisionPoints[i].magnitude);
             }    
             s = s * -1.0; //we reverse the direction to obtain joint velocities that bring about avoidance

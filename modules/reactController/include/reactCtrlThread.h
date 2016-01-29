@@ -49,6 +49,7 @@
 
 #include "reactIpOpt.h"
 #include "particleThread.h"
+#include "avoidanceHandler.h"
 
 using namespace yarp::dev;
 

@@ -32,8 +32,6 @@
 
 #include <iCub/skinDynLib/common.h>
 
-#include "avoidanceHandler.h" //is needed for the collisionPoint_t definition
-
 /**
 *
 * Class for reactive control of kinematic chain with target and obstacles
@@ -124,7 +122,7 @@ public:
     * @return estimated joint velocities.
     */
     virtual yarp::sig::Vector solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_dot_0,
-                                    double dt, const yarp::sig::Matrix &v_lim, const std::vector<collisionPoint_t> &collision_points,
+                                    double dt, const yarp::sig::Matrix &v_lim, 
                                     int *exit_code);
 
     /**
