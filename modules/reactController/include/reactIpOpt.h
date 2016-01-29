@@ -90,13 +90,6 @@ public:
     void setVerbosity(const unsigned int verbose);
 
     /**
-    * Returns the lower and upper bounds to represent -inf and +inf.
-    * @param lower is a reference to return the lower bound.
-    * @param upper is a reference to return the upper bound. 
-    */
-    void getBoundsInf(double &lower, double &upper);
-
-    /**
     * Executes the IpOpt algorithm trying to converge on target. 
     * @param xd        is the End-Effector target Pose to be attained. 
     * @param q_dot_0   are the initial joint velocities of the chain.
@@ -122,7 +115,7 @@ public:
     * @return estimated joint velocities.
     */
     virtual yarp::sig::Vector solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_dot_0,
-                                    double dt, const yarp::sig::Matrix &v_lim, 
+                                    double dt, const yarp::sig::Matrix &v_lim, bool bonundSmoothnessOn,
                                     int *exit_code);
 
     /**

@@ -90,6 +90,8 @@ protected:
     bool visualizeParticleInSim; 
     // will use the yarp rpc /icubSim/world to visualize the potential collision points
     bool visualizeCollisionPointsInSim;
+    //to enable/disable the smooth changes of joint velocities bounds in optimizer
+    bool ipoptBoundSmoothnessOn; 
     
     /***************************************************************************/
     // INTERNAL VARIABLES:

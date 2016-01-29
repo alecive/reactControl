@@ -102,6 +102,7 @@ protected:
     // The torso reduction rate at for the max velocities sent to the torso(default 3.0)
     double torsoReduction;  
     //for smooth changes in joint velocities
+    bool boundSmoothnessOn; 
     double boundSmoothness;
     
     //joint position limits handled in a smooth way - see Pattacini et al. 2010 - iCub Cart. control - Fig. 8
@@ -254,8 +255,8 @@ public:
     /***** 8 pure virtual functions from TNLP class need to be implemented here **********/
     /************************************************************************/
     react_NLP(iKinChain &c, const yarp::sig::Vector &_xd, const yarp::sig::Vector &_q_dot_0,
-             double _dT, const yarp::sig::Matrix &_v_lim, int _verbosity) : chain(c),
-             xd(_xd), q_dot_0(_q_dot_0), dT(_dT), v_lim(_v_lim), verbosity(_verbosity) 
+             double _dT, const yarp::sig::Matrix &_v_lim, bool _boundSmoothnessOn, int _verbosity) : chain(c),
+             xd(_xd), q_dot_0(_q_dot_0), dT(_dT), v_lim(_v_lim), boundSmoothnessOn(_boundSmoothnessOn),verbosity(_verbosity) 
     {
         name="react_NLP";
 
@@ -347,20 +348,34 @@ public:
   
         for (Index i=0; i<n; i++)
         {
-            // The joints velocities will be constrained by the V_min / V_max constraints and 
-            // and the previous state (that is our current initial state), in order to avoid abrupt changes
-            x_l[i]=max(v_lim(i,0),q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD); //lower bound
-            x_u[i]=min(v_lim(i,1),q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD); //upper bound
-            
-                 
-            if (n==10 && i<3) //special handling of torso joints - should be moving less
+            if (boundSmoothnessOn)
             {
-                x_l[i]=max(v_lim(i,0)/torsoReduction,q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD);
-                x_u[i]=min(v_lim(i,1)/torsoReduction,q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD);
-            }
+                // The joints velocities will be constrained by the v_lim constraints (after possible external modification by avoidanceHandlers) and 
+                // and the previous state (that is our current initial state), in order to avoid abrupt changes
+                x_l[i]=max(v_lim(i,0),q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD); //lower bound
+                x_u[i]=min(v_lim(i,1),q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD); //upper bound
+                
+                    
+                if (n==10 && i<3) //special handling of torso joints - should be moving less
+                {
+                    x_l[i]=max(v_lim(i,0)/torsoReduction,q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD);
+                    x_u[i]=min(v_lim(i,1)/torsoReduction,q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD);
+                }
 
-            // printf("-V_max*CTRL_DEG2RAD %g\tq_dot_0[i]-boundSmoothness*CTRL_DEG2RAD %g\n",
-            //         -V_max*CTRL_DEG2RAD,    q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD);
+                // printf("-V_max*CTRL_DEG2RAD %g\tq_dot_0[i]-boundSmoothness*CTRL_DEG2RAD %g\n",
+                //         -V_max*CTRL_DEG2RAD,    q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD);
+            }
+            else{
+                // The joints velocities will be constrained by the v_lim constraints (after possible external modification by avoidanceHandlers) 
+                x_l[i]=v_lim(i,0); //lower bound
+                x_u[i]=v_lim(i,1); //upper bound
+                     
+                if (n==10 && i<3) //special handling of torso joints - should be moving less
+                {
+                    x_l[i]=v_lim(i,0)/torsoReduction;
+                    x_u[i]=v_lim(i,1)/torsoReduction;
+                }
+            }
         }
         
         //limits for the g function - in our case joint position limits
@@ -494,11 +509,11 @@ public:
         printMessage(4,"[finalize_solution] Solution of the primal variables, x: %s\n",
                                         IPOPT_Number_toString(x,CTRL_RAD2DEG).c_str());
         printMessage(4,"[finalize_solution] Solution of the bound multipliers: z_L and z_U\n");
-        printMessage(4,"[finalize_solution] z_L: %s\n",
+        printMessage(4,"[finalize_solution (deg))] z_L: %s\n",
                         IPOPT_Number_toString(z_L,CTRL_RAD2DEG).c_str());
-        printMessage(4,"[finalize_solution] z_U: %s\n",
+        printMessage(4,"[finalize_solution (deg)] z_U: %s\n",
                         IPOPT_Number_toString(z_U,CTRL_RAD2DEG).c_str());
-        printMessage(4,"[finalize_solution] q(t+1): %s\n",
+        printMessage(4,"[finalize_solution (deg)] q(t+1): %s\n",
                         IPOPT_Number_toString(g,CTRL_RAD2DEG).c_str());
         printMessage(4,"[finalize_solution] Objective value f(x*) = %e\n", obj_value);
         for (Index i=0; i<n; i++)
@@ -564,9 +579,9 @@ void reactIpOpt::setVerbosity(const unsigned int verbose)
 
 /************************************************************************/
 yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_dot_0,
-                                    double dt, const yarp::sig::Matrix &v_lim, int *exit_code)
+                                    double dt, const yarp::sig::Matrix &v_lim, bool boundSmoothnessOn, int *exit_code)
 {
-    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,v_lim,verbosity);
+    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,v_lim,boundSmoothnessOn, verbosity);
     
     CAST_IPOPTAPP(App)->Options()->SetNumericValue("max_cpu_time",dt);
     ApplicationReturnStatus status=CAST_IPOPTAPP(App)->OptimizeTNLP(GetRawPtr(nlp));
