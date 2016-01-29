@@ -373,10 +373,10 @@ public:
             }
         }
         
-        printMessage(3,"[get_bounds_info]   x_l: %s\n", IPOPT_Number_toString(x_l,CTRL_RAD2DEG).c_str());
-        printMessage(3,"[get_bounds_info]   x_u: %s\n", IPOPT_Number_toString(x_u,CTRL_RAD2DEG).c_str());
-        printMessage(4,"[get_bounds_info]   g_l: %s\n", IPOPT_Number_toString(g_l,CTRL_RAD2DEG).c_str());
-        printMessage(4,"[get_bounds_info]   g_u: %s\n", IPOPT_Number_toString(g_u,CTRL_RAD2DEG).c_str());
+        printMessage(3,"[get_bounds_info (deg)]   x_l: %s\n", IPOPT_Number_toString(x_l,CTRL_RAD2DEG).c_str());
+        printMessage(3,"[get_bounds_info (deg)]   x_u: %s\n", IPOPT_Number_toString(x_u,CTRL_RAD2DEG).c_str());
+        printMessage(4,"[get_bounds_info (deg)]   g_l: %s\n", IPOPT_Number_toString(g_l,CTRL_RAD2DEG).c_str());
+        printMessage(4,"[get_bounds_info (deg)]   g_u: %s\n", IPOPT_Number_toString(g_u,CTRL_RAD2DEG).c_str());
         return true;
     }
     
@@ -541,9 +541,7 @@ reactIpOpt::reactIpOpt(const iKinChain &c, const double tol,
 
     Ipopt::ApplicationReturnStatus status = CAST_IPOPTAPP(App)->Initialize();
     if (status != Ipopt::Solve_Succeeded)
-    CAST_IPOPTAPP(App)->Options()->SetNumericValue("tol",tol);
-    CAST_IPOPTAPP(App)->Options()->SetNumericValue("acceptable_tol",tol);
-    CAST_IPOPTAPP(App)->Initialize();
+        yError("Error during initialization!");
 }
 
 

@@ -334,7 +334,8 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     AvoidanceHandlerAbstract *avhdl; 
     avhdl = new AvoidanceHandlerTactile(*arm->asChain(),collisionPoints,verbosity);
     Matrix vLimAdapted=avhdl->getVLIM(vLimNominal);
-
+    printf("calling ipopt with the following joint velocity limits (deg): \n %s \n",vLimAdapted.toString(3,3).c_str());
+    //printf("calling ipopt with the following joint velocity limits (rad): \n %s \n",(vLimAdapted*CTRL_DEG2RAD).toString(3,3).c_str());
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
     // So, q_dot_0 is in degrees, but I have to convert it in radians before sending it to ipopt
@@ -684,7 +685,7 @@ void reactCtrlThread::printJointsBounds()
     {
         min=chain(i).getMin()*CTRL_RAD2DEG;
         max=chain(i).getMax()*CTRL_RAD2DEG;
-        yDebug("[jointsBounds] i: %i\tmin: %g\tmax %g",i,min,max);
+        yDebug("[jointsBounds (deg)] i: %i\tmin: %g\tmax %g",i,min,max);
     }
 }
 
