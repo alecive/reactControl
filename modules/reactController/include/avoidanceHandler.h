@@ -27,6 +27,8 @@
 #include <stdarg.h>
 #include <string>
 
+#include <algorithm>
+
 #include <yarp/sig/all.h>
 #include <yarp/math/Math.h>
 #include <yarp/os/Property.h>
@@ -77,7 +79,7 @@ public:
     * @param l is the level of verbosity: if verbosity >= l, something is printed
     * @param f is the text. Please use c standard (like printf)
     */
-    int printMessage(const int l, const char *f, ...) const;
+    int printMessage(const unsigned int l, const char *f, ...) const;
     
 };
 

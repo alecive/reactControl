@@ -146,7 +146,7 @@ AvoidanceHandlerAbstract::~AvoidanceHandlerAbstract()
 }
 
 
-int AvoidanceHandlerAbstract::printMessage(const int l, const char *f, ...) const
+int AvoidanceHandlerAbstract::printMessage(const unsigned int l, const char *f, ...) const
 {
     if (verbosity>=l)
     {
