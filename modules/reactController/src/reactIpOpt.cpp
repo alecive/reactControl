@@ -60,26 +60,27 @@ protected:
     unsigned int dim;
 
     // The desired position to attain
-    yarp::sig::Vector &xd;
+    yarp::sig::Vector xd;
     // The current position
     yarp::sig::Vector x0;
 
     // The delta T with which ipopt needs to solve the task - time in the task, not comp. time - delta x = delta T * J * q_dot 
-    double &dT;
+    double dT;
 
-    // The maximum allowed speed at the joints
-    double V_max;
-    
+  
+    //N.B. Here within IPOPT, we will keep everyting in radians - joint pos in rad, joint vel in rad/s; same for limits 
     // The desired final joint velocities - the solution of this iteration 
     yarp::sig::Vector q_dot_d;
     // The initial joint velocities - solution from prev. step 
     yarp::sig::Vector q_dot_0;
     // The current joint velocities - for internal steps of ipopt, not carrying a particular meaning
     yarp::sig::Vector q_dot;
-
     // The current joint configuration
     yarp::sig::Vector q_t;
-
+    // The maximum allowed speed at the joints; joints in rows; first col minima, second col maxima
+    //They may be set adaptively by avoidanceHandler from the outside
+    yarp::sig::Matrix v_lim;
+    
     // The cost function
     yarp::sig::Vector cost_func;
     // The gradient of the cost function
@@ -101,13 +102,9 @@ protected:
     // The torso reduction rate at for the max velocities sent to the torso(default 3.0)
     double torsoReduction;  
     //for smooth changes in joint velocities
-    double boundSmoothness;
+    bool boundSmoothnessOn; 
+    double boundSmoothness; //new joint vel can differ by max boundSmoothness from the previous one (rad)
     
-    vector<collisionPoint_t> collisionPoints; //list of "avoidance vectors" from peripersonal space / safety margin
-    /* every (potential) collision point will be converted into a set of joint velocity limits in the subchain   above the threat - 
-     - the unaffected joints (more distal and those with opposite sign of Jacobian inverse) will be set to their maxima/minima */
-    vector<yarp::sig::Vector> jointVelMinimaForSafetyMargin;
-    vector<yarp::sig::Vector> jointVelMaximaForSafetyMargin;
     //joint position limits handled in a smooth way - see Pattacini et al. 2010 - iCub Cart. control - Fig. 8
     yarp::sig::Vector qGuard;
     yarp::sig::Vector qGuardMinInt, qGuardMinExt, qGuardMinCOG;
@@ -209,42 +206,6 @@ protected:
     }
     
     
-    //creates a full transform as given by a DCM matrix at the pos and norm w.r.t. the original frame, from the pos and norm (one axis set arbitrarily)  
-    bool computeFoR(const yarp::sig::Vector &pos, const yarp::sig::Vector &norm, yarp::sig::Matrix &FoR)
-    {
-        if (norm == zeros(3))
-        {
-            FoR=eye(4);
-            return false;
-        }
-        
-        // Set the proper orientation for the touching end-effector
-        yarp::sig::Vector x(3,0.0), z(3,0.0), y(3,0.0);
-
-        z = norm;
-        if (z[0] == 0.0)
-        {
-            z[0] = 0.00000001;    // Avoid the division by 0
-        }
-        y[0] = -z[2]/z[0]; //y is in normal plane
-        y[2] = 1; //this setting is arbitrary
-        x = -1*(cross(z,y));
-
-        // Let's make them unitary vectors:
-        x = x / yarp::math::norm(x);
-        y = y / yarp::math::norm(y);
-        z = z / yarp::math::norm(z);
-
-        FoR=eye(4);
-        FoR.setSubcol(x,0,0);
-        FoR.setSubcol(y,0,1);
-        FoR.setSubcol(z,0,2);
-        FoR.setSubcol(pos,0,3);
-
-        return true;
-    }
-    
-
     /********to ensure joint pos limits but in a smooth way around the limits****************************************/
     void computeGuard()
     {
@@ -270,96 +231,7 @@ protected:
         printMessage(4,"qGuardMaxExt %s\n",(CTRL_RAD2DEG*qGuardMaxExt).toString(3,3).c_str());
     }
     
-    /**** goes through the avoidanceVectors and for each of them adapts the joint vel limits in
-     * the chain above the threat so as to assist in avoiding the collision - constraining the joints in going toward the threat */
-    void setSafetyMarginJointVelLimits()
-    {
-        if (!collisionPoints.empty()){
-            for(std::vector<collisionPoint_t>::const_iterator it = collisionPoints.begin(); it != collisionPoints.end(); ++it) {
-                yarp::sig::Vector minima(dim,-V_max); //joint velocity minima
-                yarp::sig::Vector maxima(dim,V_max); // joint velocity maxima
-                iKinChain chain_local = chain; //makes a copy that will be used internally and some joints blocked
-               
-                if (verbosity >= 5){
-                    printf("Full chain has %d DOF \n",chain.getDOF());
-                    printf("chain.getH(): \n %s \n",chain.getH().toString(3,3).c_str());
-                    int linkNrForCurrentSkinPartFrame = 0;
-                    if (dim ==7){
-                        printf("chain.getH() relevant for skinPart %s: \n %s \n",SkinPart_s[(*it).skin_part].c_str(),chain.getH(SkinPart_2_LinkNum[(*it).skin_part].linkNum).toString(3,3).c_str());
-                    }
-                    else if (dim == 10){
-                         printf("chain.getH() relevant for skinPart %s: \n %s \n",SkinPart_s[(*it).skin_part].c_str(),chain.getH(SkinPart_2_LinkNum[(*it).skin_part].linkNum + 3).toString(3,3).c_str());
-                    }
-                    yarp::sig::Matrix JfullChain = chain.GeoJacobian(); //6 rows, n columns for every active DOF
-                    printMessage(5,"GeoJacobian matrix for canonical end-effector (palm): \n %s \n",JfullChain.toString(3,3).c_str());
-                }
-                 
-               // Block all the more distal joints after the joint 
-                // if the skin part is a hand, no need to block any joints
-                if (((*it).skin_part == SKIN_LEFT_FOREARM) ||  ((*it).skin_part == SKIN_RIGHT_FOREARM)){
-                    if(dim == 10){
-                        chain_local.blockLink(9); chain_local.blockLink(8);//wrist joints 
-                        printMessage(4,"obstacle threatening skin part %s, blocking links 9 and 10 (wrist) (but indexes 8,9) on subchain for avoidance\n",SkinPart_s[(*it).skin_part].c_str());
-                    }
-                    else if(dim==7){
-                        chain_local.blockLink(6); chain_local.blockLink(5);//wrist joints
-                        printMessage(4,"obstacle threatening skin part %s, blocking links 6 and 7 (wrist) (but indexes 5,6) on subchain for avoidance\n",SkinPart_s[(*it).skin_part].c_str());
-                   
-                    }
-                }
-                else if (((*it).skin_part == SKIN_LEFT_UPPER_ARM) ||  ((*it).skin_part == SKIN_RIGHT_UPPER_ARM)){
-                    if(dim == 10){
-                        chain_local.blockLink(9); chain_local.blockLink(8);chain_local.blockLink(7);chain_local.blockLink(6); //wrist joints + elbow joints
-                        printMessage(4,"obstacle threatening skin part %s, blocking links 7-10 (wrist+elbow; indexes 6-9) on subchain for avoidance\n",SkinPart_s[(*it).skin_part].c_str());
-                    }
-                    else if(dim==7){
-                        chain_local.blockLink(6); chain_local.blockLink(5);chain_local.blockLink(4);chain_local.blockLink(3); //wrist joints + elbow joints
-                        printMessage(4,"obstacle threatening skin part %s, blocking links 7-10 (wrist+elbow; indexes 6-9) on subchain for avoidance\n",SkinPart_s[(*it).skin_part].c_str());
-                    }
-                }
-                // SetHN to move the end effector toward the point to be controlled - the average locus of collision threat from safety margin
-                yarp::sig::Matrix HN = eye(4);
-                computeFoR((*it).x,(*it).n,HN);
-                printMessage(5,"HN matrix at collision point w.r.t. local frame: \n %s \n",HN.toString(3,3).c_str());
-                //TODO Ugo - the end-effector needs to be correctly set w.r.t. the sub chain? But coordinates are in the corresponding frame for a given skin part, SkinPart_2_LinkNum[(*it).skin_part].linkNum) [+ 3 torso DOF]  
-                chain_local.setHN(HN); //! this is probably wrong - setting the end-effector transform to the collision point w.r.t subchain
-                if (verbosity >=5){
-                    yarp::sig::Matrix H = chain_local.getH();
-                    printf("H matrix at collision point w.r.t. root: \n %s \n",H.toString(3,3).c_str());
-                }
-                
-                //printMessage(5,"Normal at collision point w.r.t. skin part frame: %s, norm %f.\n",(*it).n.toString(3,3).c_str(),yarp::math::norm((*it).n));
-                //yarp::sig::Vector normalAtCollisionInRootFoR = chain_local.getH() * (*it).n;
-                //normalAtCollisionInRootFoR.subVector(0,3); //take out the dummy element from homogenous transform
-                //printMessage(5,"Normal at collision point w.r.t. Root: %s, norm %f.\n",normalAtCollisionInRootFoR.toString(3,3).c_str(),yarp::math::norm(normalAtCollisionInRootFoR));
-        
-                //for testing
-                //yarp::sig::Vector normalAtCollisionInEndEffFrame(4,0.0);
-                //normalAtCollisionInEndEffFrame(2) = 1.0; //z-axis ~ normal
-                //yarp::sig::Vector normalAtCollisionInRootFoR_2 = chain_local.getHN() * normalAtCollisionInEndEffFrame;
-                
-                
-                yarp::sig::Matrix J = chain_local.GeoJacobian(); //6 rows, n columns for every active DOF (excluding the blocked)
-                printMessage(5,"GeoJacobian matrix of new end-effector (collision point), after possible blocking of joints: \n %s \n",J.toString(3,3).c_str());
-                yarp::sig::Matrix pseudoInvJ = yarp::math::pinv(J); 
-                printMessage(5,"Jacobian pseudoinverse matrix: \n %s \n",pseudoInvJ.toString(3,3).c_str());
-                
-
-                // Compute the q_dot - joint velocities that contribute to motion along the normal - "toward the "threat" 
-                //yarp::sig::Vector qdotTowardThreat = correct submatrix of  pseudoInvJ * normal at collision point; //TODO Ugo
-                // ~ Eq. 13 in Flacco et al. 2012
-                
-                //TODO Ugo take the q_dot and then use them to define the minima and maxima vectors - take into account just the sign like Flacco (Eq. 14) or 
-                //magnitude of qdot or take into account avoidance vector magnitude (Eq. 12 in Flacco, in our case will come from PPS activation; 
-                // be careful with which links are blocked - assign to correct joints
-                
-                //TODO Ugo add the newly found limits to jointVelMinimaForSafetyMargin / jointVelMaximaForSafetyMargin;
-                
-               // printf("setSafetyMarginJointVelLimits: end of \n");
-            }
-        }
-    }
-    
+   
     
     /************************************************************************/
     int printMessage(const int l, const char *f, ...) const
@@ -382,9 +254,9 @@ protected:
 public:
     /***** 8 pure virtual functions from TNLP class need to be implemented here **********/
     /************************************************************************/
-    react_NLP(iKinChain &c, yarp::sig::Vector &_xd, yarp::sig::Vector &_q_dot_0,
-             double &_dT, double &_vM, const std::vector<collisionPoint_t> & _collision_points, int _verbosity) : chain(c),
-             q_dot_0(_q_dot_0), dT(_dT), xd(_xd), collisionPoints(_collision_points), verbosity(_verbosity), V_max(_vM)
+    react_NLP(iKinChain &c, const yarp::sig::Vector &_xd, const yarp::sig::Vector &_q_dot_0,
+             double _dT, const yarp::sig::Matrix &_v_lim, bool _boundSmoothnessOn, int _verbosity) : chain(c),
+             xd(_xd), q_dot_0(_q_dot_0), dT(_dT), v_lim(_v_lim), boundSmoothnessOn(_boundSmoothnessOn),verbosity(_verbosity) 
     {
         name="react_NLP";
 
@@ -398,7 +270,7 @@ public:
         yarp::sig::Matrix H=chain.getH();
         x0=H.subcol(0,3,3);
 
-        dim=chain.getDOF(); //e.g. 7 for the arm joints, 10 if torso is included
+        dim=chain.getDOF(); //only active (not blocked) joints - e.g. 7 for the arm joints, 10 if torso is included
         if (!((dim == 7) || (dim == 10)) ){ 
             yError("react_NLP(): unexpected nr DOF on the chain : %d\n",dim);
         }
@@ -415,7 +287,7 @@ public:
         guardRatio=0.4;
 
         torsoReduction=3.0;
-        boundSmoothness=10.0;
+        boundSmoothness=10.0*CTRL_DEG2RAD;
 
         qGuard.resize(dim,0.0);
         qGuardMinInt.resize(dim,0.0);
@@ -473,26 +345,40 @@ public:
                          Number* g_u)
     {
         //x_l, x_u - limits for the primal variables - in our case joint velocities
-        setSafetyMarginJointVelLimits(); //will go through the avoidanceVectors and set the jointVelMinimaForSafetyMargin / jointVelMaximaForSafetyMargin
-
+  
         for (Index i=0; i<n; i++)
         {
-            // The joints velocities will be constrained by the V_min / V_max constraints and 
-            // and the previous state (that is our current initial state), in order to avoid abrupt changes
-            x_l[i]=max(-V_max*CTRL_DEG2RAD,q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD); //lower bound
-            x_u[i]=min(+V_max*CTRL_DEG2RAD,q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD); //upper bound
-            
-            //TODO Ugo integrate the additional limits from  jointVelMinimaForSafetyMargin / jointVelMaximaForSafetyMargin;
-                
-            
-            if (n==10 && i<3) //special handling of torso joints - should be moving less
+            if (boundSmoothnessOn)
             {
-                x_l[i]=max(-V_max*CTRL_DEG2RAD/torsoReduction,q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD);
-                x_u[i]=min(+V_max*CTRL_DEG2RAD/torsoReduction,q_dot_0[i]+boundSmoothness*CTRL_DEG2RAD);
-            }
+                // The joints velocities will be constrained by the v_lim constraints (after possible external modification by avoidanceHandlers) and 
+                // and the previous state (that is our current initial state), in order to avoid abrupt changes
+                double smoothnessMin = std::min(v_lim(i,1),q_dot_0[i]-boundSmoothness); //the smooth min vel should not be bigger than max vel
+                double smoothnessMax = std::max(v_lim(i,0),q_dot_0[i]+boundSmoothness); //the smooth max vel should not be smaller than min vel
+                
+                x_l[i]=max(v_lim(i,0),smoothnessMin); //lower bound
+                x_u[i]=min(v_lim(i,1),smoothnessMax); //upper bound
+                
+                
+                if (n==10 && i<3) //special handling of torso joints - should be moving less
+                {
+                    x_l[i]=max(v_lim(i,0)/torsoReduction,smoothnessMin);
+                    x_u[i]=min(v_lim(i,1)/torsoReduction,smoothnessMax);
+                }
 
-            // printf("-V_max*CTRL_DEG2RAD %g\tq_dot_0[i]-boundSmoothness*CTRL_DEG2RAD %g\n",
-            //         -V_max*CTRL_DEG2RAD,    q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD);
+                // printf("-V_max*CTRL_DEG2RAD %g\tq_dot_0[i]-boundSmoothness*CTRL_DEG2RAD %g\n",
+                //         -V_max*CTRL_DEG2RAD,    q_dot_0[i]-boundSmoothness*CTRL_DEG2RAD);
+            }
+            else{
+                // The joints velocities will be constrained by the v_lim constraints (after possible external modification by avoidanceHandlers) 
+                x_l[i]=v_lim(i,0); //lower bound
+                x_u[i]=v_lim(i,1); //upper bound
+                     
+                if (n==10 && i<3) //special handling of torso joints - should be moving less
+                {
+                    x_l[i]=v_lim(i,0)/torsoReduction;
+                    x_u[i]=v_lim(i,1)/torsoReduction;
+                }
+            }
         }
         
         //limits for the g function - in our case joint position limits
@@ -505,10 +391,10 @@ public:
             }
         }
         
-        printMessage(3,"[get_bounds_info]   x_l: %s\n", IPOPT_Number_toString(x_l,CTRL_RAD2DEG).c_str());
-        printMessage(3,"[get_bounds_info]   x_u: %s\n", IPOPT_Number_toString(x_u,CTRL_RAD2DEG).c_str());
-        printMessage(4,"[get_bounds_info]   g_l: %s\n", IPOPT_Number_toString(g_l,CTRL_RAD2DEG).c_str());
-        printMessage(4,"[get_bounds_info]   g_u: %s\n", IPOPT_Number_toString(g_u,CTRL_RAD2DEG).c_str());
+        printMessage(3,"[get_bounds_info (deg)]   x_l: %s\n", IPOPT_Number_toString(x_l,CTRL_RAD2DEG).c_str());
+        printMessage(3,"[get_bounds_info (deg)]   x_u: %s\n", IPOPT_Number_toString(x_u,CTRL_RAD2DEG).c_str());
+        printMessage(4,"[get_bounds_info (deg)]   g_l: %s\n", IPOPT_Number_toString(g_l,CTRL_RAD2DEG).c_str());
+        printMessage(4,"[get_bounds_info (deg)]   g_u: %s\n", IPOPT_Number_toString(g_u,CTRL_RAD2DEG).c_str());
         return true;
     }
     
@@ -626,11 +512,11 @@ public:
         printMessage(4,"[finalize_solution] Solution of the primal variables, x: %s\n",
                                         IPOPT_Number_toString(x,CTRL_RAD2DEG).c_str());
         printMessage(4,"[finalize_solution] Solution of the bound multipliers: z_L and z_U\n");
-        printMessage(4,"[finalize_solution] z_L: %s\n",
+        printMessage(4,"[finalize_solution (deg))] z_L: %s\n",
                         IPOPT_Number_toString(z_L,CTRL_RAD2DEG).c_str());
-        printMessage(4,"[finalize_solution] z_U: %s\n",
+        printMessage(4,"[finalize_solution (deg)] z_U: %s\n",
                         IPOPT_Number_toString(z_U,CTRL_RAD2DEG).c_str());
-        printMessage(4,"[finalize_solution] q(t+1): %s\n",
+        printMessage(4,"[finalize_solution (deg)] q(t+1): %s\n",
                         IPOPT_Number_toString(g,CTRL_RAD2DEG).c_str());
         printMessage(4,"[finalize_solution] Objective value f(x*) = %e\n", obj_value);
         for (Index i=0; i<n; i++)
@@ -643,11 +529,13 @@ public:
 
 
 /************************************************************************/
-reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
+reactIpOpt::reactIpOpt(const iKinChain &c, const double tol,
                        const unsigned int verbose) :
                        chain(c), verbosity(verbose)
 {
+    //reactIpOpt makes a copy of the original chain; then it will be passed as reference to react_NLP in reactIpOpt::solve
     chain.setAllConstraints(false); // this is required since IpOpt initially relaxes constraints
+    //note that this is about limits not about joints being blocked (which is preserved)
 
     App=new IpoptApplication();
 
@@ -676,15 +564,6 @@ reactIpOpt::reactIpOpt(iKinChain &c, const double tol,
 
 
 /************************************************************************/
-void reactIpOpt::setTol(const double tol)
-{
-    CAST_IPOPTAPP(App)->Options()->SetNumericValue("tol",tol);
-    CAST_IPOPTAPP(App)->Options()->SetNumericValue("acceptable_tol",tol);
-    CAST_IPOPTAPP(App)->Initialize();
-}
-
-
-/************************************************************************/
 double reactIpOpt::getTol() const
 {
     double tol;
@@ -702,11 +581,10 @@ void reactIpOpt::setVerbosity(const unsigned int verbose)
 
 
 /************************************************************************/
-yarp::sig::Vector reactIpOpt::solve(yarp::sig::Vector &xd, yarp::sig::Vector q_dot_0,
-                                    double &dt, double &vm, const std::vector<collisionPoint_t> &collision_points,
-                                    int *exit_code)
+yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_dot_0,
+                                    double dt, const yarp::sig::Matrix &v_lim, bool boundSmoothnessOn, int *exit_code)
 {
-    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,vm,collision_points,verbosity);
+    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,v_lim,boundSmoothnessOn, verbosity);
     
     CAST_IPOPTAPP(App)->Options()->SetNumericValue("max_cpu_time",dt);
     ApplicationReturnStatus status=CAST_IPOPTAPP(App)->OptimizeTNLP(GetRawPtr(nlp));

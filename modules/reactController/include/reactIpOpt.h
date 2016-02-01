@@ -32,14 +32,6 @@
 
 #include <iCub/skinDynLib/common.h>
 
-struct collisionPoint_t{
-        iCub::skinDynLib::SkinPart skin_part;
-        yarp::sig::Vector x; //position (x,y,z) in the FoR of the respective skin part
-        yarp::sig::Vector n; //normal vector at that point - derived from taxel normals, pointing out of the skin
-        double magnitude; // ~ activation level from probabilistic representation in pps - likelihood of collision
-};
-    
-
 /**
 *
 * Class for reactive control of kinematic chain with target and obstacles
@@ -58,7 +50,7 @@ protected:
     // The IpOpt application that supposedly will solve the task
     void *App;
 
-    iCub::iKin::iKinChain &chain;
+    iCub::iKin::iKinChain chain;
 
     int verbosity;
 
@@ -73,7 +65,7 @@ public:
     *                dump. The larger this value the more detailed
     *                is the output (0=>off by default).
     */
-    reactIpOpt(iCub::iKin::iKinChain &c,
+    reactIpOpt(const iCub::iKin::iKinChain &c,
                const double tol, const unsigned int verbose=0);
 
     /**
@@ -96,13 +88,6 @@ public:
     *                is the output.
     */
     void setVerbosity(const unsigned int verbose);
-
-    /**
-    * Returns the lower and upper bounds to represent -inf and +inf.
-    * @param lower is a reference to return the lower bound.
-    * @param upper is a reference to return the upper bound. 
-    */
-    void getBoundsInf(double &lower, double &upper);
 
     /**
     * Executes the IpOpt algorithm trying to converge on target. 
@@ -129,8 +114,8 @@ public:
     *                   INTERNAL_ERROR
     * @return estimated joint velocities.
     */
-    virtual yarp::sig::Vector solve(yarp::sig::Vector &xd, yarp::sig::Vector q_dot_0,
-                                    double &dt, double &vm, const std::vector<collisionPoint_t> &collision_points,
+    virtual yarp::sig::Vector solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_dot_0,
+                                    double dt, const yarp::sig::Matrix &v_lim, bool bonundSmoothnessOn,
                                     int *exit_code);
 
     /**
