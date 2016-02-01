@@ -1,14 +1,17 @@
 function animate(filein,varargin)
-% Author: Ugo Pattacini
+% Author: Ugo Pattacini, Matej Hoffmann
 
 global P;
 global t t0;
-global xd xo q ctrlp;
-global hax hg1 hg2 hg3;
+global xd xr xo q ctrlp;
+global hax hg1 hg2 hg3 hg4;
 global save_movie save_pics writer tm;
+global plot_asynchronously;
 
 save_movie=false;
 save_pics=false;
+plot_asynchronously = true; % in this mode, the timer will not be used, allowing to step the visualization
+
 if nargin>1
     mode=varargin{1};
     if strcmpi(mode,'save-movie')
@@ -20,10 +23,11 @@ end
 
 data=importdata(filein);
 t=data(:,1);
-xd=data(:,2:4);
-xo=data(:,5:8);
-q=data(:,19:19+10-1);
-ctrlp=data(:,19+10:end);
+xd=data(:,2:4); % target
+xo=data(:,5:8); % obstacle
+xr=data(:,9:11); % end-effector target
+q=data(:,22:22+10-1); % joint angles
+ctrlp=data(:,52:end); % ctrl points
 
 P{1}.A =0.032;      P{1}.D =0;        P{1}.alpha =pi/2;  P{1}.offset =0;
 P{2}.A =0;          P{2}.D =-0.0055;  P{2}.alpha =pi/2;  P{2}.offset =-pi/2;
@@ -56,15 +60,14 @@ quiver3(hax,0,0,0,0,0,1,scale,'Color','b','Linewidth',2);
 hg1=[];
 hg2=[];
 hg3=[];
+hg4=[];
 
 set(hfig,'CloseRequestFcn',@Quit);
 
-Ts=0.1;
-tm=timer('Period',Ts,'ExecutionMode','fixedRate',...
-         'TimerFcn',@PlotQuantities);
-    
 if save_movie
-    writer=VideoWriter('movie','MPEG-4');
+    %writer=VideoWriter('movie','MPEG-4');
+    writer=VideoWriter('movie','Motion JPEG AVI');
+    %writer=VideoWriter('movie','Uncompressed AVI');
     writer.FrameRate=10;
     open(writer);
 end
@@ -73,6 +76,21 @@ if save_pics
     [~]=rmdir('./pics','s');
     mkdir('./pics');
 end
+
+
+if plot_asynchronously
+    [m,n]=size(data);
+    for i=1:m
+       PlotQuantitiesAsync(data(i,1)); 
+       pause;
+    end
+else
+    Ts=0.1;
+    tm=timer('Period',Ts,'ExecutionMode','fixedRate',...
+         'TimerFcn',@PlotQuantities);
+end
+     
+
 
 t0=cputime;
 start(tm);
@@ -167,8 +185,8 @@ end
 function PlotQuantities(obj,event,string_arg) %#ok<INUSD>
 
 global t t0;
-global xd xo q ctrlp;
-global hax hg1 hg2 hg3;
+global xd xo xr q ctrlp;
+global hax hg1 hg2 hg3 hg4;
 global save_movie save_pics writer tm;
 
 dt=cputime-t0;
@@ -191,15 +209,23 @@ if ~isempty(hg3)
     delete(hg3)
 end
 
+
+if ~isempty(hg4)
+    delete(hg4)
+end
+
 [x,axpoint]=fkin(q(i,:));
-hg1=drawArm(x,axpoint,ctrlp(i,:));
-hg2=plot3(hax,xd(i,1),xd(i,2),xd(i,3),'go','LineWidth',3);
+hg1=drawArm(x,axpoint,ctrlp(i,:)); % draws the whole "arm" - in fact whole chain from root to end-eff
+hg2=plot3(hax,xr(i,1),xr(i,2),xr(i,3),'go','LineWidth',5); % plots the enf-eff target
 
 n=10;
 [x,y,z]=sphere(n); r=xo(i,4);
 c(:,:,1)=ones(n); c(:,:,2)=zeros(n); c(:,:,3)=zeros(n);
-hg3=surf(hax,xo(i,1)+r*x,xo(i,2)+r*y,xo(i,3)+r*z,c,'EdgeColor','none');
+hg3=surf(hax,xo(i,1)+r*x,xo(i,2)+r*y,xo(i,3)+r*z,c,'EdgeColor','none'); % plots the end-eff target
 alpha(hg3,0.2);
+
+hg4=plot3(hax,xd(i,1),xd(i,2),xd(i,3),'go','LineWidth',10); % plots the actual target
+
 drawnow;
 
 if save_movie
@@ -218,6 +244,68 @@ if save_pics
     catch
     end
 end
+
+%--------------------------------------------------------------------------
+function PlotQuantitiesAsync(current_t) 
+
+global t t0;
+global xd xo xr q ctrlp;
+global hax hg1 hg2 hg3 hg4;
+global save_movie save_pics writer tm;
+
+i=find(t>=current_t,1);
+
+if isempty(i)
+   return;
+end
+  
+if ~isempty(hg1)
+    delete(hg1)
+end
+
+if ~isempty(hg2)
+    delete(hg2)
+end
+
+if ~isempty(hg3)
+    delete(hg3)
+end
+
+if ~isempty(hg4)
+    delete(hg4)
+end
+
+[x,axpoint]=fkin(q(i,:));
+hg1=drawArm(x,axpoint,ctrlp(i,:)); % draws the whole "arm" - in fact whole chain from root to end-eff
+hg2=plot3(hax,xr(i,1),xr(i,2),xr(i,3),'go','LineWidth',3); % plots the end-eff target
+
+n=10;
+[x,y,z]=sphere(n); r=xo(i,4);
+c(:,:,1)=ones(n); c(:,:,2)=zeros(n); c(:,:,3)=zeros(n);
+hg3=surf(hax,xo(i,1)+r*x,xo(i,2)+r*y,xo(i,3)+r*z,c,'EdgeColor','none');
+alpha(hg3,0.2);
+
+hg4=plot3(hax,xd(i,1),xd(i,2),xd(i,3),'go','LineWidth',10); % plots the actual target
+
+drawnow;
+
+if save_movie
+    try
+        frame=getframe(hax);
+        writeVideo(writer,frame);
+    catch
+    end
+end
+
+if save_pics
+    try
+        frame=getframe(hax);
+        img=frame2im(frame);
+        imwrite(img,sprintf('./pics/img_%.8d.png',i));
+    catch
+    end
+end
+
 
 
 %--------------------------------------------------------------------------
