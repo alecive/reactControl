@@ -26,7 +26,7 @@
 #include <yarp/os/Mutex.h>
 #include <yarp/os/LockGuard.h>
 #include <yarp/os/Port.h>
-#include <yarp/os/Network.h>
+
 
 #include <yarp/sig/Vector.h>
 #include <yarp/sig/Matrix.h>
@@ -39,6 +39,7 @@
 #include <yarp/dev/Drivers.h>
 
 #include <iCub/iKin/iKinFwd.h>
+#include <iCub/skinDynLib/common.h>
 
 #include <iostream>
 #include <string>
@@ -48,6 +49,7 @@
 
 #include "reactIpOpt.h"
 #include "particleThread.h"
+#include "avoidanceHandler.h"
 
 using namespace yarp::dev;
 
@@ -72,7 +74,7 @@ protected:
     bool useTorso;
     // [DEPRECATED] Trajectory time (default 3.0 s)
     double trajTime;
-    // Tracjectory speed (default 0.1 m/s)
+    // Trajectory speed (default 0.1 m/s)
     double trajSpeed;
     // Tolerance of the ipopt task. The solver exits if norm2(x_d-x)<tol.
     double tol;
@@ -80,32 +82,22 @@ protected:
     double globalTol;
     // Max velocity set for the joints
     double vMax;
+    //matrix with mni/max velocity limits for the current chain
+    yarp::sig::Matrix vLimNominal;
     // will use the yarp rpc /icubSim/world to visualize the target
     bool visualizeTargetInSim;
     // will use the yarp rpc /icubSim/world to visualize the particle (trajectory - intermediate targets)
     bool visualizeParticleInSim; 
     // will use the yarp rpc /icubSim/world to visualize the potential collision points
     bool visualizeCollisionPointsInSim;
+    //to enable/disable the smooth changes of joint velocities bounds in optimizer
+    bool ipoptBoundSmoothnessOn; 
     
     /***************************************************************************/
     // INTERNAL VARIABLES:
     particleThread  *prtclThrd;     // Pointer to the particleThread in order to access its data
 
     int        state;        // Flag to know in which state the thread is in
-    
-    double      t_0;        // Time at which the trajectory starts - currently these params are not used 
-    double      t_d;        // Time at which the trajectory should end - currently these params are not used
-    yarp::sig::Vector x_0;  // Initial end-effector position
-    yarp::sig::Vector x_t;  // Current end-effector position
-    yarp::sig::Vector x_n;  // Desired next end-effector position
-    yarp::sig::Vector x_d;  // Vector that stores the new target
-
-    yarp::sig::Vector q_dot_0;    // Initial arm configuration
-    yarp::sig::Vector q_dot;  // Computed arm configuration to reach the target
-    yarp::sig::Matrix H;      // End-effector pose
-
-    yarp::os::Port outPort;
-    yarp::os::Port portToSimWorld;
     
     // Driver for "classical" interfaces
     PolyDriver       ddA;
@@ -128,15 +120,32 @@ protected:
     yarp::sig::Vector     *encsT;
     int jntsT;
 
+    
+    size_t chainActiveDOF;
+    
+    double      t_0;        // Time at which the trajectory starts - currently these params are not used 
+    double      t_d;        // Time at which the trajectory should end - currently these params are not used
+    yarp::sig::Vector x_0;  // Initial end-effector position
+    yarp::sig::Vector x_t;  // Current end-effector position
+    yarp::sig::Vector x_n;  // Desired next end-effector position
+    yarp::sig::Vector x_d;  // Vector that stores the new target
+
+    yarp::sig::Vector q_dot_0;    // Initial arm configuration
+    yarp::sig::Vector q_dot;  // Computed arm configuration to reach the target
+    yarp::sig::Matrix H;      // End-effector pose
+
+    yarp::os::Port outPort;
+    yarp::os::Port portToSimWorld;
+    
+ 
     // IPOPT STUFF
     reactIpOpt    *slv;    // solver
-    int nDOF;
-
+    
     // Mutex for handling things correctly
     yarp::os::Mutex mutex;
     
     yarp::os::Bottle    cmd; 
-    yarp::sig::Matrix T; //from robot to simulator reference frame
+    yarp::sig::Matrix T_world_root; //homogenous transf. matrix expressing the rotation and translation of FoR from world (simulator) to from robot (Root) FoR
     
     // objects in simulator will be created only for first target - with new targets they will be moved
     bool firstTarget;

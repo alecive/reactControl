@@ -24,6 +24,7 @@
 #include <fstream>
 #include <iomanip>
 #include <deque>
+#include <set>
 
 #include <IpTNLP.hpp>
 #include <IpIpoptApplication.hpp>
@@ -51,13 +52,13 @@ class ControllerNLP : public Ipopt::TNLP
 {
     iKinChain &chain;
 
-    Vector xr;
-    Vector x0;
+    Vector xr; //target position
+    Vector x0; // current end-effector position
     Vector delta_x;
     Vector v0;
-    Matrix v_lim;
+    Matrix v_lim; //velocity limits, #rows ~ #DOF, first column minima, 2nd column maxima; in radians 
     Matrix bounds;
-    Matrix J0;
+    Matrix J0; //end-effector Jacobian for position (leaving orientation aside)
     Vector v;
     double dt;
 
@@ -181,7 +182,7 @@ public:
     void init()
     {
         x0=chain.EndEffPosition();
-        J0=chain.GeoJacobian().submatrix(0,2,0,chain.getDOF()-1);
+        J0=chain.GeoJacobian().submatrix(0,2,0,chain.getDOF()-1); //first 3 rows ~ delta position; 
         computeBounds();
     }
 
@@ -229,8 +230,8 @@ public:
         if (new_x)
         {
             for (size_t i=0; i<v.length(); i++)
-                v[i]=x[i];
-            delta_x=xr-(x0+dt*(J0*v));
+                v[i]=x[i]; //x are the primal variables optimized by Ipopt - in this case they are the joint velocities
+            delta_x=xr-(x0+dt*(J0*v)); //difference between target position and new end-eff position
         }
     }
 
@@ -347,6 +348,24 @@ public:
     }
 
     /****************************************************************/
+    void setPosition(const Vector &x)
+    {
+        I.reset(x);
+    }
+    
+    /****************************************************************/
+    void setVelocity(const Vector &_v)
+    {
+        v = _v;
+    }
+
+    /****************************************************************/
+    void setRadius(const double r)
+    {
+        radius = r;
+    }
+ 
+    /****************************************************************/
     string toString() const
     {
         ostringstream str;
@@ -374,13 +393,13 @@ public:
 
         limb_=new iKinLimb(limb);
         iKinChain *c1=limb_->asChain();
-        c1->rmLink(9); c1->rmLink(8); c1->rmLink(7);
+        c1->rmLink(9); c1->rmLink(8); c1->rmLink(7); //TODO for forearm skin, the link 7 should probably remain there; but then the HN will have to be adapted appropriately to set the translation from the new frame (wrist instead of elbow it seems)
         HN(2,3)=0.1373;
         c1->setHN(HN);
 
         limb_=new iKinLimb(limb);
         iKinChain *c2=limb_->asChain();
-        c2->rmLink(9); c2->rmLink(8); c2->rmLink(7);
+        c2->rmLink(9); c2->rmLink(8); c2->rmLink(7); //TODO for forearm skin, the link 7 should probably remain there; but then the HN will have to be adapted appropriately to set the translation from the new frame (wrist instead of elbow it seems)
         HN(2,3)=0.1373/2.0;
         c2->setHN(HN);
 
@@ -414,10 +433,11 @@ public:
     /****************************************************************/
     void updateCtrlPoints()
     {
-        // i>0: original chain is up-to-date
+        // i>0: original chain (one to the end-effector) is up-to-date
         for (size_t i=1; i<chainCtrlPoints.size(); i++)
             for (size_t j=0; j<chainCtrlPoints[i]->getDOF(); j++)
-                chainCtrlPoints[i]->setAng(j,chain(j).getAng());
+                chainCtrlPoints[i]->setAng(j,chain(j).getAng()); //updating the local chains with current config of the orig chain - 
+                //only for joint values in the local (possibly shorter) chain
     }
 
     /****************************************************************/
@@ -450,16 +470,21 @@ public:
 class AvoidanceHandlerVisuo : public virtual AvoidanceHandlerAbstract
 {
 protected:
+    bool scalingBySnorm;
+    
     double rho;
     double alpha;
+    double sScaling;
 
 public:
     /****************************************************************/
-    AvoidanceHandlerVisuo(iKinLimb &limb) : AvoidanceHandlerAbstract(limb)
+    AvoidanceHandlerVisuo(iKinLimb &limb,bool _scalingBySNorm) : AvoidanceHandlerAbstract(limb)
     {
         type="visuo";
+        scalingBySnorm = _scalingBySNorm;
         rho=0.4;
         alpha=6.0;
+        sScaling = 1.0;
 
         parameters.unput("rho");
         parameters.put("rho",rho);
@@ -491,41 +516,67 @@ public:
     {
         Vector xo=obstacle.getPosition();
         deque<Vector> ctrlPoints=getCtrlPointsPosition();
+        double sNorm = 1.0;
+        double sScalingGain = 4.0;
 
         Matrix VLIM=v_lim;
+        //yDebug("AvoidanceHandlerVisuo::getVLIM: adapting VLIM: \n");
         for (size_t i=0; i<ctrlPoints.size(); i++)
         {
             Vector dist=xo-ctrlPoints[i];
-            double d=norm(dist);
-            if (d>=obstacle.radius)
+            Vector distNormalized(3,0.0);
+            double d_norm=norm(dist);
+            if (d_norm>=obstacle.radius)
             {
-                dist*=1.0-obstacle.radius/d;
-                d=norm(dist);
+                dist*=1.0-obstacle.radius/d_norm; //the distance vector is refactored to account for the real distance between the control point and the obstacle surface
+                d_norm=norm(dist);
+                distNormalized = dist / d_norm;
             }
             else
             {
                 dist=0.0;
-                d=0.0;
+                distNormalized = 0.0;
+                d_norm=0.0;
             }
             
-            double f=1.0/(1.0+exp((d*(2.0/rho)-1.0)*alpha));
+            double f=1.0/(1.0+exp((d_norm*(2.0/rho)-1.0)*alpha));
             Matrix J=chainCtrlPoints[i]->GeoJacobian().submatrix(0,2,0,chainCtrlPoints[i]->getDOF()-1);
-            Vector s=J.transposed()*dist;
+            Vector s=J.transposed()*(distNormalized); //Matej: adding the normalization of distance- Eq. 13 in Flacco
 
-            double red=1.0-f;
+            yAssert((f>=0.0) && (f<=1.0));
+            //printf("    control point %d:  collision risk (f): %f, \n   J: \n %s \ns = J.transposed * distNormalized\n   (%s)T = \n (%s) * \n (%s)T\n",i,f,J.toString(3,3).c_str(),s.toString(3,3).c_str(),J.transposed().toString(3,3).c_str(),distNormalized.toString(3,3).c_str());
+            Vector rowNorms(J.rows(),0.0);
+        
+            if(scalingBySnorm){
+                sNorm = norm(s);
+                //printf("norm s: %f \n",norm(s));
+            }
             for (size_t j=0; j<s.length(); j++)
             {
+                //printf("        Joint: %d, s[j]: %f, limits before: Min: %f, Max: %f\n",j,s[j],VLIM(j,0),VLIM(j,1));
                 if (s[j]>=0.0)
                 {
-                    double tmp=v_lim(j,1)*red;
+                    if(scalingBySnorm){
+                        sScaling = std::min(1.0,abs(s[j]) / sNorm * sScalingGain);
+                        //printf("            s>=0 clause, scaling of f term min(1, abs(s[j])/sNorm*sScalingGain)  = %f = min(1.0, %f * %f) = min(1.0,%f)\n",sScaling,abs(s[j])/sNorm,sScalingGain,abs(s[j])/sNorm*sScalingGain);
+                    }
+                    double tmp=v_lim(j,1)*(1.0 - f*sScaling);
+                    //printf("        New max limit candidate: %f = %f * (1 - %f * %f) = %f * (1-%f),",tmp,v_lim(j,1),f,sScaling,v_lim(j,1),f*sScaling);
                     VLIM(j,1)=std::min(VLIM(j,1),tmp);
                     VLIM(j,0)=std::min(VLIM(j,0),VLIM(j,1));
+                    //printf("            s>=0 clause, limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
                 }
                 else
                 {
-                    double tmp=v_lim(j,0)*red;
+                    if(scalingBySnorm){
+                        sScaling = std::min(1.0,abs(s[j]) / sNorm * sScalingGain);
+                        //printf("        s<0 clause, scaling of f term min(1, abs(s[j])/sNorm*sScalingGain)  = %f = min(1.0, %f * %f) = min(1.0,%f)\n",sScaling,abs(s[j])/sNorm,sScalingGain,abs(s[j])/sNorm*sScalingGain);
+                    }
+                    double tmp=v_lim(j,0)*(1.0 - f*sScaling);
+                    //printf("            New min limit candidate: %f = %f * (1 - %f * %f) = %f * (1-%f),",tmp,v_lim(j,0),f,sScaling,v_lim(j,0),f*sScaling);
                     VLIM(j,0)=std::max(VLIM(j,0),tmp);
                     VLIM(j,1)=std::max(VLIM(j,0),VLIM(j,1));
+                    //printf("            s<0 clause, limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
                 }
             }
         }
@@ -612,8 +663,8 @@ class AvoidanceHandlerVisuoTactile : public AvoidanceHandlerVisuo,
 {
 public:
     /****************************************************************/
-    AvoidanceHandlerVisuoTactile(iKinLimb &limb) : AvoidanceHandlerAbstract(limb),
-                                                   AvoidanceHandlerVisuo(limb),
+    AvoidanceHandlerVisuoTactile(iKinLimb &limb,bool _scalingBySNorm) : AvoidanceHandlerAbstract(limb),
+                                                   AvoidanceHandlerVisuo(limb,_scalingBySNorm),
                                                    AvoidanceHandlerTactile(limb)
     {
         type="visuo-tactile";
@@ -653,25 +704,41 @@ void signal_handler(int signal)
 /****************************************************************/
 int main(int argc, char *argv[])
 {
+    yarp::os::Network yarp;
     ResourceFinder rf;
+    rf.setVerbose(true);
+    rf.setDefaultContext("react-control");
+    rf.setDefaultConfigFile("reactController-sim.ini");
     rf.configure(argc,argv);
 
+    int verbosity = rf.check("verbosity",Value(0)).asInt();
     double sim_time=rf.check("sim-time",Value(10.0)).asDouble();
-    double motor_tau=rf.check("motor-tau",Value(0.0)).asDouble();
-    string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();    
-
+    double motor_tau=rf.check("motor-tau",Value(0.0)).asDouble(); //motor transfer function
+    string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();   //none | visuo | tactile
+    bool visuo_scaling_by_sNorm=rf.check("visuo-scaling-snorm",Value("off")).asString()=="on"?true:false; // on | off
+    string target_type=rf.check("target-type",Value("moving-circular")).asString(); // moving-circular | static
+    string obstacle_type=rf.check("obstacle-type",Value("falling")).asString(); //falling | static
+    
+    yInfo("Starting with the following parameters: \n verbosity: %d \n sim-time: %f \n motor-tau: %f \n avoidance-type: %s \n target-type: %s \n obstacle-type: %s \n",verbosity,sim_time,motor_tau,avoidance_type.c_str(),target_type.c_str(),obstacle_type.c_str());
+    
+    if (!yarp.checkNetwork())
+    {
+        yError("No Network!!!");
+        return -1;
+    }
+    
     iCubArm arm("left");
     iKinChain &chain=*arm.asChain();
-    chain.releaseLink(0);
+    chain.releaseLink(0); //releasing torso links that are blocked by default
     chain.releaseLink(1);
     chain.releaseLink(2);
 
     Vector q0(chain.getDOF(),0.0);
-    q0[3]=-25.0; q0[4]=20.0; q0[6]=50.0;
+    q0[3]=-25.0; q0[4]=20.0; q0[6]=50.0; //setting shoulder position
     chain.setAng(CTRL_DEG2RAD*q0);
 
-    Matrix lim(chain.getDOF(),2);
-    Matrix v_lim(chain.getDOF(),2);
+    Matrix lim(chain.getDOF(),2); //joint position limits, in degrees
+    Matrix v_lim(chain.getDOF(),2); //joint velocity limits, in degrees/s
     for (size_t r=0; r<chain.getDOF(); r++)
     {
         lim(r,0)=CTRL_RAD2DEG*chain(r).getMin();
@@ -698,11 +765,11 @@ int main(int argc, char *argv[])
     if (avoidance_type=="none")
         avhdl=new AvoidanceHandlerAbstract(arm);
     else if (avoidance_type=="visuo")
-        avhdl=new AvoidanceHandlerVisuo(arm);
+        avhdl=new AvoidanceHandlerVisuo(arm,visuo_scaling_by_sNorm);
     else if (avoidance_type=="tactile")
         avhdl=new AvoidanceHandlerTactile(arm);
     else if (avoidance_type=="visuo-tactile")
-        avhdl=new AvoidanceHandlerVisuoTactile(arm); 
+        avhdl=new AvoidanceHandlerVisuoTactile(arm,visuo_scaling_by_sNorm); 
     else
     {
         yError()<<"unrecognized avoidance type! exiting ...";
@@ -719,33 +786,69 @@ int main(int argc, char *argv[])
     Vector v(chain.getDOF(),0.0);
 
     Vector xee=chain.EndEffPosition();
-    minJerkTrajGen target(xee,dt,T);
-    Vector xc(3);
+    //actual target
+    Vector xc(3); //center of target
     xc[0]=-0.35;
     xc[1]=0.0;
     xc[2]=0.1;
-    double rt=0.1;
-
-    Vector xo(3);
-    xo[0]=-0.3;
-    xo[1]=0.0;
-    xo[2]=0.4;
-    Vector vo(3,0.0);
-    vo[2]=-0.1;
+    double rt=.1; //target will be moving along circular trajectory with this radius
+    //if (target_type == "moving-circular") double rt=0.1; 
+    if (target_type == "static")
+        rt=0.0; //static target will be "moving" along a trajectory with 0 radius
+    
+    minJerkTrajGen target(xee,dt,T); //target for end-effector
+    
+    
+    Vector xo(3); //obstacle position
+    Vector vo(3,0.0); //obstacle velocity
     Obstacle obstacle(xo,0.07,vo,dt);
+    if (obstacle_type == "falling"){
+        xo[0]=-0.3;
+        xo[1]=0.0;
+        xo[2]=0.4;
+        vo[2]=-0.1;
+        obstacle.setPosition(xo);
+        obstacle.setVelocity(vo);
+    }
+    else if(obstacle_type == "static"){
+        xo[0]=-0.35;
+        xo[1]=-0.05;
+        //xo[2]=0.04;
+        xo[2]=0.02;
+        obstacle.setPosition(xo);
+        obstacle.setRadius(0.04);
+    }
+    
 
-    ofstream fout;
+    ofstream fout_param; //log parameters that stay constant during the simulation, but are important for analysis - e.g. joint limits 
+    ofstream fout; //to log data every iteration
+    
+    fout_param.open("param.log");
     fout.open("data.log");
-
+    
+    fout_param<<chain.getDOF()<<" ";
+    for (size_t i=0; i<chain.getDOF(); i++)
+    {
+        fout_param<<CTRL_RAD2DEG*chain(i).getMin()<<" ";
+        fout_param<<CTRL_RAD2DEG*chain(i).getMax()<<" ";
+    }
+    for (size_t i=0; i<chain.getDOF(); i++)
+    {
+        fout_param<<v_lim(i,0)<<" ";
+        fout_param<<v_lim(i,1)<<" ";
+    }
+    
+            
     std::signal(SIGINT,signal_handler);
     for (double t=0.0; t<sim_time; t+=dt)
     {
-        Vector xd=xc;
+        //printf("\n**************************************\n main loop:t: %f s \n",t);
+        Vector xd=xc; //target moving along circular trajectory
         xd[1]+=rt*cos(2.0*M_PI*0.3*t);
         xd[2]+=rt*sin(2.0*M_PI*0.3*t);
 
         target.computeNextValues(xd);
-        Vector xr=target.getPos();
+        Vector xr=target.getPos(); //target for end-effector - from minJerkTrajGen
 
         xo=obstacle.move();
 
@@ -753,32 +856,42 @@ int main(int argc, char *argv[])
         Matrix VLIM=avhdl->getVLIM(obstacle,v_lim);
 
         nlp->set_xr(xr);
-        nlp->set_v_lim(VLIM);
+        nlp->set_v_lim(VLIM); //VLIM in deg/s; set_v_lim converts to radians/s
         nlp->set_v0(v);
         nlp->init();
         Ipopt::ApplicationReturnStatus status=app->OptimizeTNLP(GetRawPtr(nlp));
-        v=nlp->get_result();
+        v=nlp->get_result(); //updating the joint velocities with the output from optimizer
 
         xee=chain.EndEffPosition(CTRL_DEG2RAD*motor.move(v));
 
-        yInfo()<<"        t [s] = "<<t;
-        yInfo()<<"    v [deg/s] = ("<<v.toString(3,3)<<")";
-        yInfo()<<" |xr-xee| [m] = "<<norm(xr-xee);
-        yInfo()<<"";
+        if (verbosity>0){ //this is probably not the right way to do it
+            yInfo()<<"        t [s] = "<<t;
+            yInfo()<<"    v [deg/s] = ("<<v.toString(3,3)<<")";
+            yInfo()<<" |xr-xee| [m] = "<<norm(xr-xee);
+            yInfo()<<"";
+        }
 
+        ostringstream strVLIM;
+        for (size_t i=0; i<VLIM.rows(); i++)
+            strVLIM<<VLIM.getRow(i).toString(3,3)<<" ";
+        
         ostringstream strCtrlPoints;
         deque<Vector> ctrlPoints=avhdl->getCtrlPointsPosition();
         for (size_t i=0; i<ctrlPoints.size(); i++)
             strCtrlPoints<<ctrlPoints[i].toString(3,3)<<" ";
 
+        fout.setf(std::ios::fixed, std::ios::floatfield);
+        fout<<setprecision(3);
         fout<<t<<" "<<
-              xr.toString(3,3)<<" "<<
+              xd.toString(3,3)<<" "<<
               obstacle.toString()<<" "<<
+              xr.toString(3,3)<<" "<<
               v.toString(3,3)<<" "<<
               (CTRL_RAD2DEG*chain.getAng()).toString(3,3)<<" "<<
+              strVLIM.str()<<
               strCtrlPoints.str()<<
               endl;
-
+              //in columns on the output for 10 DOF case: 1:time, 2:4 target, 5:8 obstacle, 9:11 end-eff target, 12:21 joint velocities, 22:31 joint pos,   32:51 joint vel limits set by avoidance handler (joint1_min, joint1_max, joint2_min, ...., joint10_min, joint10_max) , 52:end - current control points' (x,y,z) pos in Root FoR for each control point
         if (gSignalStatus==SIGINT)
         {
             yWarning("SIGINT detected: exiting ...");
