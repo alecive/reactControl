@@ -57,6 +57,62 @@ using namespace std;
 
 class reactCtrlThread: public yarp::os::RateThread
 {
+    
+public:
+    // CONSTRUCTOR
+    reactCtrlThread(int , const string & , const string & , const string &_ ,
+                    int , bool , double , double , double , double , bool, bool, bool , bool , bool , particleThread * );
+    // INIT
+    virtual bool threadInit();
+    // RUN
+    virtual void run();
+    // RELEASE
+    virtual void threadRelease();
+
+    // Enables the torso
+    bool enableTorso();
+
+    // Disables the torso
+    bool disableTorso();
+
+    // Sets the new target
+    bool setNewTarget(const yarp::sig::Vector&);
+
+    // Sets the new target relative to the current position
+    bool setNewRelativeTarget(const yarp::sig::Vector&);
+
+    // Sets the tolerance
+    bool setTol(const double );
+
+    // Gets the tolerance
+    double getTol();
+
+    // Sets the vMax
+    bool setVMax(const double );
+
+    // Gets the vMax
+    double getVMax();
+
+    // [DEPRECATED] Sets the trajectory time 
+    bool setTrajTime(const double );
+
+    // Sets the trajectory speed
+    bool setTrajSpeed(const double );
+
+    // Sets the verbosity
+    bool setVerbosity(const int );
+
+    // gets the verbosity
+    int getVerbosity() { return verbosity; };
+
+    // gets the state of the controller
+    int getState() { return state; };
+
+    /**
+    * Stops the control of the robot
+    */
+    bool stopControl();    
+    
 protected:
     /***************************************************************************/
     // EXTERNAL VARIABLES: change them from command line or through .ini file
@@ -84,8 +140,9 @@ protected:
     double vMax;
     //matrix with mni/max velocity limits for the current chain
     yarp::sig::Matrix vLimNominal;
-    // will use the yarp rpc /icubSim/world to visualize the target
-    bool visualizeTargetInSim;
+    bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
+    bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
+    bool visualizeTargetInSim;  // will use the yarp rpc /icubSim/world to visualize the target
     // will use the yarp rpc /icubSim/world to visualize the particle (trajectory - intermediate targets)
     bool visualizeParticleInSim; 
     // will use the yarp rpc /icubSim/world to visualize the potential collision points
@@ -134,6 +191,10 @@ protected:
     yarp::sig::Vector q_dot;  // Computed arm configuration to reach the target
     yarp::sig::Matrix H;      // End-effector pose
 
+    yarp::os::BufferedPort<yarp::os::Bottle> aggregSkinEventsInPort; //coming from /skinEventsAggregator/skin_events_aggreg:o
+    yarp::os::BufferedPort<yarp::os::Bottle> aggregPPSeventsInPort; //coming from visuoTactileRF/pps_activations_aggreg:o 
+    //expected format for both: (skinPart_s x y z o1 o2 o3 magnitude), with position x,y,z and normal o1 o2 o3 in link FoR
+    
     yarp::os::Port outPort;
     yarp::os::Port portToSimWorld;
     
@@ -207,13 +268,15 @@ protected:
     bool setCtrlModes(const yarp::sig::VectorOf<int> &jointsToSet,
                       const string &_p, const string &_s);
 
-    /**
-    * Prints a message according to the verbosity level:
-    * @param l is the level of verbosity: if verbosity >= l, something is printed
-    * @param f is the text. Please use c standard (like printf)
-    */
-    int printMessage(const int l, const char *f, ...) const;
-
+    
+    void convertPosFromRootToSimFoR(const yarp::sig::Vector &pos, yarp::sig::Vector &outPos);
+    
+    void convertPosFromLinkToRootFoR(const yarp::sig::Vector &pos,const iCub::skinDynLib::SkinPart skinPart, yarp::sig::Vector &outPos);
+        
+    bool getCollisionPointsFromPort(yarp::os::BufferedPort<yarp::os::Bottle> &inPort, double gain, string whichChain,std::vector<collisionPoint_t> &collPoints);
+    
+    
+    //*** visualizations in icub simulator
     /**
     * Creates a sphere (not affected by gravity) in the iCub simulator through the /icubSim/world port
     * @param radius
@@ -227,67 +290,19 @@ protected:
     
     void moveBox(int index, const yarp::sig::Vector &pos);
     
-    void convertPosFromRootToSimFoR(const yarp::sig::Vector &pos, yarp::sig::Vector &outPos);
-    
-    void convertPosFromLinkToRootFoR(const yarp::sig::Vector &pos,const iCub::skinDynLib::SkinPart skinPart, yarp::sig::Vector &outPos);
-        
     void showCollisionPointsInSim();
 
+    
     bool stopControlHelper();
-public:
-    // CONSTRUCTOR
-    reactCtrlThread(int , const string & , const string & , const string &_ ,
-                    int , bool , double , double , double , double , bool , bool , bool , particleThread * );
-    // INIT
-    virtual bool threadInit();
-    // RUN
-    virtual void run();
-    // RELEASE
-    virtual void threadRelease();
-
-    // Enables the torso
-    bool enableTorso();
-
-    // Disables the torso
-    bool disableTorso();
-
-    // Sets the new target
-    bool setNewTarget(const yarp::sig::Vector&);
-
-    // Sets the new target relative to the current position
-    bool setNewRelativeTarget(const yarp::sig::Vector&);
-
-    // Sets the tolerance
-    bool setTol(const double );
-
-    // Gets the tolerance
-    double getTol();
-
-    // Sets the vMax
-    bool setVMax(const double );
-
-    // Gets the vMax
-    double getVMax();
-
-    // [DEPRECATED] Sets the trajectory time 
-    bool setTrajTime(const double );
-
-    // Sets the trajectory speed
-    bool setTrajSpeed(const double );
-
-    // Sets the verbosity
-    bool setVerbosity(const int );
-
-    // gets the verbosity
-    int getVerbosity() { return verbosity; };
-
-    // gets the state of the controller
-    int getState() { return state; };
-
+    
     /**
-    * Stops the control of the robot
+    * Prints a message according to the verbosity level:
+    * @param l will be checked against the global var verbosity: if verbosity >= l, something is printed
+    * @param f is the text. Please use c standard (like printf)
     */
-    bool stopControl();
+    int printMessage(const int l, const char *f, ...) const;
+
+
 };
 
 #endif

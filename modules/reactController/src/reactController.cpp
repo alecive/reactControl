@@ -104,6 +104,8 @@ private:
     double  globalTol;  // global tolerance of the task. The controller exits if norm(x_d-x)<globalTol
     double       vMax;  // max velocity set for the joints
     
+    bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
+    bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
     bool visualizeTargetInSim; // will use the yarp rpc /icubSim/world to visualize the target
     bool visualizeParticleInSim; // will use the yarp rpc /icubSim/world to visualize the particle (trajectory - intermediate targets)
     bool visualizeCollisionPointsInSim; // will visualize the (potential) collision points in iCub simulator 
@@ -127,6 +129,9 @@ public:
         tol          =  1e-5;
         globalTol    =  1e-2;
         vMax         =  30.0;
+        
+        tactileCollisionPointsOn = false;
+        visualCollisionPointsOn = false;
         
         if(robot == "icubSim"){
             visualizeTargetInSim = true;
@@ -365,6 +370,39 @@ public:
             }
             else yInfo("[reactController] Could not find globalTol in the config file; using %g as default",globalTol);
             
+        //************** getting collision points either from aggregated skin events or from pps (predictions from vision)
+        if (rf.check("tactileCollisionPoints"))
+        {
+            if(rf.find("tactileCollisionPoints").asString()=="on"){
+                tactileCollisionPointsOn = true;
+                yInfo("[reactController] tactileCollisionPoints flag set to on.");
+            }
+            else{
+                tactileCollisionPointsOn = false;
+                yInfo("[reactController] tactileCollisionPoints flag set to off.");
+            }
+        }
+        else
+        {
+            yInfo("[reactController] Could not find tactileCollisionPoints flag (on/off) in the config file; using %d as default",tactileCollisionPointsOn);
+        }
+        
+        if (rf.check("visualCollisionPoints"))
+        {
+            if(rf.find("visualCollisionPoints").asString()=="on"){
+                visualCollisionPointsOn = true;
+                yInfo("[reactController] visualCollisionPoints flag set to on.");
+            }
+            else{
+                visualCollisionPointsOn = false;
+                yInfo("[reactController] visualCollisionPoints flag set to off.");
+            }
+        }
+        else
+        {
+            yInfo("[reactController] Could not find visualCollisionPoints flag (on/off) in the config file; using %d as default",visualCollisionPointsOn);
+        }
+           
          //********************** Visualizations in simulator ***********************
             if (robot == "icubSim"){
                 if (rf.check("visualizeTargetInSim"))
@@ -428,7 +466,7 @@ public:
 
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
                                           disableTorso, trajSpeed, globalTol, vMax,
-                                          tol, visualizeTargetInSim, visualizeParticleInSim,
+                                          tol, tactileCollisionPointsOn, visualCollisionPointsOn, visualizeTargetInSim, visualizeParticleInSim,
                                           visualizeCollisionPointsInSim, prtclThrd);
         if (!rctCtrlThrd->start())
         {
