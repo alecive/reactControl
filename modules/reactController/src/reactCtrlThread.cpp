@@ -260,8 +260,9 @@ void reactCtrlThread::run()
     collisionPointStruct.n(0) = -0.005; collisionPointStruct.n(1) = 0.238; collisionPointStruct.n(2) = -0.971;
     collisionPointStruct.magnitude = 0.1; //~ "probability of collision" */
     
-    if (tactileCollisionPointsOn)
+    if (tactileCollisionPointsOn){
         getCollisionPointsFromPort(aggregSkinEventsInPort, TACTILE_INPUT_GAIN, part_short,collisionPoints);
+    }
     if (visualCollisionPointsOn) //note, these are not mutually exclusive - they can co-exist
         getCollisionPointsFromPort(aggregPPSeventsInPort, VISUAL_INPUT_GAIN, part_short,collisionPoints);
     //after this point, we don't care where did the collision points come from - our relative confidence in the two modalities is expressed in the gains
@@ -881,10 +882,10 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
     
     Bottle* collPointsMultiBottle = inPort.read();
     if(collPointsMultiBottle != NULL){
-         yDebug("[reactCtrlThread::getCollisionPointsFromPort]: There were %d bottles on the port.\n",collPointsMultiBottle->size());
+         printMessage(5,"[reactCtrlThread::getCollisionPointsFromPort]: There were %d bottles on the port.\n",collPointsMultiBottle->size());
          for(int i=0; i< collPointsMultiBottle->size();i++){
              Bottle* collPointBottle = collPointsMultiBottle->get(i).asList();
-             yDebug("Bottle %d contains %s", i,collPointBottle->toString().c_str());
+             printMessage(5,"Bottle %d contains %s", i,collPointBottle->toString().c_str());
              sp =  (SkinPart)(collPointBottle->get(0).asInt());
              //we take only those collision points that are relevant for the chain we are controlling
              if( ((which_chain == "left") && ( (sp==SKIN_LEFT_HAND) || (sp==SKIN_LEFT_FOREARM) || (sp==SKIN_LEFT_UPPER_ARM) ) )
