@@ -1,10 +1,10 @@
 % Author: Ugo Pattacini, Matej Hoffmann
 
 plot_target = true; % useful in Fig. if target is static
-visualize_all_joint_pos = true;
-visualize_all_joint_vel = true;
-visualize_single_joint_in_detail = true;
-save_figs = true;
+visualize_all_joint_pos = false;
+visualize_all_joint_vel = false;
+visualize_single_joint_in_detail = false;
+save_figs = false;
 
 %path_prefix = 'circular_target/'; %'static_target/';
 %path_prefix = 'staticTarget_staticObst/obstRad_0.04_pos_-0.35_-0.05_0.04/';
@@ -293,5 +293,6 @@ if visualize_single_joint_in_detail
         saveas(f12,'output/SelectedJointDetailTactileAvoidance.fig');
     end
 end
+
 
 
