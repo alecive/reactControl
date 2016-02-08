@@ -197,7 +197,9 @@ public:
                       Ipopt::Index &nnz_h_lag, IndexStyleEnum &index_style)
     {
         n=chain.getDOF();
-        m=nnz_jac_g=nnz_h_lag=0;
+        m=3;
+        nnz_jac_g=7;
+        nnz_h_lag=0;
         index_style=TNLP::C_STYLE;
         return true;
     }
@@ -211,6 +213,18 @@ public:
             x_l[i]=bounds(i,0);
             x_u[i]=bounds(i,1);
         }
+        
+        //Limits of shoulder assembly in real robot - taken from iKinIpOpt.cpp, iCubShoulderConstr::update(void*)
+        //1st ineq constraint -347deg/1.71 < q_0 - q_1
+        //2nd ineq constr., -366.57deg /1.71 < q_0 - q_1 - q_2 < 112.42deg / 1.71 
+        //-66.6 deg < q_1 + q_2 < 213.3 deg
+        g_l[0]= (-347/1.71)*CTRL_DEG2RAD;
+        g_u[0]= 4.0*M_PI; //the difference of two joint angles should never exceed 2 * 360deg 
+        g_l[1]= (-366.57/1.71)*CTRL_DEG2RAD;
+        g_u[1]= (112.42 / 1.71) * CTRL_DEG2RAD;
+        g_l[2]= -66.6*CTRL_DEG2RAD;
+        g_u[2]= 213.3*CTRL_DEG2RAD;
+        
         return true;
     }
 
@@ -254,19 +268,80 @@ public:
         return true; 
     }
 
-    /****************************************************************/
+   /*********** g will take care of cable constraints in shoulder assembly***********************/
     bool eval_g(Ipopt::Index n, const Ipopt::Number *x, bool new_x,
                 Ipopt::Index m, Ipopt::Number *g)
     {
+        if(n==10){ //we have 3 torso joints and 7 arm joints
+            g[0] =  chain(3).getAng()+dt*x[3] - (chain(4).getAng()+dt*x[4]);   //1st ineq constraint -347deg/1.71 < q_0 - q_1
+            //2nd ineq constr., -366.57deg /1.71 < q_0 - q_1 - q_2 < 112.42deg / 1.71 
+            g[1] = chain(3).getAng()+dt*x[3] - (chain(4).getAng()+dt*x[4]) - (chain(5).getAng()+dt*x[5]);
+            g[2] = chain(4).getAng()+dt*x[4] + (chain(5).getAng()+dt*x[5]); //-66.6 deg < q_1 + q_2 < 213.3 deg
+            return true;
+          
+        }
+        else if (n==7){ //only arm joints
+            g[0] =  chain(0).getAng()+dt*x[0] - (chain(1).getAng()+dt*x[1]);   //1st ineq constraint -347deg/1.71 < q_0 - q_1
+            g[1] = chain(0).getAng()+dt*x[0] - (chain(1).getAng()+dt*x[1]) - (chain(2).getAng()+dt*x[2]);
+            g[2] = chain(1).getAng()+dt*x[1] + (chain(2).getAng()+dt*x[2]); //-66.6 deg < q_1 + q_2 < 213.3 deg
+            return true;
+        }
+       
         return false;
+        
     }
-
     /****************************************************************/
     bool eval_jac_g(Ipopt::Index n, const Ipopt::Number *x, bool new_x,
                     Ipopt::Index m, Ipopt::Index nele_jac, Ipopt::Index *iRow,
                     Ipopt::Index *jCol, Ipopt::Number *values)
     {
-        return false;
+        
+        if (n==10){
+            if (values == NULL){ //return the structure of the Jacobian
+                iRow[0] = 0; jCol[0]= 3;
+                iRow[1] = 0; jCol[1]= 4;
+                iRow[2] = 1; jCol[2]= 3;
+                iRow[3] = 1; jCol[3]= 4;
+                iRow[4] = 1; jCol[4]= 5;
+                iRow[5] = 2; jCol[5]= 4;
+                iRow[6] = 2; jCol[6]= 5;
+            }
+            else{  //return the values of the Jacobian of the constraints
+                values[0]= dt;
+                values[1]= -dt;
+                values[2]= dt;
+                values[3]= -dt;
+                values[4]= -dt;
+                values[5]= dt;
+                values[6]= dt;   
+            }
+            return true;
+        
+        }
+        else if (n==7){
+            if (values == NULL){ //return the structure of the Jacobian
+                iRow[0] = 0; jCol[0]= 0;
+                iRow[1] = 0; jCol[1]= 1;
+                iRow[2] = 1; jCol[2]= 0;
+                iRow[3] = 1; jCol[3]= 1;
+                iRow[4] = 1; jCol[4]= 2;
+                iRow[5] = 2; jCol[5]= 1;
+                iRow[6] = 2; jCol[6]= 2;
+            }
+            else{  //return the values of the Jacobian of the constraints
+                values[0]= dt;
+                values[1]= -dt;
+                values[2]= dt;
+                values[3]= -dt;
+                values[4]= -dt;
+                values[5]= dt;
+                values[6]= dt;   
+            }
+            return true;
+        }
+        else
+            return false;
+        
     }
 
     /****************************************************************/
