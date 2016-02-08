@@ -46,6 +46,7 @@ using namespace yarp::math;
 using namespace iCub::ctrl;
 using namespace iCub::iKin;
 
+#define EXTRA_MARGIN_SHOULDER_INEQ_RAD 0.05 //each of the ineq. constraints for shoulder joints will have an extra safety marging of 0.05 rad on each side - i.e. the actual allowed range will be smaller
 
 /****************************************************************/
 class ControllerNLP : public Ipopt::TNLP
@@ -218,12 +219,12 @@ public:
         //1st ineq constraint -347deg/1.71 < q_0 - q_1
         //2nd ineq constr., -366.57deg /1.71 < q_0 - q_1 - q_2 < 112.42deg / 1.71 
         //-66.6 deg < q_1 + q_2 < 213.3 deg
-        g_l[0]= (-347/1.71)*CTRL_DEG2RAD;
-        g_u[0]= 4.0*M_PI; //the difference of two joint angles should never exceed 2 * 360deg 
-        g_l[1]= (-366.57/1.71)*CTRL_DEG2RAD;
-        g_u[1]= (112.42 / 1.71) * CTRL_DEG2RAD;
-        g_l[2]= -66.6*CTRL_DEG2RAD;
-        g_u[2]= 213.3*CTRL_DEG2RAD;
+        g_l[0]= (-347/1.71)*CTRL_DEG2RAD + EXTRA_MARGIN_SHOULDER_INEQ_RAD;
+        g_u[0]= 4.0*M_PI - EXTRA_MARGIN_SHOULDER_INEQ_RAD; //the difference of two joint angles should never exceed 2 * 360deg 
+        g_l[1]= (-366.57/1.71)*CTRL_DEG2RAD + EXTRA_MARGIN_SHOULDER_INEQ_RAD;
+        g_u[1]= (112.42 / 1.71) * CTRL_DEG2RAD - EXTRA_MARGIN_SHOULDER_INEQ_RAD;
+        g_l[2]= -66.6*CTRL_DEG2RAD + EXTRA_MARGIN_SHOULDER_INEQ_RAD;
+        g_u[2]= 213.3*CTRL_DEG2RAD - EXTRA_MARGIN_SHOULDER_INEQ_RAD;
         
         return true;
     }
