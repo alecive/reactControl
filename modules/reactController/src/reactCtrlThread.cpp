@@ -227,9 +227,10 @@ bool reactCtrlThread::threadInit()
 
 void reactCtrlThread::run()
 {
+    printMessage(5,"[reactCtrlThread::run()] started, state: %d.\n",state);
     yarp::os::LockGuard lg(mutex);
     updateArmChain();
-    
+    printMessage(10,"[reactCtrlThread::run()] updated arm chain.\n");
     //debug - see Jacobian
     //iCub::iKin::iKinChain &chain_temp=*arm->asChain();
     //yarp::sig::Matrix J1_temp=chain_temp.GeoJacobian();
@@ -272,8 +273,10 @@ void reactCtrlThread::run()
     }
     //after this point, we don't care where did the collision points come from - our relative confidence in the two modalities is expressed in the gains
     
-    if (visualizeCollisionPointsInSim)
+    if (visualizeCollisionPointsInSim){
+        printMessage(5,"[reactCtrlThread::run()] will visualize collision points in simulator.\n");
         showCollisionPointsInSim();
+    }
     
     switch (state)
     {
@@ -645,6 +648,7 @@ Vector reactCtrlThread::computeDeltaX()
 
 void reactCtrlThread::sendData()
 {
+    printMessage(5,"[reactCtrlThread::sendData()]\n");
     if (outPort.getOutputCount()>0)
     {
         if (state==STATE_REACH)
@@ -909,7 +913,7 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
         return true;
     }
     else{
-       yDebug("getAvoidanceVectorsFromPort(): no avoidance vectors on the port.") ;  
+       printMessage(9,"[reactCtrlThread::getCollisionPointsFromPort]: no avoidance vectors on the port.\n") ;
        return false;
     };   
 }

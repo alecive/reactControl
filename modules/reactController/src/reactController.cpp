@@ -452,6 +452,15 @@ public:
                     yInfo("[reactController] Could not find visualizeCollisionPointsInSim flag (on/off) in the config file; using %d as default",visualizeCollisionPointsInSim);
                 }
             }
+            else{
+                visualizeTargetInSim = false;
+                yInfo("[reactController] visualizeTargetInSim flag set to off.");
+                visualizeParticleInSim = false;
+                yInfo("[reactController] visualizeParticleInSim flag set to off.");
+                visualizeCollisionPointsInSim = false;
+                yInfo("[reactController] visualizeCollisionPointsInSim flag set to off.");
+
+            }
 
         //************* THREAD *************
         prtclThrd = new particleThread(prtclRate, name, verbosity);
@@ -463,7 +472,6 @@ public:
             yError("[reactController] particleThread wasn't instantiated!!");
             return false;
         }
-
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
                                           disableTorso, trajSpeed, globalTol, vMax,
                                           tol, tactileCollisionPointsOn, visualCollisionPointsOn, visualizeTargetInSim, visualizeParticleInSim,
