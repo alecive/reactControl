@@ -880,7 +880,7 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
     collPoint.n.resize(3,0.0);
     collPoint.magnitude=0.0;
     
-    Bottle* collPointsMultiBottle = inPort.read();
+    Bottle* collPointsMultiBottle = inPort.read(false);
     if(collPointsMultiBottle != NULL){
          printMessage(5,"[reactCtrlThread::getCollisionPointsFromPort]: There were %d bottles on the port.\n",collPointsMultiBottle->size());
          for(int i=0; i< collPointsMultiBottle->size();i++){
