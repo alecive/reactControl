@@ -188,12 +188,14 @@ bool reactCtrlThread::threadInit()
     x_d.resize(3,0.0);
   
     /***************** ports *************************************************************************************/
+    
     aggregPPSeventsInPort.open("/"+name+"/pps_events_aggreg:i");
     aggregSkinEventsInPort.open("/"+name+"/skin_events_aggreg:i");
     
     outPort.open("/"+name +"/data:o"); //for dumping
     
     /**** visualizing targets and collision points in simulator ***************************/
+    
     if((robot == "icubSim") && (visualizeTargetInSim || visualizeParticleInSim || visualizeCollisionPointsInSim) ){ 
         string port2icubsim = "/" + name + "/sim:o";
         if (!portToSimWorld.open(port2icubsim.c_str())) {
@@ -261,10 +263,13 @@ void reactCtrlThread::run()
     collisionPointStruct.magnitude = 0.1; //~ "probability of collision" */
     
     if (tactileCollisionPointsOn){
+        printMessage(9,"[reactCtrlThread::run()] Getting tactile collisions from port.\n");
         getCollisionPointsFromPort(aggregSkinEventsInPort, TACTILE_INPUT_GAIN, part_short,collisionPoints);
     }
-    if (visualCollisionPointsOn) //note, these are not mutually exclusive - they can co-exist
+    if (visualCollisionPointsOn){ //note, these are not mutually exclusive - they can co-exist
+        printMessage(9,"[reactCtrlThread::run()] Getting visual collisions from port.\n");
         getCollisionPointsFromPort(aggregPPSeventsInPort, VISUAL_INPUT_GAIN, part_short,collisionPoints);
+    }
     //after this point, we don't care where did the collision points come from - our relative confidence in the two modalities is expressed in the gains
     
     if (visualizeCollisionPointsInSim)
@@ -871,7 +876,7 @@ void reactCtrlThread::convertPosFromLinkToRootFoR(const Vector &pos,const SkinPa
 
 bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, double gain, string which_chain,std::vector<collisionPoint_t> &collPoints)
 {
-    
+    printMessage(9,"[reactCtrlThread::getCollisionPointsFromPort].\n");
     collisionPoint_t collPoint;    
     SkinPart sp = SKIN_PART_UNKNOWN;
     
@@ -880,7 +885,7 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
     collPoint.n.resize(3,0.0);
     collPoint.magnitude=0.0;
     
-    Bottle* collPointsMultiBottle = inPort.read();
+    Bottle* collPointsMultiBottle = inPort.read(false);
     if(collPointsMultiBottle != NULL){
          printMessage(5,"[reactCtrlThread::getCollisionPointsFromPort]: There were %d bottles on the port.\n",collPointsMultiBottle->size());
          for(int i=0; i< collPointsMultiBottle->size();i++){
