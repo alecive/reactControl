@@ -810,9 +810,9 @@ int main(int argc, char *argv[])
     chain.releaseLink(2);
 
     Vector q0(chain.getDOF(),0.0);
-    q0[3]=-25.0; q0[4]=20.0; q0[6]=50.0; //setting shoulder position
+    q0[3]=-25.0; q0[4]=20.0; q0[6]=50.0; //setting shoulder and elbow position
     chain.setAng(CTRL_DEG2RAD*q0);
-
+    
     Matrix lim(chain.getDOF(),2); //joint position limits, in degrees
     Matrix v_lim(chain.getDOF(),2); //joint velocity limits, in degrees/s
     for (size_t r=0; r<chain.getDOF(); r++)
@@ -864,9 +864,9 @@ int main(int argc, char *argv[])
     Vector xee=chain.EndEffPosition();
     //actual target
     Vector xc(3); //center of target
-    xc[0]=-0.35;
-    xc[1]=0.0;
-    xc[2]=0.1;
+    xc[0]=-0.35; //-0.35
+    xc[1]= 0.0;  //0.0;
+    xc[2]= 0.1; //0.1; 
     double rt=.1; //target will be moving along circular trajectory with this radius
     //if (target_type == "moving-circular") double rt=0.1; 
     if (target_type == "static")
@@ -920,8 +920,8 @@ int main(int argc, char *argv[])
     {
         //printf("\n**************************************\n main loop:t: %f s \n",t);
         Vector xd=xc; //target moving along circular trajectory
-        xd[1]+=rt*cos(2.0*M_PI*0.3*t);
-        xd[2]+=rt*sin(2.0*M_PI*0.3*t);
+        xd[1]+=rt*cos(2.0*M_PI*0.3*t); //rt*cos(2.0*M_PI*0.3*t);
+        xd[2]+=rt*sin(2.0*M_PI*0.3*t); //rt*cos(2.0*M_PI*0.3*t);
 
         target.computeNextValues(xd);
         Vector xr=target.getPos(); //target for end-effector - from minJerkTrajGen
