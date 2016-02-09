@@ -29,6 +29,7 @@
 #include "reactIpOpt.h"
 
 #define CAST_IPOPTAPP(x)             (static_cast<IpoptApplication*>(x))
+#define EXTRA_MARGIN_SHOULDER_INEQ_RAD 0.05 //each of the ineq. constraints for shoulder joints will have an extra safety marging of 0.05 rad on each side - i.e. the actual allowed range will be smaller
 
 using namespace std;
 using namespace yarp::os;
@@ -286,10 +287,8 @@ public:
                       IndexStyleEnum& index_style)
     {
         n=dim; // number of vars in the problem (dim(x)) ~ n DOF in chain in our case 
-        m=0; // nr constraints - dim(g(x))
-        nnz_jac_g=0; // the jacobian of g has dim non zero entries (the diagonal)
-
-        // nnz_h_lag=(dim*(dim+1))>>1;
+        m=3; // nr constraints - dim(g(x))
+        nnz_jac_g=7; // the jacobian of g has dim non zero entries
         nnz_h_lag=0; //number of nonzero entries in the Hessian
         index_style=TNLP::C_STYLE;
         printMessage(7,"[get_nlp_info]\tn: %i m: %i nnz_jac_g: %i\n",n,m,nnz_jac_g);
@@ -357,10 +356,22 @@ public:
             }
         }
         
+        //Limits of shoulder assembly in real robot - taken from iKinIpOpt.cpp, iCubShoulderConstr::update(void*)
+        //1st ineq constraint -347deg/1.71 < q_0 - q_1
+        //2nd ineq constr., -366.57deg /1.71 < q_0 - q_1 - q_2 < 112.42deg / 1.71 
+        //-66.6 deg < q_1 + q_2 < 213.3 deg
+        g_l[0]= (-347/1.71)*CTRL_DEG2RAD + EXTRA_MARGIN_SHOULDER_INEQ_RAD;
+        g_u[0]= 4.0*M_PI - EXTRA_MARGIN_SHOULDER_INEQ_RAD; //the difference of two joint angles should never exceed 2 * 360deg 
+        g_l[1]= (-366.57/1.71)*CTRL_DEG2RAD + EXTRA_MARGIN_SHOULDER_INEQ_RAD;
+        g_u[1]= (112.42 / 1.71) * CTRL_DEG2RAD - EXTRA_MARGIN_SHOULDER_INEQ_RAD;
+        g_l[2]= -66.6*CTRL_DEG2RAD + EXTRA_MARGIN_SHOULDER_INEQ_RAD;
+        g_u[2]= 213.3*CTRL_DEG2RAD - EXTRA_MARGIN_SHOULDER_INEQ_RAD;
+        
         printMessage(3,"[get_bounds_info (deg)]   x_l: %s\n", IPOPT_Number_toString(x_l,CTRL_RAD2DEG).c_str());
         printMessage(3,"[get_bounds_info (deg)]   x_u: %s\n", IPOPT_Number_toString(x_u,CTRL_RAD2DEG).c_str());
         printMessage(4,"[get_bounds_info (deg)]   g_l: %s\n", IPOPT_Number_toString(g_l,CTRL_RAD2DEG).c_str());
         printMessage(4,"[get_bounds_info (deg)]   g_u: %s\n", IPOPT_Number_toString(g_u,CTRL_RAD2DEG).c_str());
+       
         return true;
     }
     
@@ -387,25 +398,78 @@ public:
         return true;
     }
     
-    /********** Return the value of the constraint function at the point x***********************************************************/
+    /********** g will take care of cable constraints in shoulder assembly***********************************************************/
     bool eval_g(Index n, const Number* x, bool new_x, Index m, Number* g)
     {
-        //printMessage(9,"[eval_g]\t\tq(t): %s\n",(q_t*CTRL_RAD2DEG).toString(3,3).c_str());
-        
-        //printMessage(7,"[eval_g] OK\t\tq(t+1): %s\n",IPOPT_Number_toString(g,CTRL_RAD2DEG).c_str());
-
+        if(n==10){ //we have 3 torso joints and 7 arm joints
+            g[0] =  chain(3).getAng()+dT*x[3] - (chain(4).getAng()+dT*x[4]);   //1st ineq constraint -347deg/1.71 < q_0 - q_1
+            //2nd ineq constr., -366.57deg /1.71 < q_0 - q_1 - q_2 < 112.42deg / 1.71 
+            g[1] = chain(3).getAng()+dT*x[3] - (chain(4).getAng()+dT*x[4]) - (chain(5).getAng()+dT*x[5]);
+            g[2] = chain(4).getAng()+dT*x[4] + (chain(5).getAng()+dT*x[5]); //-66.6 deg < q_1 + q_2 < 213.3 deg
+            return true;
+          
+        }
+        else if (n==7){ //only arm joints
+            g[0] =  chain(0).getAng()+dT*x[0] - (chain(1).getAng()+dT*x[1]);   //1st ineq constraint -347deg/1.71 < q_0 - q_1
+            g[1] = chain(0).getAng()+dT*x[0] - (chain(1).getAng()+dT*x[1]) - (chain(2).getAng()+dT*x[2]);
+            g[2] = chain(1).getAng()+dT*x[1] + (chain(2).getAng()+dT*x[2]); //-66.6 deg < q_1 + q_2 < 213.3 deg
+            return true;
+        }
+       
         return false;
+        
     }
     
     /************************************************************************/
     bool eval_jac_g(Index n, const Number* x, bool new_x, Index m, Index nele_jac,
                     Index* iRow, Index *jCol, Number* values)
     {
-        // printMessage(9,"[eval_jac_g] START\tx: %i\n",IPOPT_Number_toString(x,CTRL_RAD2DEG).c_str());
-
+        if (n==10){
+            if (values == NULL){ //return the structure of the Jacobian
+                iRow[0] = 0; jCol[0]= 3;
+                iRow[1] = 0; jCol[1]= 4;
+                iRow[2] = 1; jCol[2]= 3;
+                iRow[3] = 1; jCol[3]= 4;
+                iRow[4] = 1; jCol[4]= 5;
+                iRow[5] = 2; jCol[5]= 4;
+                iRow[6] = 2; jCol[6]= 5;
+            }
+            else{  //return the values of the Jacobian of the constraints
+                values[0]= dT;
+                values[1]= -dT;
+                values[2]= dT;
+                values[3]= -dT;
+                values[4]= -dT;
+                values[5]= dT;
+                values[6]= dT;   
+            }
+            return true;
         
-        //printMessage(7,"[eval_jac_g] OK\n");
-        return false;
+        }
+        else if (n==7){
+            if (values == NULL){ //return the structure of the Jacobian
+                iRow[0] = 0; jCol[0]= 0;
+                iRow[1] = 0; jCol[1]= 1;
+                iRow[2] = 1; jCol[2]= 0;
+                iRow[3] = 1; jCol[3]= 1;
+                iRow[4] = 1; jCol[4]= 2;
+                iRow[5] = 2; jCol[5]= 1;
+                iRow[6] = 2; jCol[6]= 2;
+            }
+            else{  //return the values of the Jacobian of the constraints
+                values[0]= dT;
+                values[1]= -dT;
+                values[2]= dT;
+                values[3]= -dT;
+                values[4]= -dT;
+                values[5]= dT;
+                values[6]= dT;   
+            }
+            return true;
+        }
+        else
+            return false;
+        
     }
     
     /************************************************************************/
