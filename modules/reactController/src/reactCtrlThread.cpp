@@ -190,12 +190,30 @@ bool reactCtrlThread::threadInit()
     x_n.resize(3,0.0);
     x_d.resize(3,0.0);
   
-    /***************** ports *************************************************************************************/
+    /***************** ports and files*************************************************************************************/
     
     aggregPPSeventsInPort.open("/"+name+"/pps_events_aggreg:i");
     aggregSkinEventsInPort.open("/"+name+"/skin_events_aggreg:i");
     
     outPort.open("/"+name +"/data:o"); //for dumping
+    
+    fout_param.open("param.log");
+    
+    /***** writing to param file ******************************************************/
+    iCub::iKin::iKinChain chainTemp = *(arm->asChain());
+    fout_param<<chainActiveDOF<<" ";
+    for (size_t i=0; i<chainActiveDOF; i++)
+    {
+        fout_param<<CTRL_RAD2DEG*(chainTemp(i).getMin())<<" ";
+        fout_param<<CTRL_RAD2DEG*(chainTemp(i).getMax())<<" ";
+    }
+    for (size_t j=0; j<chainActiveDOF; j++)
+    {
+        fout_param<<vLimNominal(j,0)<<" ";
+        fout_param<<vLimNominal(j,1)<<" ";
+    }
+    yInfo("Written to param file and closing..");    
+    fout_param.close();
     
     /**** visualizing targets and collision points in simulator ***************************/
     
@@ -351,6 +369,8 @@ void reactCtrlThread::threadRelease()
             portToSimWorld.interrupt();
             portToSimWorld.close();
         }
+   // yInfo("Closing files..");    
+     //   fout_param.close();
     yInfo("Closing controllers..");
         stopControl();
         ddA.close();

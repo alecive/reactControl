@@ -42,6 +42,7 @@
 #include <iCub/skinDynLib/common.h>
 
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <stdio.h>
 #include <stdarg.h>
@@ -190,13 +191,14 @@ protected:
     yarp::sig::Vector q_dot;  // Computed arm configuration to reach the target
     yarp::sig::Matrix H;      // End-effector pose
 
+    // ports and files
     yarp::os::BufferedPort<yarp::os::Bottle> aggregSkinEventsInPort; //coming from /skinEventsAggregator/skin_events_aggreg:o
     yarp::os::BufferedPort<yarp::os::Bottle> aggregPPSeventsInPort; //coming from visuoTactileRF/pps_activations_aggreg:o 
     //expected format for both: (skinPart_s x y z o1 o2 o3 magnitude), with position x,y,z and normal o1 o2 o3 in link FoR
-    
-    yarp::os::Port outPort;
+        yarp::os::Port outPort;
     yarp::os::Port portToSimWorld;
-    
+    ofstream fout_param; //log parameters that stay constant during the simulation, but are important for analysis - e.g. joint limits 
+       
  
     // IPOPT STUFF
     reactIpOpt    *slv;    // solver

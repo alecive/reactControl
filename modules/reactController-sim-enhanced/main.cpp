@@ -975,6 +975,7 @@ int main(int argc, char *argv[])
         }
     }
 
+    fout_param.close();
     fout.close();
     delete avhdl;
 
