@@ -42,6 +42,9 @@ using namespace iCub::skinDynLib;
 #define STATE_REACH             1
 #define STATE_IDLE              2
 
+#define NR_ARM_JOINTS 7
+#define NR_TORSO_JOINTS 3 
+
 /*********** public methods ****************************************************************************/ 
 
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,  const string &_part,
@@ -584,24 +587,24 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
     VectorOf<int> jointsToSetT;
     if (!areJointsHealthyAndSet(jointsToSetA,"arm","velocity"))
     {
-        yWarning("[reactCtrlThread]Stopping control because arm joints are not healthy!");
+        yWarning("[reactCtrlThread::controlArm] Stopping control because arm joints are not healthy!");
         stopControlHelper();
         return false;
     }
-
+ 
     if (useTorso)
     {
         if (!areJointsHealthyAndSet(jointsToSetT,"torso","velocity"))
         {
-            yWarning("[reactCtrlThread]Stopping control because torso joints are not healthy!");
+            yWarning("[reactCtrlThread::controlArm] Stopping control because torso joints are not healthy!");
             stopControlHelper();
             return false;
         }
     }
-
+    
     if (!setCtrlModes(jointsToSetA,"arm","velocity"))
     {
-        yError("[reactCtrlThread]I am not able to set the arm joints to velocity mode!");
+        yError("[reactCtrlThread::controlArm] I am not able to set the arm joints to velocity mode!");
         return false;
     }   
 
@@ -609,21 +612,22 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
     {
         if (!setCtrlModes(jointsToSetT,"torso","velocity"))
         {
-            yError("[reactCtrlThread]I am not able to set the torso joints to velocity mode!");
+            yError("[reactCtrlThread::controlArm] I am not able to set the torso joints to velocity mode!");
             return false;
         }
     }
-
-    printMessage(1,"Moving the robot with velocities: %s\n",_vels.toString(3,3).c_str());
+    printMessage(1,"[reactCtrlThread::controlArm] Joint velocities (iKin order): %s\n",_vels.toString(3,3).c_str());
     if (useTorso)
     {
         Vector velsT(3,0.0);
         velsT[0] = _vels[2]; //swapping pitch and yaw as per iKin vs. motor interface convention
         velsT[1] = _vels[1];
         velsT[2] = _vels[0]; //swapping pitch and yaw as per iKin vs. motor interface convention
-        
+       
+        printMessage(2,"    velocityMove(): torso (swap pitch & yaw): %s\n",velsT.toString(3,3).c_str());
         ivelT->velocityMove(velsT.data());
         ivelA->velocityMove(_vels.subVector(3,9).data()); //indexes 3 to 9 are the arm joints velocities
+        
     }
     else
     {
@@ -760,25 +764,25 @@ bool reactCtrlThread::areJointsHealthyAndSet(VectorOf<int> &jointsToSet,
     VectorOf<int> modes;
     if (_p=="arm")
     {
-        modes=encsA->size();
+        modes.resize(NR_ARM_JOINTS,VOCAB_CM_IDLE);
         imodA->getControlModes(modes.getFirst());
     }
     else if (_p=="torso")
     {
-        modes=encsT->size();
+        modes.resize(NR_TORSO_JOINTS,VOCAB_CM_IDLE);
         imodT->getControlModes(modes.getFirst());
     }
     else
         return false;
-
-    for (size_t i=0; i<modes.size(); i++)
+    
+    for (size_t i=0; i<modes.size(); i++) //TODO in addition, one might check if some joints are blocked like here:  ServerCartesianController::areJointsHealthyAndSet
     {
         if ((modes[i]==VOCAB_CM_HW_FAULT) || (modes[i]==VOCAB_CM_IDLE))
             return false;
 
         if (_s=="velocity")
         {
-            if (modes[i]!=VOCAB_CM_MIXED || modes[i]!=VOCAB_CM_VELOCITY)
+            if (modes[i]!=VOCAB_CM_MIXED || modes[i]!=VOCAB_CM_VELOCITY) // we will set only those that are not in correct modes already
                 jointsToSet.push_back(i);
         }
         else if (_s=="position")
