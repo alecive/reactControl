@@ -616,6 +616,20 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
             return false;
         }
     }
+    if(verbosity>=10){
+        printf("[reactCtrlThread::controlArm] setting following arm joints to %s: ",Vocab::decode(VOCAB_CM_VELOCITY).c_str());
+        for (size_t k=0; k<jointsToSetA.size(); k++){
+                printf("%d ",jointsToSetA[k]);
+        }
+        printf("\n");
+        if(useTorso){
+            printf("[reactCtrlThread::controlArm] setting following torso joints to %s: ",Vocab::decode(VOCAB_CM_VELOCITY).c_str());
+            for (size_t l=0; l<jointsToSetT.size(); l++){
+                printf("%d ",jointsToSetT[l]);
+            }
+            printf("\n");       
+        }
+    }
     printMessage(1,"[reactCtrlThread::controlArm] Joint velocities (iKin order): %s\n",_vels.toString(3,3).c_str());
     if (useTorso)
     {
@@ -761,6 +775,7 @@ void reactCtrlThread::printJointsBounds()
 bool reactCtrlThread::areJointsHealthyAndSet(VectorOf<int> &jointsToSet,
                                              const string &_p, const string &_s)
 {
+    jointsToSet.clear();
     VectorOf<int> modes;
     if (_p=="arm")
     {
@@ -782,17 +797,31 @@ bool reactCtrlThread::areJointsHealthyAndSet(VectorOf<int> &jointsToSet,
 
         if (_s=="velocity")
         {
-            if (modes[i]!=VOCAB_CM_MIXED || modes[i]!=VOCAB_CM_VELOCITY) // we will set only those that are not in correct modes already
+            if ((modes[i]!=VOCAB_CM_MIXED) && (modes[i]!=VOCAB_CM_VELOCITY)){ // we will set only those that are not in correct modes already
+                //printMessage(3,"    joint %d in %s mode, pushing to jointsToSet \n",i,Vocab::decode(modes[i]).c_str());
                 jointsToSet.push_back(i);
+            }
         }
         else if (_s=="position")
         {
-            if (modes[i]!=VOCAB_CM_MIXED || modes[i]!=VOCAB_CM_POSITION)
+            if ((modes[i]!=VOCAB_CM_MIXED) && (modes[i]!=VOCAB_CM_POSITION))
                 jointsToSet.push_back(i);
         }
 
     }
-
+    if(verbosity >= 10){
+        printf("[reactCtrlThread::areJointsHealthyAndSet] %s: ctrl Modes retreived: ",_p.c_str());
+        for (size_t j=0; j<modes.size(); j++){
+                printf("%s ",Vocab::decode(modes[j]).c_str());
+        }
+        printf("\n");
+        printf("Indexes of joints to set: ");
+        for (size_t k=0; k<jointsToSet.size(); k++){
+                printf("%d ",jointsToSet[k]);
+        }
+        printf("\n");
+    }
+    
     return true;
 }
 
