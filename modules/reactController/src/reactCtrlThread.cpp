@@ -450,8 +450,8 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d)
 {
     if (_x_d.size()==3)
     {
-        q_dot_0.resize(arm->getDOF(),0.0);
-        q_dot.resize(arm->getDOF(),0.0);
+        q_dot_0.resize(chainActiveDOF,0.0);
+        q_dot.resize(chainActiveDOF,0.0);
         x_0=x_t;
         x_n=x_0;
         x_d=_x_d;
@@ -656,9 +656,9 @@ Vector reactCtrlThread::computeDeltaX()
     iCub::iKin::iKinChain &chain=*arm->asChain();
     yarp::sig::Matrix J1=chain.GeoJacobian();
     yarp::sig::Matrix J_cst;
-    J_cst.resize(3,arm->getDOF());
+    J_cst.resize(3,chainActiveDOF);
     J_cst.zero();
-    submatrix(J1,J_cst,0,2,0,arm->getDOF()-1);
+    submatrix(J1,J_cst,0,2,0,chainActiveDOF-1);
     double dT=getRate()/1000.0;
 
     return dT*J_cst*q_dot;
@@ -764,7 +764,7 @@ void reactCtrlThread::printJointsBounds()
     double min, max;
     iCub::iKin::iKinChain &chain=*arm->asChain();
 
-    for (size_t i = 0; i < arm->getDOF(); i++)
+    for (size_t i = 0; i < chainActiveDOF; i++)
     {
         min=chain(i).getMin()*CTRL_RAD2DEG;
         max=chain(i).getMax()*CTRL_RAD2DEG;

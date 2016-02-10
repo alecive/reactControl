@@ -138,7 +138,7 @@ protected:
     double globalTol;
     // Max velocity set for the joints
     double vMax;
-    //matrix with mni/max velocity limits for the current chain
+    //matrix with min/max velocity limits for the current chain
     yarp::sig::Matrix vLimNominal;
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
@@ -176,7 +176,6 @@ protected:
     IControlLimits        *ilimT;
     yarp::sig::Vector     *encsT;
     int jntsT;
-
     
     size_t chainActiveDOF;
     
