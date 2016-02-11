@@ -709,15 +709,15 @@ void reactCtrlThread::sendData()
             b.addInt(chainActiveDOF);
             //cols 2-4: the desired final target (for end-effector)
             vectorIntoBottle(x_d,b);
-            // 5:8 the end effector position in which the robot currently is
+            // 5:7 the end effector position in which the robot currently is
             vectorIntoBottle(x_t,b);
-            // 9:11 the current desired target given by the particle (for end-effector)
+            // 8:10 the current desired target given by the particle (for end-effector)
             vectorIntoBottle(x_n,b);
-            //variable - if torso on: 12:21: joint velocities as solution to control and sent to robot 
+            //variable - if torso on: 11:20: joint velocities as solution to control and sent to robot 
             vectorIntoBottle(q_dot,b); 
-            //variable - if torso on: 22:31: joint positions as solution to control and sent to robot 
+            //variable - if torso on: 21:30: joint positions as solution from ipopt and sent to robot 
             vectorIntoBottle(q,b); 
-            //variable - if torso on: 32:51; assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
+            //variable - if torso on: 31:50; assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
             matrixIntoBottle(vLimAdapted,b);
             
             // the delta_x, that is the 3D vector that ipopt commands to 
