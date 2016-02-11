@@ -81,7 +81,7 @@ bool reactCtrlThread::threadInit()
    
     arm = new iCub::iKin::iCubArm(part_short.c_str());
     // Release / block torso links (blocked by default)
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < NR_TORSO_JOINTS; i++)
     {
         if (useTorso)
         {
@@ -95,12 +95,22 @@ bool reactCtrlThread::threadInit()
 
     //we set up the variables based on the current DOF - that is without torso joints if torso is blocked
     chainActiveDOF = arm->getDOF();
+ 
+    //N.B. All angles in this thread are in degrees
+    qA.resize(NR_ARM_JOINTS,0.0); //current values of arm joints (should be 7)
+    if (useTorso)
+        qT.resize(NR_TORSO_JOINTS,0.0); //current values of torso joints (3, in the order expected for iKin: yaw, roll, pitch)
+    q.resize(chainActiveDOF,0.0); //current joint angle values (10 if torso is on, 7 if off)
+   
     q_dot_0.resize(chainActiveDOF,0.0);
     vLimNominal.resize(chainActiveDOF,2);
+    vLimAdapted.resize(chainActiveDOF,2);
     for (size_t r=0; r<chainActiveDOF; r++)
     {
         vLimNominal(r,0)=-vMax;
+        vLimAdapted(r,0)=-vMax;
         vLimNominal(r,1)=vMax;
+        vLimAdapted(r,1)=vMax;
     }
     //optionally: if (useTorso) vLimNominal(1,0)=vLimNominal(1,1)=0.0;  // disable torso roll
          
@@ -580,7 +590,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     
     AvoidanceHandlerAbstract *avhdl; 
     avhdl = new AvoidanceHandlerTactile(*arm->asChain(),collisionPoints,verbosity);
-    Matrix vLimAdapted=avhdl->getVLIM(vLimNominal);
+    vLimAdapted=avhdl->getVLIM(vLimNominal);
     printMessage(2,"calling ipopt with the following joint velocity limits (deg): \n %s \n",vLimAdapted.toString(3,3).c_str());
     //printf("calling ipopt with the following joint velocity limits (rad): \n %s \n",(vLimAdapted*CTRL_DEG2RAD).toString(3,3).c_str());
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
@@ -686,35 +696,37 @@ Vector reactCtrlThread::computeDeltaX()
 
 void reactCtrlThread::sendData()
 {
+    ts.update();
     printMessage(5,"[reactCtrlThread::sendData()]\n");
     if (outPort.getOutputCount()>0)
     {
         if (state==STATE_REACH)
         {
-            yarp::os::Bottle out;
-            out.clear();
+            yarp::os::Bottle b;
+            b.clear();
 
-            // 1: the state of the robot
-            out.addInt(state);
-
-            // 2: the desired final target
-            yarp::os::Bottle &b_x_d=out.addList();
-            iCub::skinDynLib::vectorIntoBottle(x_d,b_x_d);
-
-            // 3: the current desired target given by the particle
-            yarp::os::Bottle &b_x_n=out.addList();
-            iCub::skinDynLib::vectorIntoBottle(x_n,b_x_n);
-
-            // 4: the end effector position in which the robot currently is
-            yarp::os::Bottle &b_x_t=out.addList();
-            iCub::skinDynLib::vectorIntoBottle(x_t,b_x_t);
-
-            // 5: the delta_x, that is the 3D vector that ipopt commands to 
+            //col 1
+            b.addInt(chainActiveDOF);
+            //cols 2-4: the desired final target (for end-effector)
+            vectorIntoBottle(x_d,b);
+            // 5:8 the end effector position in which the robot currently is
+            vectorIntoBottle(x_t,b);
+            // 9:11 the current desired target given by the particle (for end-effector)
+            vectorIntoBottle(x_n,b);
+            //variable - if torso on: 12:21: joint velocities as solution to control and sent to robot 
+            vectorIntoBottle(q_dot,b); 
+            //variable - if torso on: 22:31: joint positions as solution to control and sent to robot 
+            vectorIntoBottle(q,b); 
+            //variable - if torso on: 32:51; assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
+            matrixIntoBottle(vLimAdapted,b);
+            
+            // the delta_x, that is the 3D vector that ipopt commands to 
             //    the robot in order for x_t to reach x_n
-            yarp::os::Bottle &b_delta_x=out.addList();
-            iCub::skinDynLib::vectorIntoBottle(computeDeltaX(),b_delta_x);
-
-            outPort.write(out);
+            //yarp::os::Bottle &b_delta_x=out.addList();
+            //iCub::skinDynLib::vectorIntoBottle(computeDeltaX(),b_delta_x);
+                         
+            outPort.setEnvelope(ts);
+            outPort.write(b);
         }
     }
 }
@@ -733,26 +745,23 @@ bool reactCtrlThread::stopControlHelper()
 void reactCtrlThread::updateArmChain()
 {    
     iencsA->getEncoders(encsA->data());
-    Vector qA=encsA->subVector(0,6);
+    qA=encsA->subVector(0,NR_ARM_JOINTS-1);
 
     if (useTorso)
     {
         iencsT->getEncoders(encsT->data());
-        Vector qT(3,0.0);
         qT[0]=(*encsT)[2];
         qT[1]=(*encsT)[1];
         qT[2]=(*encsT)[0];
 
-        Vector q(10,0.0);
         q.setSubvector(0,qT);
-        q.setSubvector(3,qA);
-        arm->setAng(q*CTRL_DEG2RAD);
+        q.setSubvector(NR_TORSO_JOINTS,qA);
     }
     else
     {
-        arm->setAng(qA*CTRL_DEG2RAD);
+        q = qA;        
     }
-
+    arm->setAng(q*CTRL_DEG2RAD);
     H=arm->getH();
     x_t=H.subcol(0,3,3);
 }

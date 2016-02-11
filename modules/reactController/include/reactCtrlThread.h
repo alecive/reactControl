@@ -139,8 +139,7 @@ protected:
     double globalTol;
     // Max velocity set for the joints
     double vMax;
-    //matrix with min/max velocity limits for the current chain
-    yarp::sig::Matrix vLimNominal;
+    
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
     bool visualizeTargetInSim;  // will use the yarp rpc /icubSim/world to visualize the target
@@ -187,18 +186,29 @@ protected:
     yarp::sig::Vector x_n;  // Desired next end-effector position
     yarp::sig::Vector x_d;  // Vector that stores the new target
 
+    //N.B. All angles in this thread are in degrees
+    yarp::sig::Vector qA; //current values of arm joints (should be 7)
+    yarp::sig::Vector qT; //current values of torso joints (3, in the order expected for iKin: yaw, roll, pitch)
+    yarp::sig::Vector q; //current joint angle values (10 if torso is on, 7 if off)
+   
     yarp::sig::Vector q_dot_0;    // Initial arm configuration
     yarp::sig::Vector q_dot;  // Computed arm configuration to reach the target
+    
+    yarp::sig::Matrix vLimNominal;     //matrix with min/max velocity limits for the current chain
+    yarp::sig::Matrix vLimAdapted;  //matrix with min/max velocity limits after adptation by avoidanceHandler
+      
     yarp::sig::Matrix H;      // End-effector pose
-
+  
+    
     // ports and files
     yarp::os::BufferedPort<yarp::os::Bottle> aggregSkinEventsInPort; //coming from /skinEventsAggregator/skin_events_aggreg:o
     yarp::os::BufferedPort<yarp::os::Bottle> aggregPPSeventsInPort; //coming from visuoTactileRF/pps_activations_aggreg:o 
     //expected format for both: (skinPart_s x y z o1 o2 o3 magnitude), with position x,y,z and normal o1 o2 o3 in link FoR
-        yarp::os::Port outPort;
+    yarp::os::Port outPort;
     yarp::os::Port portToSimWorld;
     ofstream fout_param; //log parameters that stay constant during the simulation, but are important for analysis - e.g. joint limits 
-       
+    // Stamp for the setEnvelope for the ports
+    yarp::os::Stamp ts;
  
     // IPOPT STUFF
     reactIpOpt    *slv;    // solver
