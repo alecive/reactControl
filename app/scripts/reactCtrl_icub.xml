@@ -1,0 +1,52 @@
+<application>
+    <name>Reactcontrol</name>
+
+    <dependencies>
+    </dependencies>
+ 
+   
+
+   <module>
+        <name>reactController</name>
+        <parameters></parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>reactController</tag>
+    </module>
+
+    <module>
+        <name>skinEventsAggregator</name>
+        <parameters>general::robot icub</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>skinEventsAggreg</tag>
+    </module>
+
+
+    <!--module>
+        <name></name>
+        <parameters></parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag></tag>
+    </module-->
+
+    <connection>
+      <from>/skinManager/skin_events:o</from>
+	  <to>/skinEventsAggregator/skin_events:i</to>
+      <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+       <from>/skinEventsAggregator/skin_events_aggreg:o</from>
+	   <to>/reactController/skin_events_aggreg:i</to>
+       <protocol>udp</protocol>
+    </connection>
+
+        
+    <!--connection>
+        <from></from>
+	<to></to>
+        <protocol>udp</protocol>
+    </connection-->
+</application>
