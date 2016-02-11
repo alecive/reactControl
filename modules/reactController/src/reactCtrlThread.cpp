@@ -581,7 +581,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     AvoidanceHandlerAbstract *avhdl; 
     avhdl = new AvoidanceHandlerTactile(*arm->asChain(),collisionPoints,verbosity);
     Matrix vLimAdapted=avhdl->getVLIM(vLimNominal);
-    printf("calling ipopt with the following joint velocity limits (deg): \n %s \n",vLimAdapted.toString(3,3).c_str());
+    printMessage(2,"calling ipopt with the following joint velocity limits (deg): \n %s \n",vLimAdapted.toString(3,3).c_str());
     //printf("calling ipopt with the following joint velocity limits (rad): \n %s \n",(vLimAdapted*CTRL_DEG2RAD).toString(3,3).c_str());
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
@@ -593,7 +593,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     printMessage(0,"x_0: %s\tx_t: %s\n",       x_0.toString(3,3).c_str(),x_t.toString(3,3).c_str());
     printMessage(0,"norm(x_n-x_t): %g\tnorm(x_d-x_n): %g\tnorm(x_d-x_t): %g\n",
                     norm(x_n-x_t), norm(x_d-x_n), norm(x_d-x_t));
-    printMessage(0,"Result: %s\n",res.toString(3,3).c_str());
+    printMessage(0,"Result (solved velocities (deg/s)): %s\n",res.toString(3,3).c_str());
     _exit_code=exit_code;
     q_dot_0=res;  //result at this step will be prepared as q_dot_0 for the next iteration of the solver
 
@@ -650,7 +650,7 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
             printf("\n");       
         }
     }
-    printMessage(1,"[reactCtrlThread::controlArm] Joint velocities (iKin order): %s\n",_vels.toString(3,3).c_str());
+    printMessage(1,"[reactCtrlThread::controlArm] Joint velocities (iKin order, deg/s): %s\n",_vels.toString(3,3).c_str());
     if (useTorso)
     {
         Vector velsT(3,0.0);
