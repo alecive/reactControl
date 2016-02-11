@@ -694,7 +694,7 @@ void reactCtrlThread::sendData()
             yarp::os::Bottle out;
             out.clear();
 
-            // 1: the sate of the robot
+            // 1: the state of the robot
             out.addInt(state);
 
             // 2: the desired final target
