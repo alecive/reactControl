@@ -1,4 +1,5 @@
 % Author: Matej Hoffmann
+clear; 
 
 visualize_all_joint_pos = true;
 visualize_all_joint_vel = true;
@@ -46,7 +47,7 @@ end
 sz=size(d);
 L=sz(1); % ~ nr. rows
 
-t = d(3,:); 
+t = d(:,3); 
 
 %% reference vs. end-effector
 f1 = figure(1); clf(f1); set(f1,'Color','white','Name','Target, reference, end-effector');  
@@ -65,15 +66,13 @@ plot3(d(:,8),d(:,9),d(:,10),'k.','LineWidth',3); % plots the end-eff trajectory
 plot3(d(end,8),d(end,9),d(end,10),'kx','LineWidth',6); % plots the end-eff final pos
 
 
-f2 = figure(1); clf(f2); set(f1,'Color','white','Name','Distance Reference vs. end-effector');  
+f2 = figure(2); clf(f2); set(f2,'Color','white','Name','Distance Reference vs. end-effector');  
 hold on;
 xlabel('time (s)');
 
-for i=1:L
-  [ax,h1,h2] = plotyy(t(i),myEuclDist3d(d(i,8),d(i,9),d(i,10),d(i,11),d(i,12),d(i,13)),t(i),myEuclDist3d(d(i,8),d(i,9),d(i,10),d(i,5),d(i,6),d(i,7)));
-  set(h1,'Marker','o','MarkerSize',10,'Color','g');
-  set(h2,'Marker','*','MarkerSize',10,'Color','b');
-end
+[ax,h1,h2] = plotyy(t,myEuclDist3d_matrix(d(:,8),d(:,9),d(:,10),d(:,11),d(:,12),d(:,13)),t,myEuclDist3d_matrix(d(:,8),d(:,9),d(:,10),d(:,5),d(:,6),d(:,7)));
+set(h1,'Marker','o','MarkerSize',10,'Color','g');
+set(h2,'Marker','*','MarkerSize',10,'Color','b');
 
 set(get(ax(1),'Ylabel'),'String','Distance end-eff to current target (m)'); 
 set(get(ax(2),'Ylabel'),'String','Distance end-eff to final target (m)');
@@ -81,7 +80,8 @@ hold off;
 
 
 if save_figs
-   saveas(f1,'output/ReferenceVsEndeffector.fig');
+   saveas(f1,'output/TargetReferenceEndeffectorTrajectories.fig');
+   saveas(f2,'output/TargetReferenceEndeffectorDistances.fig');
 end
 
 

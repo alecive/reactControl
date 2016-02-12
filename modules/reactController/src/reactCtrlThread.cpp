@@ -717,8 +717,8 @@ void reactCtrlThread::sendData()
             vectorIntoBottle(q_dot,b); 
             //variable - if torso on: 21:30: joint positions as solution from ipopt and sent to robot 
             vectorIntoBottle(q,b); 
-            //variable - if torso on: 31:50; assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
-            matrixIntoBottle(vLimAdapted,b);
+            //variable - if torso on: 31:50; joint vel limits as input to ipopt, after avoidanceHandler,
+            matrixIntoBottle(vLimAdapted,b); // assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
             
             // the delta_x, that is the 3D vector that ipopt commands to 
             //    the robot in order for x_t to reach x_n
