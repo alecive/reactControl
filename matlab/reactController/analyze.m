@@ -1,10 +1,13 @@
 % Author: Matej Hoffmann
 clear; 
 
-visualize_all_joint_pos = true;
-visualize_all_joint_vel = true;
+visualize_time_stats = true;
+visualize_target = false;
+visualize_all_joint_pos = false;
+visualize_all_joint_vel = false;
 visualize_single_joint_in_detail = false;
 save_figs = false;
+chosen_time_column = 6; % 6 for receivet, 4 for sender
 
 path_prefix = 'input/';
 path_prefix_dumper = 'data/';
@@ -16,75 +19,158 @@ end
 % param file - columns: 1:#DOF, then joint pos min max for every DOF, then joint vel limits for every DOF
 d_params=importdata([path_prefix 'param.log']);
 
+NR_EXTRA_TIME_COLUMNS = 4; % these will be created so that there is time starting from 0, plus time increment column - this 2 times (sender and receiver time stamp) - for diagnostics
+
 % data file -  in columns on the output for 10 DOF case:
 %1: packetID, 2: sender time stamp, 3:receiver time stamp, 4: nActiveDOF in chain
-% 5:7 desired final target (for end-effector), 8:10 current end effector position 
-% 11-13 current desired target given by particle (for end-effector)
-%variable - if torso on: 14:23: joint velocities as solution from ipopt and sent to robot 
-%variable - if torso on: 24:33: joint positions as solution to control and sent to robot 
-%variable - if torso on: 34:53; joint vel limits as input to ipopt, after avoidanceHandler
+% 5: time from 0, sender; 6: increments of 5; 7: time from 0 receiver; 8: increments in 7 
+% 9:11 desired final target (for end-effector), 12:14 current end effector position 
+% 15-17 current desired target given by particle (for end-effector)
+%variable - if torso on: 18:27: joint velocities as solution from ipopt and sent to robot 
+%variable - if torso on: 28:37: joint positions as solution to control and sent to robot 
+%variable - if torso on: 38:57; joint vel limits as input to ipopt, after avoidanceHandler
 %assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
-d=importdata([path_prefix path_prefix_dumper 'reactCtrl/data.log']);
+d_orig=importdata([path_prefix path_prefix_dumper 'reactCtrl/data.log']);
 
-if((d_params(1) == 10) && (d(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 arm
-    chainActiveDOF = 10;
-    joint_info(1).name = '1st torso - pitch'; joint_info(2).name = '2nd torso - roll'; joint_info(3).name = '3rd torso - yaw'; 
-    joint_info(4).name = '1st shoulder'; joint_info(5).name = '2nd shoulder'; joint_info(6).name = '3rd shoulder'; 
-    joint_info(7).name = '1st elbow'; joint_info(8).name = '2nd elbow'; 
-    joint_info(9).name = '1st wrist'; joint_info(10).name = '2nd wrist'; 
+
+TIME_FROM_ZERO_1_COLUMN = 4;
+TIME_FROM_ZERO_DELTA_1_COLUMN = 5;
+TIME_FROM_ZERO_2_COLUMN = 6;
+TIME_FROM_ZERO_DELTA_2_COLUMN = 7;
+PACKET_ID_COLUMN = 1;
+TIME_ABS_1_COLUMN = 2;
+TIME_ABS_2_COLUMN = 3;
+
+target_x.column = 9;
+target_y.column = 10;
+target_z.column = 11;
     
+targetEE_x.column = 15;
+targetEE_y.column = 16;
+targetEE_z.column = 17;
+    
+EE_x.column = 12;
+EE_y.column = 13;
+EE_z.column = 14;
+    
+joint_info(1).name = '1st torso - pitch'; joint_info(2).name = '2nd torso - roll'; joint_info(3).name = '3rd torso - yaw'; 
+joint_info(4).name = '1st shoulder'; joint_info(5).name = '2nd shoulder'; joint_info(6).name = '3rd shoulder'; 
+joint_info(7).name = '1st elbow'; joint_info(8).name = '2nd elbow'; 
+joint_info(9).name = '1st wrist'; joint_info(10).name = '2nd wrist'; 
+
+if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 arm
+    chainActiveDOF = 10;
+        
     for i=1:chainActiveDOF
         joint_info(i).pos_limit_min = d_params(2*i); joint_info(i).pos_limit_max = d_params(2*i+1);
         joint_info(i).vel_limit_min = d_params(20+2*i); joint_info(i).vel_limit_max = d_params(20+2*i+1);
-        joint_info(i).vel_column = 13+i; joint_info(i).pos_column = 23+i; 
-        joint_info(i).vel_limit_min_avoid_column = 32+2*i; joint_info(i).vel_limit_max_avoid_column = 32+2*i+1;
+        joint_info(i).vel_column = 13+i+NR_EXTRA_TIME_COLUMNS; joint_info(i).pos_column = 23+i+NR_EXTRA_TIME_COLUMNS; 
+        joint_info(i).vel_limit_min_avoid_column = 32+2*i+NR_EXTRA_TIME_COLUMNS; joint_info(i).vel_limit_max_avoid_column = 32+2*i+1+NR_EXTRA_TIME_COLUMNS;
     end
 else
    error('This script is currently not supporting other than 10 DOF chains'); 
 end
+
+
+
+%% create extra time columns
+
+    nr_rows_dat = size(d_orig,1);
+    time_cols_to_insert = NaN(nr_rows_dat,4);
+    time_cols_to_insert(1,1)=0; time_cols_to_insert(1,2)=0;time_cols_to_insert(1,3)=0; time_cols_to_insert(1,4)=0;
+    for i=2:nr_rows_dat
+        time_cols_to_insert(i,1)=d_orig(i,2)-d_orig(1,2); % sender time stamp
+        time_cols_to_insert(i,2)=time_cols_to_insert(i,1)-time_cols_to_insert(i-1,1); % increment - to see if it is stable
+        time_cols_to_insert(i,3)=d_orig(i,3)-d_orig(1,3); % this would be the receiver time stamp
+        time_cols_to_insert(i,4)=time_cols_to_insert(i,3)-time_cols_to_insert(i-1,3); % increment - to see if it is stable
+    end
+    d = [d_orig(:,1:3) time_cols_to_insert(:,1:4) d_orig(:,4:end)];
     
- 
+
+%% info about data matrix
+
 sz=size(d);
 L=sz(1); % ~ nr. rows
 
-t = d(:,3); 
-
-%% reference vs. end-effector
-f1 = figure(1); clf(f1); set(f1,'Color','white','Name','Target, reference, end-effector');  
-hold; axis equal; view([-130 30]); grid;
-xlabel('x [m]');
-ylabel('y [m]');
-zlabel('z [m]');
-
-plot3(d(:,5),d(:,6),d(:,7),'r*','LineWidth',6); % plots the desired target trajectory
-%plot3(d(end,5),d(end,6),d(end,7),'r*','LineWidth',10); % plots the desired target final pos
-
-plot3(d(:,11),d(:,12),d(:,13),'go','LineWidth',2); % plots the end-eff targets as given by particle
-plot3(d(end,11),d(end,12),d(end,13),'go','LineWidth',4); % plots the end-eff target final pos
-
-plot3(d(:,8),d(:,9),d(:,10),'k.','LineWidth',3); % plots the end-eff trajectory
-plot3(d(end,8),d(end,9),d(end,10),'kx','LineWidth',6); % plots the end-eff final pos
+t = d(:,chosen_time_column); 
 
 
-f2 = figure(2); clf(f2); set(f2,'Color','white','Name','Distance Reference vs. end-effector');  
-hold on;
-xlabel('time (s)');
+%% plot time diagnostics
 
-[ax,h1,h2] = plotyy(t,myEuclDist3d_matrix(d(:,8),d(:,9),d(:,10),d(:,11),d(:,12),d(:,13)),t,myEuclDist3d_matrix(d(:,8),d(:,9),d(:,10),d(:,5),d(:,6),d(:,7)));
-set(h1,'Marker','o','MarkerSize',10,'Color','g');
-set(h2,'Marker','*','MarkerSize',10,'Color','b');
+if visualize_time_stats
+    f13 = figure(13); clf;
+    set(f13,'Name','Time statistics');
 
-set(get(ax(1),'Ylabel'),'String','Distance end-eff to current target (m)'); 
-set(get(ax(2),'Ylabel'),'String','Distance end-eff to final target (m)');
-hold off;
+    subplot(3,1,1);
+        title('Absolute time');
+        hold on;
+          plot(d(:,TIME_ABS_1_COLUMN),'b+');
+          plot(d(:,TIME_ABS_2_COLUMN),'k+');
+        hold off;
+        legend('time (sender)','time (receiver)');
+        ylabel('Time (s)');
+       
+    subplot(3,1,2)
+        title('Time starting from 0');
+        hold on;
+          plot(d(:,TIME_FROM_ZERO_1_COLUMN),'b+');
+          plot(d(:,TIME_FROM_ZERO_2_COLUMN),'k+');
+        hold off;
+        legend('time (sender)','time (receiver)');
+        ylabel('Time (s)');
+       
+     subplot(3,1,3);
+           title(' Time increments');
+           hold on;
+             plot(d(2:end,TIME_FROM_ZERO_DELTA_1_COLUMN),'b+');
+             plot(d(2:end,TIME_FROM_ZERO_DELTA_2_COLUMN),'k+');
+           hold off;
+           legend('joints (sender)','joints (receiver)');
+           ylabel('Sampling - delta time (s)');
+       
+    if save_figs
+       saveas(f13,'TimeStats.fig'); 
+    end
 
-
-if save_figs
-   saveas(f1,'output/TargetReferenceEndeffectorTrajectories.fig');
-   saveas(f2,'output/TargetReferenceEndeffectorDistances.fig');
 end
 
+%% reference vs. end-effector
+if visualize_target
 
+    f1 = figure(1); clf(f1); set(f1,'Color','white','Name','Target, reference, end-effector');  
+    hold on; axis equal; view([-130 30]); grid;
+    xlabel('x [m]');
+    ylabel('y [m]');
+    zlabel('z [m]');
+
+    plot3(d(:,target_x.column),d(:,target_y.column),d(:,target_z.column),'r*','LineWidth',6); % plots the desired target trajectory
+    %plot3(d(end,5),d(end,6),d(end,7),'r*','LineWidth',10); % plots the desired target final pos
+
+    plot3(d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column),'go','LineWidth',2); % plots the end-eff targets as given by particle
+    plot3(d(end,targetEE_x.column),d(end,targetEE_x.column),d(end,targetEE_x.column),'go','LineWidth',4); % plots the end-eff target final pos
+
+    plot3(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),'k.','LineWidth',3); % plots the end-eff trajectory
+    plot3(d(end,EE_x.column),d(end,EE_y.column),d(end,EE_z.column),'kx','LineWidth',6); % plots the end-eff final pos
+
+    hold off;
+
+    f2 = figure(2); clf(f2); set(f2,'Color','white','Name','Distance Reference vs. end-effector');  
+    xlabel('time (s)');
+    [ax,h1,h2] = plotyy(t,myEuclDist3d_matrix(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column)),...
+        t,myEuclDist3d_matrix(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),d(:,target_x.column),d(:,target_y.column),d(:,target_z.column)));
+    set(h1,'Marker','o','MarkerSize',10,'Color','b');
+    set(h2,'Marker','*','MarkerSize',10,'Color','g');
+    legend('Distance end-eff to current target','Distance end-eff to final target');
+    set(get(ax(1),'Ylabel'),'String','Distance (m)'); 
+    set(get(ax(2),'Ylabel'),'String','Distance (m)');
+
+
+    if save_figs
+       saveas(f1,'output/TargetReferenceEndeffectorTrajectories.fig');
+       saveas(f2,'output/TargetReferenceEndeffectorDistances.fig');
+    end
+
+end
 
 %% joint values vs. joint limits
 if visualize_all_joint_pos
@@ -106,8 +192,7 @@ if visualize_all_joint_pos
                     set(0, 'currentfigure', f5); 
                     data = d_t;
             end
-            t = data(:,1);
-
+            
             for j=1:10
                 subplot(4,3,j); hold on;
                 plot(t,data(:,joint_info(j).pos_column));
@@ -151,8 +236,6 @@ if visualize_all_joint_vel
                     set(0, 'currentfigure', f8); 
                     data = d_t;
             end
-            t = data(:,1);
-
             
             for j=1:10
                 subplot(4,3,j); hold on;
@@ -205,7 +288,6 @@ if visualize_single_joint_in_detail
                     set(0, 'currentfigure', f12); 
                     data = d_t;
             end
-         t= data(:,1);
          [m,n] = size(data);
 
          hold on;
