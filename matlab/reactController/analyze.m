@@ -164,46 +164,83 @@ if visualize_target
     hold off;
 
     f2 = figure(2); clf(f2); set(f2,'Color','white','Name','End-eff reference evolution');  
+        subplot(4,1,1);
+            hold on;
+            title('reference (x), reference (y)');
+            plotyy(t,100*d(:,targetEE_x.column),t,100*d(:,targetEE_y.column));
+            legend('reference (x)','reference (y)');
+            ylabel('position (cm)');
+            hold off;
+
+        subplot(4,1,2);
+            hold on;
+            title('reference (z)');
+            plot(t,100*d(:,targetEE_z.column),'-bo');
+            ylabel('position (cm)');
+            hold off;
+
+        subplot(4,1,3);
+            title('End-eff reference increments');
+            hold on;
+            for i=2:L
+                plot(t(i),100*myEuclDist3d(d(i,targetEE_x.column),d(i,targetEE_y.column),d(i,targetEE_z.column),...
+                    d(i-1,targetEE_x.column),d(i-1,targetEE_y.column),d(i-1,targetEE_z.column)),'ko','MarkerSize',4);
+            end
+            %xlabel('Time (s)');
+            ylabel('Distance (cm)');
+            hold off;
+
+        subplot(4,1,4);  
+            title('End-eff speed needed');
+            hold on;
+            for i=2:L
+                plot(t(i),100*myEuclDist3d(d(i,targetEE_x.column),d(i,targetEE_y.column),d(i,targetEE_z.column),...
+                    d(i-1,targetEE_x.column),d(i-1,targetEE_y.column),d(i-1,targetEE_z.column))/dT,'ko','MarkerSize',4);
+            end
+            xlabel('Time (s)');
+            ylabel('Speed (cm/s)');
+            hold off;
+            
+      f21 = figure(21); clf(f21); set(f21,'Color','white','Name','End-eff evolution');  
+        subplot(4,1,1);
+            hold on;
+            title('Position (x), (y)');
+            plotyy(t,100*d(:,EE_x.column),t,100*d(:,EE_y.column));
+            legend('(x)','(y)');
+            ylabel('position (cm)');
+            hold off;
+
+        subplot(4,1,2);
+            hold on;
+            title('Position (z)');
+            plot(t,100*d(:,EE_z.column),'-bo');
+            ylabel('position (cm)');
+            hold off;
+
+        subplot(4,1,3);
+            title('End-eff increments');
+            hold on;
+            for i=2:L
+                plot(t(i),100*myEuclDist3d(d(i,EE_x.column),d(i,EE_y.column),d(i,EE_z.column),...
+                    d(i-1,EE_x.column),d(i-1,EE_y.column),d(i-1,EE_z.column)),'ko','MarkerSize',4);
+            end
+            %xlabel('Time (s)');
+            ylabel('Distance (cm)');
+            hold off;
+
+        subplot(4,1,4);  
+            title('End-eff speed');
+            hold on;
+            for i=2:L
+                plot(t(i),100*myEuclDist3d(d(i,EE_x.column),d(i,EE_y.column),d(i,EE_z.column),...
+                    d(i-1,EE_x.column),d(i-1,EE_y.column),d(i-1,EE_z.column))/dT,'ko','MarkerSize',4);
+            end
+            xlabel('Time (s)');
+            ylabel('Speed (cm/s)');
+            hold off;
     
-    subplot(4,1,1);
-        hold on;
-        title('reference (x), reference (y)');
-        plotyy(t,100*d(:,targetEE_x.column),t,100*d(:,targetEE_y.column));
-        legend('reference (x)','reference (y)');
-        ylabel('position (cm)');
-        hold off;
-        
-    subplot(4,1,2);
-        hold on;
-        title('reference (z)');
-        plot(t,100*d(:,targetEE_z.column),'-bo');
-        ylabel('position (cm)');
-        hold off;
     
-    subplot(4,1,3);
-        title('End-eff reference increments');
-        hold on;
-        for i=2:L
-            plot(t(i),100*myEuclDist3d(d(i,targetEE_x.column),d(i,targetEE_y.column),d(i,targetEE_z.column),...
-                d(i-1,targetEE_x.column),d(i-1,targetEE_y.column),d(i-1,targetEE_z.column)),'ko','MarkerSize',4);
-        end
-        %xlabel('Time (s)');
-        ylabel('Distance (cm)');
-        hold off;
-        
-    subplot(4,1,4);  
-        title('End-eff speed needed');
-        hold on;
-        for i=2:L
-            plot(t(i),100*myEuclDist3d(d(i,targetEE_x.column),d(i,targetEE_y.column),d(i,targetEE_z.column),...
-                d(i-1,targetEE_x.column),d(i-1,targetEE_y.column),d(i-1,targetEE_z.column) / dT),'ko','MarkerSize',4);
-        end
-        xlabel('Time (s)');
-        ylabel('Speed (cm/s)');
-        hold off;
-    
-    
-    f21 = figure(21); clf(f21); set(f21,'Color','white','Name','Distance ref vs. end-eff and target');      
+    f22 = figure(22); clf(f22); set(f22,'Color','white','Name','Distance ref vs. end-eff and target');      
    
         title('Distance reference vs. end-effector')
         xlabel('time (s)');
@@ -219,7 +256,8 @@ if visualize_target
     if save_figs
        saveas(f1,'output/TargetReferenceEndeffectorTrajectories.fig');
        saveas(f2,'output/End-effector reference detail.fig');
-       saveas(f21,'output/TargetReferenceEndeffectorDistances.fig');
+       saveas(f21,'output/End-effector position detail.fig');
+       saveas(f22,'output/TargetReferenceEndeffectorDistances.fig');
     end
 
 end
