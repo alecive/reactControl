@@ -168,7 +168,7 @@ if visualize_target
     subplot(4,1,1);
         hold on;
         title('reference (x), reference (y)');
-        plotyy(t,100*d(:,EE_x.column),t,100*d(:,EE_y.column));
+        plotyy(t,100*d(:,targetEE_x.column),t,100*d(:,targetEE_y.column));
         legend('reference (x)','reference (y)');
         ylabel('position (cm)');
         hold off;
@@ -176,7 +176,7 @@ if visualize_target
     subplot(4,1,2);
         hold on;
         title('reference (z)');
-        plot(t,100*d(:,EE_z.column),'-bo');
+        plot(t,100*d(:,targetEE_z.column),'-bo');
         ylabel('position (cm)');
         hold off;
     
@@ -184,8 +184,8 @@ if visualize_target
         title('End-eff reference increments');
         hold on;
         for i=2:L
-            plot(t(i),100*myEuclDist3d(d(i,EE_x.column),d(i,EE_y.column),d(i,EE_z.column),...
-                d(i-1,EE_x.column),d(i-1,EE_y.column),d(i-1,EE_z.column)),'ko','MarkerSize',4);
+            plot(t(i),100*myEuclDist3d(d(i,targetEE_x.column),d(i,targetEE_y.column),d(i,targetEE_z.column),...
+                d(i-1,targetEE_x.column),d(i-1,targetEE_y.column),d(i-1,targetEE_z.column)),'ko','MarkerSize',4);
         end
         %xlabel('Time (s)');
         ylabel('Distance (cm)');
@@ -195,8 +195,8 @@ if visualize_target
         title('End-eff speed needed');
         hold on;
         for i=2:L
-            plot(t(i),100*myEuclDist3d(d(i,EE_x.column),d(i,EE_y.column),d(i,EE_z.column),...
-                d(i-1,EE_x.column),d(i-1,EE_y.column),d(i-1,EE_z.column) / dT),'ko','MarkerSize',4);
+            plot(t(i),100*myEuclDist3d(d(i,targetEE_x.column),d(i,targetEE_y.column),d(i,targetEE_z.column),...
+                d(i-1,targetEE_x.column),d(i-1,targetEE_y.column),d(i-1,targetEE_z.column) / dT),'ko','MarkerSize',4);
         end
         xlabel('Time (s)');
         ylabel('Speed (cm/s)');
