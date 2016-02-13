@@ -68,6 +68,13 @@ if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 
         joint_info(i).vel_column = 13+i+NR_EXTRA_TIME_COLUMNS; joint_info(i).pos_column = 23+i+NR_EXTRA_TIME_COLUMNS; 
         joint_info(i).vel_limit_min_avoid_column = 32+2*i+NR_EXTRA_TIME_COLUMNS; joint_info(i).vel_limit_max_avoid_column = 32+2*i+1+NR_EXTRA_TIME_COLUMNS;
     end
+    
+    if (length(d_params) == 41) % old format before outputting extra params (prior to 13.2.2016)
+        dT = 0.02; % need to set manually - 20 ms
+    elseif (length(d_params) == 46)
+        dT = d_params(46);
+    end
+        
 else
    error('This script is currently not supporting other than 10 DOF chains'); 
 end
@@ -138,7 +145,7 @@ end
 %% reference vs. end-effector
 if visualize_target
 
-    f1 = figure(1); clf(f1); set(f1,'Color','white','Name','Target, reference, end-effector');  
+    f1 = figure(1); clf(f1); set(f1,'Color','white','Name','Target, reference, end-effector in space');  
     hold on; axis equal; view([-130 30]); grid;
     xlabel('x [m]');
     ylabel('y [m]');
@@ -155,27 +162,70 @@ if visualize_target
 
     hold off;
 
-    f2 = figure(2); clf(f2); set(f2,'Color','white','Name','Distance Reference vs. end-effector');  
-    xlabel('time (s)');
-    [ax,h1,h2] = plotyy(t,myEuclDist3d_matrix(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column)),...
-        t,myEuclDist3d_matrix(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),d(:,target_x.column),d(:,target_y.column),d(:,target_z.column)));
-    set(h1,'Marker','o','MarkerSize',10,'Color','b');
-    set(h2,'Marker','*','MarkerSize',10,'Color','g');
-    legend('Distance end-eff to current target','Distance end-eff to final target');
-    set(get(ax(1),'Ylabel'),'String','Distance (m)'); 
-    set(get(ax(2),'Ylabel'),'String','Distance (m)');
+    f2 = figure(2); clf(f2); set(f2,'Color','white','Name','End-eff reference evolution');  
+    
+    subplot(4,1,1);
+        hold on;
+        title('reference (x), reference (y)');
+        plotyy(t,100*d(:,EE_x.column),t,100*d(:,EE_y.column));
+        legend('reference (x)','reference (y)');
+        ylabel('position (cm)');
+        hold off;
+        
+    subplot(4,1,2);
+        hold on;
+        title('reference (z)');
+        plot(t,100*d(:,EE_z.column),'-bo');
+        ylabel('position (cm)');
+        hold off;
+    
+    subplot(4,1,3);
+        title('End-eff reference increments');
+        hold on;
+        for i=2:L
+            plot(t(i),100*myEuclDist3d(d(i,EE_x.column),d(i,EE_y.column),d(i,EE_z.column),...
+                d(i-1,EE_x.column),d(i-1,EE_y.column),d(i-1,EE_z.column)),'ko','MarkerSize',4);
+        end
+        %xlabel('Time (s)');
+        ylabel('Distance (cm)');
+        hold off;
+        
+    subplot(4,1,4);  
+        title('End-eff speed needed');
+        hold on;
+        for i=2:L
+            plot(t(i),100*myEuclDist3d(d(i,EE_x.column),d(i,EE_y.column),d(i,EE_z.column),...
+                d(i-1,EE_x.column),d(i-1,EE_y.column),d(i-1,EE_z.column) / dT),'ko','MarkerSize',4);
+        end
+        xlabel('Time (s)');
+        ylabel('Speed (cm/s)');
+        hold off;
+    
+    
+    f21 = figure(21); clf(f21); set(f21,'Color','white','Name','Distance ref vs. end-eff and target');      
+   
+        title('Distance reference vs. end-effector')
+        xlabel('time (s)');
+        [ax,h1,h2] = plotyy(t,100*myEuclDist3d_matrix(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column)),...
+            t,100*myEuclDist3d_matrix(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),d(:,target_x.column),d(:,target_y.column),d(:,target_z.column)));
+        set(h1,'Marker','o','MarkerSize',10,'Color','b');
+        set(h2,'Marker','*','MarkerSize',10,'Color','g');
+        legend('Distance end-eff to reference','Distance end-eff to final target'); % reference is the current target
+        set(get(ax(1),'Ylabel'),'String','Distance (cm)'); 
+        set(get(ax(2),'Ylabel'),'String','Distance (cm)');
 
 
     if save_figs
        saveas(f1,'output/TargetReferenceEndeffectorTrajectories.fig');
-       saveas(f2,'output/TargetReferenceEndeffectorDistances.fig');
+       saveas(f2,'output/End-effector reference detail.fig');
+       saveas(f21,'output/TargetReferenceEndeffectorDistances.fig');
     end
 
 end
 
 %% joint values vs. joint limits
 if visualize_all_joint_pos
-    if(d_params(1) == 10) % 10 DOF situation - 3 torso, 7 arm
+    if(chainActiveDOF == 10) % 10 DOF situation - 3 torso, 7 arm
         data = [];
         f3 = figure(3); clf(f3); set(f3,'Color','white','Name','Joint positions - No avoidance');  
        % f4 = figure(4); clf(f4); set(f4,'Color','white','Name','Joint positions - Visual avoidance');  
@@ -219,10 +269,10 @@ end
 
 %% joint velocities vs. joint vel limits
 if visualize_all_joint_vel
-    if(d_params(1) == 10) % 10 DOF situation - 3 torso, 7 arm
+    if(chainActiveDOF == 10) % 10 DOF situation - 3 torso, 7 arm
        
         data = [];
-        f6 = figure(6); clf(f6); set(f6,'Color','white','Name','Joint velocities - No avoidance');  
+        f6 = figure(6); clf(f6); set(f6,'Color','white','Name','Joint vel - control commands');  
         %f7 = figure(7); clf(f7); set(f7,'Color','white','Name','Joint velocities - Visual avoidance');  
         %f8 = figure(8); clf(f8); set(f8,'Color','white','Name','Joint velocities - Tactile avoidance');  
 
@@ -254,11 +304,27 @@ if visualize_all_joint_vel
             end    
         end
 
+        f61 = figure(61); clf(f61); set(f61,'Color','white','Name','Joint vel increments (control commands)');  
+        for j=1:chainActiveDOF
+            subplot(4,3,j); hold on;
+            plot([t(2) t(end)],[10 10],'-.r'); % smoothness limit
+            plot([t(2) t(end)],[-10 -10],'-.r'); % smoothness limit   
+            for i=2:L
+                plot(t(i),data(i,joint_info(j).vel_column)-data(i-1,joint_info(j).vel_column),'ok','MarkerSize',4); % increment in joint velocity
+            end
+            xlabel('t [s]');
+            ylabel('delta joint velocity [deg/s]');
+            title(joint_info(j).name);
+            hold off;
+        end    
+         
+        
     end
     if save_figs
         saveas(f6,'output/JointVelocitiesNoAvoidance.fig');
         %saveas(f7,'output/JointVelocitiesVisualAvoidance.fig');
         %saveas(f8,'output/JointVelocitiesTactileAvoidance.fig');
+        saveas(f61,'output/JointVelocitiesIncrements.fig');
     end
 end
 
