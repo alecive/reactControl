@@ -2,14 +2,15 @@
 clear; 
 
 visualize_time_stats = true;
-visualize_target = false;
-visualize_all_joint_pos = false;
-visualize_all_joint_vel = false;
+visualize_target = true;
+visualize_all_joint_pos = true;
+visualize_all_joint_vel = true;
 visualize_single_joint_in_detail = false;
-save_figs = false;
+save_figs = true;
 chosen_time_column = 6; % 6 for receivet, 4 for sender
 
-path_prefix = 'input/';
+%path_prefix = 'input/';
+path_prefix = 'icubTests/test_20160212e/';
 path_prefix_dumper = 'data/';
 
 if save_figs
@@ -147,7 +148,7 @@ if visualize_target
     %plot3(d(end,5),d(end,6),d(end,7),'r*','LineWidth',10); % plots the desired target final pos
 
     plot3(d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column),'go','LineWidth',2); % plots the end-eff targets as given by particle
-    plot3(d(end,targetEE_x.column),d(end,targetEE_x.column),d(end,targetEE_x.column),'go','LineWidth',4); % plots the end-eff target final pos
+    plot3(d(end,targetEE_x.column),d(end,targetEE_y.column),d(end,targetEE_z.column),'go','LineWidth',4); % plots the end-eff target final pos
 
     plot3(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),'k.','LineWidth',3); % plots the end-eff trajectory
     plot3(d(end,EE_x.column),d(end,EE_y.column),d(end,EE_z.column),'kx','LineWidth',6); % plots the end-eff final pos
@@ -193,7 +194,7 @@ if visualize_all_joint_pos
                     data = d_t;
             end
             
-            for j=1:10
+            for j=1:chainActiveDOF
                 subplot(4,3,j); hold on;
                 plot(t,data(:,joint_info(j).pos_column));
                 plot([t(1) t(end)],[joint_info(j).pos_limit_min joint_info(j).pos_limit_min],'r--'); % min joint pos limit
@@ -219,6 +220,7 @@ end
 %% joint velocities vs. joint vel limits
 if visualize_all_joint_vel
     if(d_params(1) == 10) % 10 DOF situation - 3 torso, 7 arm
+       
         data = [];
         f6 = figure(6); clf(f6); set(f6,'Color','white','Name','Joint velocities - No avoidance');  
         %f7 = figure(7); clf(f7); set(f7,'Color','white','Name','Joint velocities - Visual avoidance');  
@@ -237,7 +239,7 @@ if visualize_all_joint_vel
                     data = d_t;
             end
             
-            for j=1:10
+            for j=1:chainActiveDOF
                 subplot(4,3,j); hold on;
                 plot(t,data(:,joint_info(j).vel_limit_min_avoid_column),'--c','Marker','v','MarkerSize',2); % current min joint vel limit set by avoidance handler
                 plot(t,data(:,joint_info(j).vel_limit_max_avoid_column),'--m','Marker','^','MarkerSize',2); % current max joint vel limit set by avoidance handler
@@ -250,8 +252,6 @@ if visualize_all_joint_vel
                 title(joint_info(j).name);
                 hold off;
             end    
-            
-           
         end
 
     end
