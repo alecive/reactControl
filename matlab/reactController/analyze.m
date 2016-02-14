@@ -11,11 +11,11 @@ save_figs = true;
 chosen_time_column = 6; % 6 for receivet, 4 for sender
 
 %path_prefix = 'input/';
-path_prefix = 'icubTests/test_20160212e/';
+path_prefix = 'icubTests/test_20160212a/';
 path_prefix_dumper = 'data/';
 
 if save_figs
-  mkdir('output'); 
+  mkdir('output');
 end
 
 % param file - columns: 1:#DOF, then joint pos min max for every DOF, then joint vel limits for every DOF

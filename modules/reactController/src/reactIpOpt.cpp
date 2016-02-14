@@ -104,8 +104,8 @@ protected:
     // The torso reduction rate at for the max velocities sent to the torso(default 3.0)
     double torsoReduction;  
     //for smooth changes in joint velocities
-    bool boundSmoothnessOn; 
-    double boundSmoothness; //new joint vel can differ by max boundSmoothness from the previous one (rad)
+    bool boundSmoothnessFlag; 
+    double boundSmoothnessValue; //new joint vel can differ by max boundSmoothness from the previous one (rad)
     
     //joint position limits handled in a smooth way - see Pattacini et al. 2010 - iCub Cart. control - Fig. 8
     yarp::sig::Vector qGuard;
@@ -229,8 +229,9 @@ public:
     /***** 8 pure virtual functions from TNLP class need to be implemented here **********/
     /************************************************************************/
     react_NLP(iKinChain &c, const yarp::sig::Vector &_xd, const yarp::sig::Vector &_q_dot_0,
-             double _dT, const yarp::sig::Matrix &_v_lim, bool _boundSmoothnessOn, int _verbosity) : chain(c),
-             xd(_xd), q_dot_0(_q_dot_0), dT(_dT), v_lim(_v_lim), boundSmoothnessOn(_boundSmoothnessOn),verbosity(_verbosity) 
+             double _dT, const yarp::sig::Matrix &_v_lim, bool _boundSmoothnessFlag, double _boundSmoothnessValue,int _verbosity) : chain(c),
+             xd(_xd), q_dot_0(_q_dot_0), dT(_dT), v_lim(_v_lim), boundSmoothnessFlag(_boundSmoothnessFlag),boundSmoothnessValue(_boundSmoothnessValue),
+             verbosity(_verbosity) 
     {
         name="react_NLP";
 
@@ -261,8 +262,7 @@ public:
         guardRatio=0.1; // changing from 0.4 (orig Ale) to 0.1 - to comply with reactController-sim where the guard will be used to adapt velocity limits;
 
         torsoReduction=3.0;
-        boundSmoothness=10.0*CTRL_DEG2RAD;
-
+       
         qGuard.resize(dim,0.0);
         qGuardMinInt.resize(dim,0.0);
         qGuardMinExt.resize(dim,0.0);
@@ -323,12 +323,12 @@ public:
   
         for (Index i=0; i<n; i++)
         {
-            if (boundSmoothnessOn)
+            if (boundSmoothnessFlag)
             {
                 // The joints velocities will be constrained by the v_lim constraints (after possible external modification by avoidanceHandlers) and 
                 // and the previous state (that is our current initial state), in order to avoid abrupt changes
-                double smoothnessMin = std::min(v_bounds(i,1),q_dot_0[i]-boundSmoothness); //the smooth min vel should not be bigger than max vel
-                double smoothnessMax = std::max(v_bounds(i,0),q_dot_0[i]+boundSmoothness); //the smooth max vel should not be smaller than min vel
+                double smoothnessMin = std::min(v_bounds(i,1),q_dot_0[i]-boundSmoothnessValue); //the smooth min vel should not be bigger than max vel
+                double smoothnessMax = std::max(v_bounds(i,0),q_dot_0[i]+boundSmoothnessValue); //the smooth max vel should not be smaller than min vel
                 
                 x_l[i]=max(v_bounds(i,0),smoothnessMin); //lower bound
                 x_u[i]=min(v_bounds(i,1),smoothnessMax); //upper bound
@@ -563,9 +563,9 @@ void reactIpOpt::setVerbosity(const unsigned int verbose)
 
 /************************************************************************/
 yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_dot_0,
-                                    double dt, const yarp::sig::Matrix &v_lim, bool boundSmoothnessOn, int *exit_code)
+                                    double dt, const yarp::sig::Matrix &v_lim, bool boundSmoothnessFlag, double boundSmoothnessValue, int *exit_code)
 {
-    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,v_lim,boundSmoothnessOn, verbosity);
+    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,v_lim,boundSmoothnessFlag,boundSmoothnessValue, verbosity);
         
     CAST_IPOPTAPP(App)->Options()->SetNumericValue("max_cpu_time",dt);
     ApplicationReturnStatus status=CAST_IPOPTAPP(App)->OptimizeTNLP(GetRawPtr(nlp));

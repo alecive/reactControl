@@ -49,13 +49,15 @@ using namespace iCub::skinDynLib;
 
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,  const string &_part,
                                  int _verbosity, bool _disableTorso,  double _trajSpeed, double _globalTol, 
-                                 double _vMax, double _tol, bool _tactileCollisionPointsOn, bool _visualCollisionPointsOn,
+                                 double _vMax, double _tol, bool _tactileCollisionPointsOn, bool _visualCollisionPointsOn, bool _boundSmoothnessFlag, double _boundSmoothnessValue,
                                  bool _visualizeTargetInSim, bool _visualizeParticleInSim,
                                  bool _visualizeCollisionPointsInSim,particleThread *_pT) :
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
                                  verbosity(_verbosity), useTorso(!_disableTorso),
                                  trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol),
                                  tactileCollisionPointsOn(_tactileCollisionPointsOn), visualCollisionPointsOn(_visualCollisionPointsOn),
+                                 boundSmoothnessFlag(_boundSmoothnessFlag),
+                                 boundSmoothnessValue(_boundSmoothnessValue),
                                  visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
                                  visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim)
 {
@@ -194,7 +196,7 @@ bool reactCtrlThread::threadInit()
     /************ variables related to the optimization problem for ipopt *******/
    
     slv=NULL;
-    ipoptBoundSmoothnessOn = true;
+   
     x_0.resize(3,0.0);
     x_t.resize(3,0.0);
     x_n.resize(3,0.0);
@@ -598,7 +600,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
     // So, q_dot_0 is in degrees, but I have to convert it in radians before sending it to ipopt
-    Vector res=slv->solve(x_n,q_dot_0*CTRL_DEG2RAD,dT,vLimAdapted*CTRL_DEG2RAD,ipoptBoundSmoothnessOn,&exit_code)*CTRL_RAD2DEG;
+    Vector res=slv->solve(x_n,q_dot_0*CTRL_DEG2RAD,dT,vLimAdapted*CTRL_DEG2RAD,boundSmoothnessFlag,boundSmoothnessValue*CTRL_DEG2RAD,&exit_code)*CTRL_RAD2DEG;
 
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
     printMessage(0,"x_n: %s\tx_d: %s\tdT %g\n",x_n.toString(3,3).c_str(),x_d.toString(3,3).c_str(),dT);

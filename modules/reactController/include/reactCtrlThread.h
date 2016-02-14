@@ -62,7 +62,7 @@ class reactCtrlThread: public yarp::os::RateThread
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & , const string &_ ,
-                    int , bool , double , double , double , double , bool, bool, bool , bool , bool , particleThread * );
+                    int , bool , double , double , double , double , bool, bool, bool, double, bool , bool , bool , particleThread * );
     // INIT
     virtual bool threadInit();
     // RUN
@@ -139,7 +139,8 @@ protected:
     double globalTol;
     // Max velocity set for the joints
     double vMax;
-    
+    bool boundSmoothnessFlag; //for ipopt - whether changes in velocity commands need to be smooth
+    double boundSmoothnessValue; //actual allowed change in every joint velocity commands in deg/s from one time step to the next. Note: this is not adapted to the thread rate set by the rctCtrlRate param
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
     bool visualizeTargetInSim;  // will use the yarp rpc /icubSim/world to visualize the target

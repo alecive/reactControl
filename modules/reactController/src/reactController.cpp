@@ -106,6 +106,10 @@ private:
     
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
+    
+    bool boundSmoothnessFlag; //for ipopt - whether changes in velocity commands need to be smooth
+    double boundSmoothnessValue; //actual allowed change in every joint velocity commands in deg/s from one time step to the next. Note: this is not adapted to the thread rate set by the rctCtrlRate param
+    
     bool visualizeTargetInSim; // will use the yarp rpc /icubSim/world to visualize the target
     bool visualizeParticleInSim; // will use the yarp rpc /icubSim/world to visualize the particle (trajectory - intermediate targets)
     bool visualizeCollisionPointsInSim; // will visualize the (potential) collision points in iCub simulator 
@@ -132,6 +136,9 @@ public:
         
         tactileCollisionPointsOn = false;
         visualCollisionPointsOn = false;
+        
+        boundSmoothnessFlag = false;
+        boundSmoothnessValue = 30; // 30 deg/s change in a time step is huge - would have no effect 
         
         if(robot == "icubSim"){
             visualizeTargetInSim = true;
@@ -402,6 +409,29 @@ public:
         {
             yInfo("[reactController] Could not find visualCollisionPoints flag (on/off) in the config file; using %d as default",visualCollisionPointsOn);
         }
+        
+        if (rf.check("boundSmoothnessFlag"))
+        {
+            if(rf.find("boundSmoothnessFlag").asString()=="on"){
+                boundSmoothnessFlag = true;
+                yInfo("[reactController] boundSmoothnessFlag flag set to on.");
+                
+            }
+            else{
+                boundSmoothnessFlag = false;
+                yInfo("[reactController] boundSmoothnessFlag flag set to off.");
+            }
+        }
+        else
+        {
+            yInfo("[reactController] Could not find boundSmoothnessFlag flag (on/off) in the config file; using %d as default",boundSmoothnessFlag);
+        }
+        if (rf.check("boundSmoothnessValue"))
+        {
+              boundSmoothnessValue = rf.find("boundSmoothnessValue").asDouble();
+               yInfo("[reactController] boundSmoothnessValue set to %g deg/s (allowed change in joint vel in a time step).",boundSmoothnessValue);
+        }
+        else yInfo("[reactController] Could not find boundSmoothnessValue in the config file; using %g as default",boundSmoothnessValue);
            
          //********************** Visualizations in simulator ***********************
             if (robot == "icubSim"){
@@ -474,7 +504,7 @@ public:
         }
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
                                           disableTorso, trajSpeed, globalTol, vMax,
-                                          tol, tactileCollisionPointsOn, visualCollisionPointsOn, visualizeTargetInSim, visualizeParticleInSim,
+                                          tol, tactileCollisionPointsOn, visualCollisionPointsOn,boundSmoothnessFlag,boundSmoothnessValue, visualizeTargetInSim, visualizeParticleInSim,
                                           visualizeCollisionPointsInSim, prtclThrd);
         if (!rctCtrlThrd->start())
         {
