@@ -5,3 +5,4 @@
 add_subdirectory(reactController)
 add_subdirectory(reactController-sim)
 add_subdirectory(reactController-sim-enhanced)
+add_subdirectory(jointVelCtrlIdentSimple)

@@ -7,8 +7,8 @@ visualize_all_joint_pos = true;
 visualize_all_joint_vel = true;
 visualize_single_joint_in_detail = true;
 visualize_shoulder_ineq_constr = true;
-save_figs = true;
-chosen_time_column = 6; % 6 for receivet, 4 for sender
+save_figs = false;
+chosen_time_column = 6; % 4 for sender, 6 for receiver 
 
 %path_prefix = 'input/';
 path_prefix = 'icubTests/test_20160212a/';
@@ -24,8 +24,9 @@ d_params=importdata([path_prefix 'param.log']);
 NR_EXTRA_TIME_COLUMNS = 4; % these will be created so that there is time starting from 0, plus time increment column - this 2 times (sender and receiver time stamp) - for diagnostics
 
 % data file -  in columns on the output for 10 DOF case:
-%1: packetID, 2: sender time stamp, 3:receiver time stamp, 4: nActiveDOF in chain
-% 5: time from 0, sender; 6: increments of 5; 7: time from 0 receiver; 8: increments in 7 
+%1: packetID, 2: sender time stamp, 3:receiver time stamp, 
+% 4: time from 0, sender; 5: increments of 4; 6: time from 0 receiver; 7: increments in 6 
+%8: nActiveDOF in chain
 % 9:11 desired final target (for end-effector), 12:14 current end effector position 
 % 15-17 current desired target given by particle (for end-effector)
 %variable - if torso on: 18:27: joint velocities as solution from ipopt and sent to robot 
