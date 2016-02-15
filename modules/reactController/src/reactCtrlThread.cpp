@@ -202,12 +202,19 @@ bool reactCtrlThread::threadInit()
     x_n.resize(3,0.0);
     x_d.resize(3,0.0);
   
+    /*** visualize in iCubGui  ***************/
+    visualizeIniCubGui = true;
+    visualizeParticleIniCubGui = true;
+    visualizeTargetIniCubGui = true;
+    
     /***************** ports and files*************************************************************************************/
     
     aggregPPSeventsInPort.open("/"+name+"/pps_events_aggreg:i");
     aggregSkinEventsInPort.open("/"+name+"/skin_events_aggreg:i");
     
-    outPort.open("/"+name +"/data:o"); //for dumping
+    if (visualizeIniCubGui)
+        outPort.open("/"+name +"/data:o"); //for dumping
+    outPortiCubGui.open(("/"+name+"/gui:o").c_str());
     
     fout_param.open("param.log");
     
@@ -228,7 +235,8 @@ bool reactCtrlThread::threadInit()
     
     yInfo("Written to param file and closing..");    
     fout_param.close();
-    
+     
+      
     /**** visualizing targets and collision points in simulator ***************************/
     
     if((robot == "icubSim") && (visualizeTargetInSim || visualizeParticleInSim || visualizeCollisionPointsInSim) ){ 
@@ -363,6 +371,14 @@ void reactCtrlThread::threadRelease()
 
     collisionPoints.clear();    
     
+    if (visualizeIniCubGui)
+        if (outPortiCubGui.getOutputCount()>0)
+        {
+            Bottle b;
+            b.addString("reset");
+            outPortiCubGui.write(b);
+        }
+    
     if((robot == "icubSim") && (visualizeTargetInSim || visualizeParticleInSim || visualizeCollisionPointsInSim) ){ 
         yInfo("Deleting objects from simulator world.");
         cmd.clear();
@@ -379,6 +395,10 @@ void reactCtrlThread::threadRelease()
         aggregSkinEventsInPort.close();
         outPort.interrupt();
         outPort.close();
+        if (outPortiCubGui.isOpen()){
+            outPortiCubGui.interrupt();
+            outPortiCubGui.close();
+        }
         if (portToSimWorld.isOpen()){
             portToSimWorld.interrupt();
             portToSimWorld.close();
@@ -513,6 +533,10 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d)
             yInfo("[reactCtrlThread]                 vel: %s",vel.toString(3,3).c_str());
             state=STATE_REACH;
 
+            if(visualizeTargetIniCubGui)
+                sendiCubGuiObject("target");
+            
+            
             if(visualizeParticleInSim){
                     Vector x_0_sim(3,0.0);
                     convertPosFromRootToSimFoR(x_0,x_0_sim);
@@ -586,6 +610,10 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
 
     x_n=prtclThrd->getParticle(); //to get next target 
  
+    if(visualizeParticleIniCubGui){
+        sendiCubGuiObject("particle");
+    }
+    
     if(visualizeParticleInSim){
         Vector x_n_sim(3,0.0);
         convertPosFromRootToSimFoR(x_n,x_n_sim);
@@ -983,8 +1011,90 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
        return false;
     };   
 }
-    
 
+/**** visualizations using iCubGui **************************************/
+
+
+void reactCtrlThread::sendiCubGuiObject(const string object_type)
+{
+    if (outPortiCubGui.getOutputCount()>0)
+    {
+        Bottle obj;
+        if (object_type == "particle"){
+            obj.addString("object");
+            obj.addString("particle");
+     
+            // size 
+            obj.addDouble(20.0);
+            obj.addDouble(20.0);
+            obj.addDouble(20.0);
+        
+            // positions - iCubGui works in mm
+            obj.addDouble(1000*x_n(0));
+            obj.addDouble(1000*x_n(1));
+            obj.addDouble(1000*x_n(2));
+        
+            // orientation
+            obj.addDouble(0.0);
+            obj.addDouble(0.0);
+            obj.addDouble(0.0);
+        
+            // color
+            obj.addInt(255);
+            obj.addInt(125);
+            obj.addInt(125);
+        
+            // transparency
+            obj.addDouble(0.9);
+        }
+        else if(object_type == "target"){
+            obj.addString("object");
+            obj.addString("target");
+     
+            // size 
+            obj.addDouble(40.0);
+            obj.addDouble(40.0);
+            obj.addDouble(40.0);
+        
+            // positions - iCubGui works in mm
+            obj.addDouble(1000*x_d(0));
+            obj.addDouble(1000*x_d(1));
+            obj.addDouble(1000*x_d(2));
+        
+            // orientation
+            obj.addDouble(0.0);
+            obj.addDouble(0.0);
+            obj.addDouble(0.0);
+        
+            // color
+            obj.addInt(255);
+            obj.addInt(125);
+            obj.addInt(125);
+        
+            // transparency
+            obj.addDouble(0.7);
+            
+        }
+       
+        outPortiCubGui.write(obj);
+        
+    }
+}
+
+void reactCtrlThread::deleteiCubGuiObject(const string object_type)
+{
+    if (outPortiCubGui.getOutputCount()>0)
+    {
+        Bottle obj;
+        obj.addString("delete");
+        obj.addString(object_type);
+        outPortiCubGui.write(obj);
+    }
+}
+ 
+ 
+  
+ /***** visualizations in iCub simulator ********************************/
 
 void reactCtrlThread::createStaticSphere(double radius, const Vector &pos)
 {

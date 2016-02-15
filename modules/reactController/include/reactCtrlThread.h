@@ -149,7 +149,6 @@ protected:
     // will use the yarp rpc /icubSim/world to visualize the potential collision points
     bool visualizeCollisionPointsInSim;
     //to enable/disable the smooth changes of joint velocities bounds in optimizer
-    bool ipoptBoundSmoothnessOn; 
     
     /***************************************************************************/
     // INTERNAL VARIABLES:
@@ -206,6 +205,7 @@ protected:
     yarp::os::BufferedPort<yarp::os::Bottle> aggregPPSeventsInPort; //coming from visuoTactileRF/pps_activations_aggreg:o 
     //expected format for both: (skinPart_s x y z o1 o2 o3 magnitude), with position x,y,z and normal o1 o2 o3 in link FoR
     yarp::os::Port outPort;
+    yarp::os::Port outPortiCubGui;
     yarp::os::Port portToSimWorld;
     ofstream fout_param; //log parameters that stay constant during the simulation, but are important for analysis - e.g. joint limits 
     // Stamp for the setEnvelope for the ports
@@ -220,11 +220,16 @@ protected:
     yarp::os::Bottle    cmd; 
     yarp::sig::Matrix T_world_root; //homogenous transf. matrix expressing the rotation and translation of FoR from world (simulator) to from robot (Root) FoR
     
+    bool visualizeIniCubGui;
+    bool visualizeParticleIniCubGui;
+    bool visualizeTargetIniCubGui;
+    
     // objects in simulator will be created only for first target - with new targets they will be moved
     bool firstTarget;
     std::vector<collisionPoint_t> collisionPoints; //list of "avoidance vectors" from peripersonal space / safety margin
     int collisionPointsVisualizedCount; //objects will be created in simulator and then their positions updated every iteration
     yarp::sig::Vector collisionPointsSimReservoirPos; //inactive collision points will be stored in the world
+        
     
     /**
     * Aligns joint bounds according to the actual limits of the robot
@@ -288,7 +293,13 @@ protected:
     bool getCollisionPointsFromPort(yarp::os::BufferedPort<yarp::os::Bottle> &inPort, double gain, string whichChain,std::vector<collisionPoint_t> &collPoints);
     
     
-    //*** visualizations in icub simulator
+    /*** visualizations in icubGui  *********/
+    //uses corresponding global variables for target pos (x_d) or particle pos (x_n) and creates bottles for the port to iCubGui
+    void sendiCubGuiObject(const std::string object_type);
+    
+    void deleteiCubGuiObject(const std::string object_type);
+    
+    /*** visualizations in icub simulator   *********/
     /**
     * Creates a sphere (not affected by gravity) in the iCub simulator through the /icubSim/world port
     * @param radius
