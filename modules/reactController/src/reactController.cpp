@@ -125,7 +125,7 @@ public:
         part  =        "left_arm";
 
         verbosity    =     0;
-        rctCtrlRate  =    20;    
+        rctCtrlRate  =    10;    
         prtclRate    =    10;
         disableTorso = false;
         trajTime     =   3.0; //deprecated
