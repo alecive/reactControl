@@ -1,0 +1,21 @@
+<application>
+    <name>jointVelCtrlIdent_Logging</name>
+
+    <dependencies>
+    </dependencies>
+  
+    <module>
+        <name>yarpdatadumper</name>
+	<parameters>--name /data/jointVelCtrlIdent --txTime --rxTime</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>dataDumperJointVelIdentCtrl</tag>
+    </module>
+
+    <connection>
+   	<from>/jointVelCtrlIdent:o</from>
+    	<to>/data/jointVelCtrlIdent</to>
+        <protocol>udp</protocol>
+    </connection>
+    
+</application>
