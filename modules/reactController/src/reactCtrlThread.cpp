@@ -231,7 +231,7 @@ bool reactCtrlThread::threadInit()
         fout_param<<vLimNominal(j,0)<<" ";
         fout_param<<vLimNominal(j,1)<<" ";
     }
-    fout_param<<trajTime<<" "<<trajSpeed<<" "<<tol<<" "<<globalTol<<" "<<getRate()/1000.0;
+    fout_param<<trajTime<<" "<<trajSpeed<<" "<<tol<<" "<<globalTol<<" "<<getRate()/1000.0<<" "<<boundSmoothnessFlag<<" "<<boundSmoothnessValue;
     
     yInfo("Written to param file and closing..");    
     fout_param.close();

@@ -5,7 +5,7 @@ visualize_time_stats = true;
 save_figs = true;
 chosen_time_column = 6; % 6 for receiver, 4 for sender
 
-path_prefix_robot = 'icubTests/'; % 'icubSimTests/' or 'icubTests';
+path_prefix_robot = 'icubSimTests/'; % 'icubSimTests/' or 'icubTests';
 path_prefix_arm = 'arm_joint_';
 path_prefix_torso = 'torso_joint_';
 
@@ -98,7 +98,9 @@ if visualize_time_stats
         title(joints(i).name);
         plot(joints(i).d(2:end,TIME_FROM_ZERO_DELTA_1_COLUMN),'b+');
         plot(joints(i).d(2:end,TIME_FROM_ZERO_DELTA_2_COLUMN),'k+');
-        legend('time stamp (sender)','time stamp (receiver)');
+        if (i==1)
+            legend('time stamp (sender)','time stamp (receiver)');
+        end
       hold off;
    end       
            
@@ -128,7 +130,9 @@ set(f2,'Name','Frequency response');
          set(get(AX(2),'Ylabel'),'String','Joint velocity [deg/s]');
          %set(AX(2),'Ylim',[joint_info(j).vel_limit_min-3 joint_info(j).vel_limit_max+3]); 
          xlabel('t [s]');
-         legend('pos','vel','vel estimate');
+         if (i==1)
+             legend('pos','vel','vel estimate');
+         end
          %set(H1,'LineStyle','-');
          %set(H2,'LineStyle','--');
       hold off;
