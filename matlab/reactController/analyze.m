@@ -7,7 +7,7 @@ visualize_all_joint_pos = true;
 visualize_all_joint_vel = true;
 visualize_single_joint_in_detail = true;
 visualize_shoulder_ineq_constr = true;
-save_figs = false;
+save_figs = true;
 chosen_time_column = 6; % 4 for sender, 6 for receiver 
 
 %path_prefix = 'input/';
@@ -155,7 +155,7 @@ if visualize_time_stats
            ylabel('Sampling - delta time (s)');
        
     if save_figs
-       saveas(f13,'TimeStats.fig'); 
+       saveas(f13,'output/TimeStats.fig'); 
     end
 
 end
@@ -374,7 +374,7 @@ if visualize_all_joint_vel
              %  ylim([boundSmoothnessValue-0.1 boundSmoothnessValue+0.1]); 
             %end
             xlabel('t [s]');
-            ylabel('delta joint velocity [deg/s]');
+            ylabel('delta joint vel. [deg/s]');
             title(joint_info(j).name);
             hold off;
         end    
@@ -486,7 +486,7 @@ if visualize_shoulder_ineq_constr
         hold off;
 
    if save_figs
-       saveas(f14,'ShoulderAssemblyIneqConstraints.fig');
+       saveas(f14,'output/ShoulderAssemblyIneqConstraints.fig');
    end
         
 end
