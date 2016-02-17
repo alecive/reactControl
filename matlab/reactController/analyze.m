@@ -11,14 +11,19 @@ save_figs = false;
 chosen_time_column = 6; % 4 for sender, 6 for receiver 
 
 %path_prefix = 'input/';
-path_prefix = 'icubTests/test_20160212a/';
+%path_prefix = 'icubTests/test_20160212a/';
+path_prefix = 'icubTests/test_20160216a/';
 path_prefix_dumper = 'data/';
 
 if save_figs
   mkdir('output');
 end
 
-% param file - columns: 1:#DOF, then joint pos min max for every DOF, then joint vel limits for every DOF
+% param file - columns: 1:#DOF, then joint pos min max for every DOF, then
+% joint vel limits for every DOF, then ...
+%  fout_param<<trajTime<<" "<<trajSpeed<<" "<<tol<<" "<<globalTol<<" "<<getRate()/1000.0<<" "<<boundSmoothnessFlag<<" "<<boundSmoothnessValue;
+% for 10 DOF case: 1:nDOF, 2-21 joint pos min/max, 22-41 joint vel limits, 42 traj time, 43 traj speed (deg/s), 44: tol, 45: globalTol, 46: rate is s, 47: bound_smoothness flag,
+% 48: bound smoothness value 
 d_params=importdata([path_prefix 'param.log']);
 
 NR_EXTRA_TIME_COLUMNS = 4; % these will be created so that there is time starting from 0, plus time increment column - this 2 times (sender and receiver time stamp) - for diagnostics
@@ -72,9 +77,19 @@ if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 
     end
     
     if (length(d_params) == 41) % old format before outputting extra params (prior to 13.2.2016)
-        dT = 0.02; % need to set manually - 20 ms
+        dT = 0.02 % need to set manually - 20 ms
+        boundSmoothnessFlag = false; % or set manually based on documentation from runs
     elseif (length(d_params) == 46)
-        dT = d_params(46);
+        dT = d_params(46)
+        boundSmoothnessFlag = false; % or set manually based on documentation from runs
+    elseif  (length(d_params) == 48) % logging bound smoothness - as of 16.2.
+        dT = d_params(46)
+        if (d_params(47) ==1)
+            boundSmoothnessFlag = true
+            boundSmoothnessValue = d_params(48)
+        else
+            boundSmoothnessFlag = false
+        end
     end
         
 else
@@ -132,8 +147,9 @@ if visualize_time_stats
      subplot(3,1,3);
            title(' Time increments');
            hold on;
-             plot(d(2:end,TIME_FROM_ZERO_DELTA_1_COLUMN),'b+');
-             plot(d(2:end,TIME_FROM_ZERO_DELTA_2_COLUMN),'k+');
+             plot(d(2:end,1),d(2:end,TIME_FROM_ZERO_DELTA_1_COLUMN),'b+');
+             plot(d(2:end,1),d(2:end,TIME_FROM_ZERO_DELTA_2_COLUMN),'k+');
+             plot([d(2,1) d(end,1)],[dT dT],'r-','LineWidth',2);   
            hold off;
            legend('joints (sender)','joints (receiver)');
            ylabel('Sampling - delta time (s)');
@@ -347,11 +363,16 @@ if visualize_all_joint_vel
         f61 = figure(61); clf(f61); set(f61,'Color','white','Name','Joint vel increments (control commands)');  
         for j=1:chainActiveDOF
             subplot(4,3,j); hold on;
-            plot([t(2) t(end)],[10 10],'-.r'); % smoothness limit
-            plot([t(2) t(end)],[-10 -10],'-.r'); % smoothness limit   
+            if boundSmoothnessFlag
+                plot([t(2) t(end)],[boundSmoothnessValue boundSmoothnessValue],'-.r','LineWidth',3); % smoothness limit
+                plot([t(2) t(end)],[-boundSmoothnessValue -boundSmoothnessValue],'-.r','LineWidth',3); % smoothness limit
+            end
             for i=2:L
                 plot(t(i),data(i,joint_info(j).vel_column)-data(i-1,joint_info(j).vel_column),'ok','MarkerSize',4); % increment in joint velocity
             end
+            %if boundSmoothnessFlag
+             %  ylim([boundSmoothnessValue-0.1 boundSmoothnessValue+0.1]); 
+            %end
             xlabel('t [s]');
             ylabel('delta joint velocity [deg/s]');
             title(joint_info(j).name);
