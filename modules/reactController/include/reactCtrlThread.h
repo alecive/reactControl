@@ -213,6 +213,7 @@ protected:
  
     // IPOPT STUFF
     reactIpOpt    *slv;    // solver
+    int ipoptExitCode;
     
     // Mutex for handling things correctly
     yarp::os::Mutex mutex;

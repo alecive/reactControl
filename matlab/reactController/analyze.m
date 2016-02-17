@@ -13,7 +13,7 @@ chosen_time_column = 6; % 4 for sender, 6 for receiver
 %path_prefix = 'input/';
 %path_prefix = 'icubTests/test_20160212a/';
 path_prefix = 'icubTests/test_20160216a/';
-path_prefix_dumper = 'data/';
+path_prefix_dumper = 'data2/';
 
 if save_figs
   mkdir('output');

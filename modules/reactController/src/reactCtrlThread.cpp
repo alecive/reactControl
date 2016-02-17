@@ -335,17 +335,18 @@ void reactCtrlThread::run()
                 break;
             }
 
-            int exit_code;
-            q_dot = solveIK(exit_code);
+            q_dot = solveIK(ipoptExitCode);
             
-            if (exit_code==Ipopt::Solve_Succeeded || exit_code==Ipopt::Maximum_CpuTime_Exceeded)
+            if (ipoptExitCode==Ipopt::Solve_Succeeded || ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
             {
-                if (exit_code==Ipopt::Maximum_CpuTime_Exceeded)
+                if (ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
                     yWarning("[reactCtrlThread] Ipopt cpu time was higher than the rate of the thread!");
                 
                 if (!controlArm(q_dot))
                     yError("I am not able to properly control the arm!");
             }
+            else
+                  yWarning("[reactCtrlThread] Ipopt solve did not succeed!");
 
             break;
         }
@@ -751,7 +752,7 @@ void reactCtrlThread::sendData()
             vectorIntoBottle(q,b); 
             //variable - if torso on: 31:50; joint vel limits as input to ipopt, after avoidanceHandler,
             matrixIntoBottle(vLimAdapted,b); // assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
-            
+            b.addInt(ipoptExitCode);
             // the delta_x, that is the 3D vector that ipopt commands to 
             //    the robot in order for x_t to reach x_n
             //yarp::os::Bottle &b_delta_x=out.addList();
