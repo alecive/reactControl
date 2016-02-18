@@ -652,9 +652,12 @@ int main(int argc, char *argv[])
     ResourceFinder rf;
     rf.configure(argc,argv);
 
-    double sim_time=rf.check("sim-time",Value(10.0)).asDouble();
+    double dt=rf.check("dt",Value(0.01)).asDouble();
+    double T=rf.check("T",Value(1.0)).asDouble();    
     double motor_kp=rf.check("motor-kp",Value(1.0)).asDouble();
     double motor_td=rf.check("motor-td",Value(0.0)).asDouble();
+    double sim_time=rf.check("sim-time",Value(10.0)).asDouble();
+
     string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();    
 
     iCubArm arm("left");
@@ -707,9 +710,6 @@ int main(int argc, char *argv[])
     }
     yInfo()<<"Avoidance-Handler="<<avhdl->getType();
     yInfo()<<"Avoidance Parameters="<<avhdl->getParameters().toString();
-
-    double dt=0.01;
-    double T=1.0;
 
     nlp->set_dt(dt);
     Motor motor(q0,lim,motor_kp,motor_td,dt);
