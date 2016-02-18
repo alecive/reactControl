@@ -98,7 +98,8 @@ private:
 
     bool disableTorso;  // flag to know if the torso has to be used or not
 
-    double   trajTime;  // trajectory time (deprecated)
+    string controlMode; //either "velocity" (original) or "positionDirect" (new option after problems with oscillations)
+    
     double  trajSpeed;  // trajectory speed
     double        tol;  // Tolerance of the ipopt task. The solver exits if norm2(x_d-x)<tol.
     double  globalTol;  // global tolerance of the task. The controller exits if norm(x_d-x)<globalTol
@@ -130,7 +131,7 @@ public:
         rctCtrlRate  =    10;    
         prtclRate    =    10;
         disableTorso = false;
-        trajTime     =   3.0; //deprecated
+        controlMode = "velocity";        
         trajSpeed    =   0.1;
         tol          =  1e-5;
         globalTol    =  1e-2;
@@ -181,7 +182,7 @@ public:
     bool set_relative_circular_xd(const double _radius, const double _frequency)
     {
             yInfo("");
-            yInfo("[reactController] received new relative circular x_d: radius %f, frequency: %f",_radius,_frequency);
+            yInfo("[reactController] received new relative circular x_d: radius %f, frequency: %f. No implementation yet. :)",_radius,_frequency);
             if ((_radius>=0.0) && (_radius <= 0.3) && (_frequency >=0.0) && (_frequency<=1.0)  )
                 //return rctCtrlThrd->setNewCircularTarget(_radius,_frequency);   
                 return true;
@@ -379,6 +380,21 @@ public:
             {
                  yInfo("[reactController] Could not find disableTorso flag (on/off) in the config file; using %d as default",disableTorso);
             }
+        
+        //*** we will command the robot in velocity or in positionDirect
+           if (rf.check("controlMode"))
+            {
+                controlMode = rf.find("controlMode").asString();
+                if(controlMode!="velocity" && controlMode!="positionDirect")
+                {
+                    controlMode="velocity";
+                    yWarning("[reactController] controlMode was not in the admissible values (velocity / positionDirect). Using %s as default.",controlMode.c_str());
+                }
+                else 
+                    yInfo("[reactController] controlMode to use is: %s", controlMode.c_str());
+            }
+            else yInfo("[reactController] Could not find controlMode option in the config file; using %s as default",controlMode.c_str());
+        
         //****************** prtclRate ******************
             if (rf.check("prtclRate"))
             {
@@ -564,8 +580,8 @@ public:
             prtclThrd = NULL;
             
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
-                                          disableTorso, trajSpeed, globalTol, vMax,
-                                          tol, referenceGen, 
+                                          disableTorso, controlMode, trajSpeed, 
+                                          globalTol, vMax, tol, referenceGen, 
                                           tactileCollisionPointsOn,visualCollisionPointsOn,
                                           boundSmoothnessFlag,boundSmoothnessValue,
                                           visualizeTargetInSim, visualizeParticleInSim,

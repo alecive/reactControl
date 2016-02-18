@@ -48,14 +48,14 @@ using namespace iCub::skinDynLib;
 /*********** public methods ****************************************************************************/ 
 
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,  const string &_part,
-                                 int _verbosity, bool _disableTorso,  double _trajSpeed, double _globalTol, 
-                                 double _vMax, double _tol, string _referenceGen, 
+                                 int _verbosity, bool _disableTorso,  string _controlMode, 
+                                 double _trajSpeed, double _globalTol, double _vMax, double _tol, string _referenceGen, 
                                  bool _tactileCollisionPointsOn, bool _visualCollisionPointsOn,
                                  bool _boundSmoothnessFlag, double _boundSmoothnessValue, 
                                  bool _visualizeTargetInSim, bool _visualizeParticleInSim, bool _visualizeCollisionPointsInSim,
                                  particleThread *_pT) :
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
-                                 verbosity(_verbosity), useTorso(!_disableTorso),
+                                 verbosity(_verbosity), useTorso(!_disableTorso), controlMode(_controlMode),
                                  trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol), referenceGen(_referenceGen),
                                  tactileCollisionPointsOn(_tactileCollisionPointsOn), visualCollisionPointsOn(_visualCollisionPointsOn),
                                  boundSmoothnessFlag(_boundSmoothnessFlag), boundSmoothnessValue(_boundSmoothnessValue),                                 visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
@@ -236,7 +236,8 @@ bool reactCtrlThread::threadInit()
         fout_param<<vLimNominal(j,0)<<" ";
         fout_param<<vLimNominal(j,1)<<" ";
     }
-    fout_param<<trajTime<<" "<<trajSpeed<<" "<<tol<<" "<<globalTol<<" "<<getRate()/1000.0<<" "<<boundSmoothnessFlag<<" "<<boundSmoothnessValue;
+    fout_param<<-1<<" "<<trajSpeed<<" "<<tol<<" "<<globalTol<<" "<<dT<<" "<<boundSmoothnessFlag<<" "<<boundSmoothnessValue;
+    // the -1 used to be trajTime, keep it for compatibility with matlab scripts 
     
     yInfo("Written to param file and closing..");    
     fout_param.close();

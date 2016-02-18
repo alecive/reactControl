@@ -59,7 +59,7 @@ class reactCtrlThread: public yarp::os::RateThread
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & , const string &_ ,
-                    int , bool , double , double , double , double , string , bool , bool , bool , double , bool , bool , bool , particleThread * );
+                    int , bool , string , double , double , double , double , string , bool , bool , bool , double , bool , bool , bool , particleThread * );
     // INIT
     virtual bool threadInit();
     // RUN
@@ -126,8 +126,8 @@ protected:
     string part_short;
     // Flag to know if the torso shall be used or not
     bool useTorso;
-    // [DEPRECATED] Trajectory time (default 3.0 s)
-    double trajTime;
+    // robot will be commanded in velocity or in positionDirect
+    string controlMode;
     // Trajectory speed (default 0.1 m/s)
     double trajSpeed;
     // Tolerance of the ipopt task. The solver exits if norm2(x_d-x)<tol.
