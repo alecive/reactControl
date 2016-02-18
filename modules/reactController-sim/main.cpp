@@ -34,7 +34,6 @@
 
 #include <iCub/ctrl/math.h>
 #include <iCub/ctrl/pids.h>
-#include <iCub/ctrl/filters.h>
 #include <iCub/ctrl/minJerkCtrl.h>
 #include <iCub/iKin/iKinFwd.h>
 
@@ -285,37 +284,34 @@ public:
 /****************************************************************/
 class Motor
 {
+    deque<Vector> buffer;
     Integrator I;
-    Filter *F;
+    double kp;    
 
 public:
     /****************************************************************/
     Motor(const Vector &q0, const Matrix &lim,
-          const double tau, const double dt) :
-          I(dt,q0,lim)
+          const double kp_, const double td_,
+          const double dt) :
+          I(dt,q0,lim), kp(kp_)
     {
-        double c=2.0*tau/dt;
-        Vector den(2,1.0);
-        den[0]+=c; den[1]-=c;
-        F=new Filter(Vector(2,1.0),den,q0);
+        buffer.insert(buffer.begin(),(int)floor(td_/dt),
+                      zeros(q0.length()));
     }
 
     /****************************************************************/
     Vector move(const Vector &v)
     {
-        return F->filt(I.integrate(v));
+        buffer.push_front(v);
+        Vector v_=buffer.back();
+        buffer.pop_back();
+        return I.integrate(v_);
     }
 
     /****************************************************************/
     Vector getPosition() const
     {
-        return F->output();
-    }
-
-    /****************************************************************/
-    ~Motor()
-    {
-        delete F;
+        return I.get();
     }
 };
 
@@ -657,7 +653,8 @@ int main(int argc, char *argv[])
     rf.configure(argc,argv);
 
     double sim_time=rf.check("sim-time",Value(10.0)).asDouble();
-    double motor_tau=rf.check("motor-tau",Value(0.0)).asDouble();
+    double motor_kp=rf.check("motor-kp",Value(1.0)).asDouble();
+    double motor_td=rf.check("motor-td",Value(0.0)).asDouble();
     string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();    
 
     iCubArm arm("left");
@@ -715,7 +712,7 @@ int main(int argc, char *argv[])
     double T=1.0;
 
     nlp->set_dt(dt);
-    Motor motor(q0,lim,motor_tau,dt);
+    Motor motor(q0,lim,motor_kp,motor_td,dt);
     Vector v(chain.getDOF(),0.0);
 
     Vector xee=chain.EndEffPosition();
