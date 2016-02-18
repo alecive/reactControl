@@ -214,7 +214,8 @@ protected:
     // IPOPT STUFF
     reactIpOpt    *slv;    // solver
     int ipoptExitCode;
-    
+    double timeToSolveProblem_s; //time taken by q_dot = solveIK(ipoptExitCode) ~ ipopt + avoidance handler
+
     // Mutex for handling things correctly
     yarp::os::Mutex mutex;
     

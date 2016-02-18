@@ -7,13 +7,14 @@ visualize_all_joint_pos = true;
 visualize_all_joint_vel = true;
 visualize_single_joint_in_detail = true;
 visualize_shoulder_ineq_constr = true;
+visualize_ipopt_stats = true;
 save_figs = true;
 chosen_time_column = 6; % 4 for sender, 6 for receiver 
 
 %path_prefix = 'input/';
 %path_prefix = 'icubTests/test_20160212a/';
-path_prefix = 'icubTests/test_20160216a/';
-path_prefix_dumper = 'data2/';
+path_prefix = 'icubSimTests/test_20160218a/';
+path_prefix_dumper = 'data/';
 
 if save_figs
   mkdir('output');
@@ -28,7 +29,7 @@ d_params=importdata([path_prefix 'param.log']);
 
 NR_EXTRA_TIME_COLUMNS = 4; % these will be created so that there is time starting from 0, plus time increment column - this 2 times (sender and receiver time stamp) - for diagnostics
 
-% data file -  in columns on the output for 10 DOF case:
+% data file (after adding  extra time cols - i.e. d, not d_orig) -  in columns on the output for 10 DOF case:
 %1: packetID, 2: sender time stamp, 3:receiver time stamp, 
 % 4: time from 0, sender; 5: increments of 4; 6: time from 0 receiver; 7: increments in 6 
 %8: nActiveDOF in chain
@@ -38,6 +39,8 @@ NR_EXTRA_TIME_COLUMNS = 4; % these will be created so that there is time startin
 %variable - if torso on: 28:37: joint positions as solution to control and sent to robot 
 %variable - if torso on: 38:57; joint vel limits as input to ipopt, after avoidanceHandler
 %assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
+% variable - if torso on: 58: ipopt exit code (Solve_Succeeded=0)
+% variable - if torso on: 59: time taken to solve problem (s) ~ ipopt + avoidance handler
 d_orig=importdata([path_prefix path_prefix_dumper 'reactCtrl/data.log']);
 
 
@@ -90,6 +93,10 @@ if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 
         else
             boundSmoothnessFlag = false
         end
+    end
+    if(size(d_orig,2) >= 55)
+       ipoptExitCode_col = 58; % setting the cols already for the new d, after adding extra time xols
+       timeToSolve_s_col = 59;
     end
         
 else
@@ -489,6 +496,49 @@ if visualize_shoulder_ineq_constr
        saveas(f14,'output/ShoulderAssemblyIneqConstraints.fig');
    end
         
+end
+
+
+%% ipopt stats
+if (visualize_ipopt_stats)
+   f15 = figure(15); clf(f15); set(f15,'Color','white','Name','Ipopt statistics');  
+
+   subplot(2,1,1);
+   hold on;
+    title('ipopt exit code');
+    plot(t,data(:,ipoptExitCode_col),'or');
+   hold off;
+   xlabel('time (s)');
+   ylim([-5 7]);
+   ax = gca;
+   set(ax,'YTick',[-4 -3 -2 -1 0 1 2 3 4 5 6]);
+   set(ax,'YTickLabel',{'MaximumCpuTimeExceeded','ErrorInStepComputation','RestorationFailed','MaximumIterationsExceeded','SolveSucceeded','SolvedToAcceptableLevel','InfeasibleProblemDetected','SearchDirectionBecomesTooSmall','DivergingIterates','UserRequestedStop','FeasiblePointFound'});
+    
+    %Solve_Succeeded=0,  Solved_To_Acceptable_Level=1,  Infeasible_Problem_Detected=2,
+    %Search_Direction_Becomes_Too_Small=3, Diverging_Iterates=4, User_Requested_Stop=5,
+    %Feasible_Point_Found=6,
+    %Maximum_Iterations_Exceeded=-1, Restoration_Failed=-2,    Error_In_Step_Computation=-3,
+    %Maximum_CpuTime_Exceeded=-4, Not_Enough_Degrees_Of_Freedom=-10, Invalid_Problem_Definition=-11,
+    %Invalid_Option=-12,  Invalid_Number_Detected=-13,
+    %Unrecoverable_Exception=-100,  NonIpopt_Exception_Thrown=-101,    Insufficient_Memory=-102,
+    %Internal_Error=-199
+  
+   
+   subplot(2,1,2);
+   hold on;
+    title('solver time taken');
+    plot(t,data(:,timeToSolve_s_col));
+    hold off;
+   xlabel('time (s)');
+   ylabel('time (s)');
+  
+
+
+   if save_figs
+       saveas(f15,'output/ipoptStats.fig');
+   end
+  
+    
 end
 
 
