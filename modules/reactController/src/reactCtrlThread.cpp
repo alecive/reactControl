@@ -49,19 +49,20 @@ using namespace iCub::skinDynLib;
 
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,  const string &_part,
                                  int _verbosity, bool _disableTorso,  double _trajSpeed, double _globalTol, 
-                                 double _vMax, double _tol, bool _tactileCollisionPointsOn, bool _visualCollisionPointsOn, bool _boundSmoothnessFlag, double _boundSmoothnessValue,
-                                 bool _visualizeTargetInSim, bool _visualizeParticleInSim,
-                                 bool _visualizeCollisionPointsInSim,particleThread *_pT) :
+                                 double _vMax, double _tol, string _referenceGen, 
+                                 bool _tactileCollisionPointsOn, bool _visualCollisionPointsOn,
+                                 bool _boundSmoothnessFlag, double _boundSmoothnessValue, 
+                                 bool _visualizeTargetInSim, bool _visualizeParticleInSim, bool _visualizeCollisionPointsInSim,
+                                 particleThread *_pT) :
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
                                  verbosity(_verbosity), useTorso(!_disableTorso),
-                                 trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol),
+                                 trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol), referenceGen(_referenceGen),
                                  tactileCollisionPointsOn(_tactileCollisionPointsOn), visualCollisionPointsOn(_visualCollisionPointsOn),
-                                 boundSmoothnessFlag(_boundSmoothnessFlag),
-                                 boundSmoothnessValue(_boundSmoothnessValue),
-                                 visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
+                                 boundSmoothnessFlag(_boundSmoothnessFlag), boundSmoothnessValue(_boundSmoothnessValue),                                 visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
                                  visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim)
 {
-   prtclThrd=_pT;
+    dT=getRate()/1000.0;
+    prtclThrd=_pT;  //in case of referenceGen != uniformParticle, NULL will be received
 }
 
 bool reactCtrlThread::threadInit()
@@ -194,7 +195,11 @@ bool reactCtrlThread::threadInit()
     }
    
     /************ variables related to the optimization problem for ipopt *******/
-   
+    if(referenceGen == "minJerk") 
+        refGenMinJerk = new minJerkTrajGen(3,dT,1.0); //dim 3, dT, trajTime 1s - will be overwritten later
+    else
+        refGenMinJerk = NULL;
+        
     slv=NULL;
    
     x_0.resize(3,0.0);
@@ -374,6 +379,11 @@ void reactCtrlThread::threadRelease()
 
     collisionPoints.clear();    
     
+    if(refGenMinJerk != NULL){
+        delete refGenMinJerk;
+        refGenMinJerk = NULL;    
+    }
+    
     if (visualizeIniCubGui)
         if (outPortiCubGui.getOutputCount()>0)
         {
@@ -523,45 +533,45 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d)
                 moveSphere(1,x_d_sim);
             }
         }
-        
-        t_0=yarp::os::Time::now();
-        yarp::sig::Vector vel(3,0.0);
-        vel=trajSpeed * (x_d-x_0) / norm(x_d-x_0);
-        t_d=t_0+trajTime;
-
-        if (prtclThrd->setupNewParticle(x_0,vel))
-        {
-            yInfo("[reactCtrlThread] got new target: x_0: %s",x_0.toString(3,3).c_str());
-            yInfo("[reactCtrlThread]                 x_d: %s",x_d.toString(3,3).c_str());
-            yInfo("[reactCtrlThread]                 vel: %s",vel.toString(3,3).c_str());
-            state=STATE_REACH;
-
-            if(visualizeTargetIniCubGui)
-                sendiCubGuiObject("target");
-            
-            
-            if(visualizeParticleInSim){
-                    Vector x_0_sim(3,0.0);
-                    convertPosFromRootToSimFoR(x_0,x_0_sim);
-                    if (firstTarget){
-                        createStaticSphere(0.02,x_0_sim);
-                    }
-                    else{
-                       moveSphere(2,x_0_sim); //sphere created as second will keep the index 2  
-                    }
+                
+        if (referenceGen == "uniformParticle"){
+            yarp::sig::Vector vel(3,0.0);
+            vel=trajSpeed * (x_d-x_0) / norm(x_d-x_0);
+            if (!prtclThrd->setupNewParticle(x_0,vel)){
+                yWarning("prtclThrd->setupNewParticle(x_0,vel) returned false.\n");
+                return false;
             }
-            
-           
         }
-        else{
-            yWarning("prtclThrd->setupNewParticle(x_0,vel) returned false.\n");
-            return false;
-        }
+        else if(referenceGen == "minJerk"){
+            refGenMinJerk->init(x_0); //initial pos
+            refGenMinJerk->setTs(dT); //time step
+            //calculate the time to reach from the distance to target and desired velocity
+            double T = sqrt( (x_d(0)-x_0(0))*(x_d(0)-x_0(0)) + (x_d(1)-x_0(1))*(x_d(1)-x_0(1)) + (x_d(2)-x_0(2))*(x_d(2)-x_0(2)) )  / trajSpeed; 
+            refGenMinJerk->setT(T);
+       }
         
-        if (firstTarget){
-            firstTarget = false;
+        yInfo("[reactCtrlThread] got new target: x_0: %s",x_0.toString(3,3).c_str());
+        yInfo("[reactCtrlThread]                 x_d: %s",x_d.toString(3,3).c_str());
+        //yInfo("[reactCtrlThread]                 vel: %s",vel.toString(3,3).c_str());
+        state=STATE_REACH;
+
+        if(visualizeTargetIniCubGui)
+            sendiCubGuiObject("target");
+               
+        if(visualizeParticleInSim){
+            Vector x_0_sim(3,0.0);
+            convertPosFromRootToSimFoR(x_0,x_0_sim);
+            if (firstTarget)
+               createStaticSphere(0.02,x_0_sim);
+            else
+               moveSphere(2,x_0_sim); //sphere created as second will keep the index 2  
         }
+          
     }
+        
+    if (firstTarget)
+        firstTarget = false;
+        
     return true;
 }
 
@@ -590,7 +600,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // Next step will be provided iteratively.
     // The equation is x(t_next) = x_t + (x_d - x_t) * (t_next - t_now/T-t_now)
     //                              s.t. t_next = t_now + dT
-    double dT=getRate()/1000.0;
+    
     int    exit_code=-1;
 
     // if (t_t>=t_d)
@@ -605,12 +615,17 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // x_n = x_0 + (x_d-x_0) * ((t_t+dT-t_0)/(t_d-t_0));
     // Third solution: use the particleThread
     // If the particle reached the target, let's stop it
-    if (norm(x_n-x_0) > norm(x_d-x_0)) //if the particle is farther than the final target, we reset the particle - it will stay with the target
-    {
-        prtclThrd->resetParticle(x_d);
+    if (referenceGen == "uniformParticle"){
+        if (norm(x_n-x_0) > norm(x_d-x_0)) //if the particle is farther than the final target, we reset the particle - it will stay with the target
+        {
+            prtclThrd->resetParticle(x_d);
+        }
+        x_n=prtclThrd->getParticle(); //to get next target
     }
-
-    x_n=prtclThrd->getParticle(); //to get next target 
+    else if(referenceGen == "minJerk"){
+        refGenMinJerk->computeNextValues(x_d);    
+        x_n = refGenMinJerk->getPos();
+    }
  
     if(visualizeParticleIniCubGui){
         sendiCubGuiObject("particle");

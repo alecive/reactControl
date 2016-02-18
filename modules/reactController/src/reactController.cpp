@@ -104,6 +104,8 @@ private:
     double  globalTol;  // global tolerance of the task. The controller exits if norm(x_d-x)<globalTol
     double       vMax;  // max velocity set for the joints
     
+    string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk" 
+    
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
     
@@ -133,6 +135,8 @@ public:
         tol          =  1e-5;
         globalTol    =  1e-2;
         vMax         =  30.0;
+        
+        referenceGen = "uniformParticle";
         
         tactileCollisionPointsOn = false;
         visualCollisionPointsOn = false;
@@ -217,33 +221,58 @@ public:
 
     bool setup_new_particle(const yarp::sig::Vector& _x_0_vel)
     {
-        yarp::sig::Vector _x_0 = _x_0_vel.subVector(0,2);
-        yarp::sig::Vector _vel = _x_0_vel.subVector(3,5);
-        yInfo("[reactController] Setting up new particle.. x_0: %s\tvel: %s\n",
+        if (referenceGen == "uniformParticle"){
+            yarp::sig::Vector _x_0 = _x_0_vel.subVector(0,2);
+            yarp::sig::Vector _vel = _x_0_vel.subVector(3,5);
+            yInfo("[reactController] Setting up new particle.. x_0: %s\tvel: %s\n",
                 _x_0.toString(3,3).c_str(), _vel.toString(3,3).c_str());
-        return prtclThrd->setupNewParticle(_x_0,_vel);
+            return prtclThrd->setupNewParticle(_x_0,_vel);
+        }
+        else{
+            yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
+            return false;
+        }
     }
 
     bool reset_particle(const yarp::sig::Vector& _x_0)
     {
-        if (_x_0.size()<3)
-        {
+        if (referenceGen == "uniformParticle"){
+            if (_x_0.size()<3)
+            {
+                return false;
+            }
+            yInfo("[reactController] Resetting particle to %s..",_x_0.toString(3,3).c_str());
+            return prtclThrd->resetParticle(_x_0);
+        }
+        else{
+            yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
             return false;
         }
-        yInfo("[reactController] Resetting particle to %s..",_x_0.toString(3,3).c_str());
-        return prtclThrd->resetParticle(_x_0);
     }
 
     bool stop_particle()
     {
-        yInfo("[reactController] Stopping particle..");
-        return prtclThrd->stopParticle();
+        if (referenceGen == "uniformParticle"){
+            yInfo("[reactController] Stopping particle..");
+            return prtclThrd->stopParticle();
+        }
+        else{
+            yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
+            return false;
+        }
     }
 
     yarp::sig::Vector get_particle()
     {
-        yInfo("[reactController] Getting particle..");
-        return prtclThrd->getParticle();
+        if (referenceGen == "uniformParticle"){
+            yInfo("[reactController] Getting particle..");
+            return prtclThrd->getParticle();
+        }
+        else{
+            yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
+            yarp::sig::Vector v(3,0.0);
+            return v;
+        }
     }
 
     bool enable_torso()
@@ -377,7 +406,21 @@ public:
             }
             else yInfo("[reactController] Could not find globalTol in the config file; using %g as default",globalTol);
             
-        //************** getting collision points either from aggregated skin events or from pps (predictions from vision)
+         //*** generating positions for end-effector - trajectory between current pos and final target
+           if (rf.check("referenceGen"))
+            {
+                referenceGen = rf.find("referenceGen").asString();
+                if(referenceGen!="uniformParticle" && referenceGen!="minJerk")
+                {
+                    referenceGen="uniformParticle";
+                    yWarning("[reactController] referenceGen was not in the admissible values (uniformParticle / minJerk). Using %s as default.",referenceGen.c_str());
+                }
+                else 
+                    yInfo("[reactController] referenceGen to use is: %s", referenceGen.c_str());
+            }
+            else yInfo("[reactController] Could not find referenceGen option in the config file; using %s as default",referenceGen.c_str());
+            
+            //************** getting collision points either from aggregated skin events or from pps (predictions from vision)
         if (rf.check("tactileCollisionPoints"))
         {
             if(rf.find("tactileCollisionPoints").asString()=="on"){
@@ -493,18 +536,26 @@ public:
             }
 
         //************* THREAD *************
-        prtclThrd = new particleThread(prtclRate, name, verbosity);
-        if (!prtclThrd->start())
-        {
-            delete prtclThrd;
-            prtclThrd=0;
+        if(referenceGen == "uniformParticle"){
+            prtclThrd = new particleThread(prtclRate, name, verbosity);
+            if (!prtclThrd->start())
+            {
+                delete prtclThrd;
+                prtclThrd=0;
 
-            yError("[reactController] particleThread wasn't instantiated!!");
-            return false;
+                yError("[reactController] particleThread wasn't instantiated!!");
+                return false;
+            }
         }
+        else
+            prtclThrd = NULL;
+            
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
                                           disableTorso, trajSpeed, globalTol, vMax,
-                                          tol, tactileCollisionPointsOn, visualCollisionPointsOn,boundSmoothnessFlag,boundSmoothnessValue, visualizeTargetInSim, visualizeParticleInSim,
+                                          tol, referenceGen, 
+                                          tactileCollisionPointsOn,visualCollisionPointsOn,
+                                          boundSmoothnessFlag,boundSmoothnessValue,
+                                          visualizeTargetInSim, visualizeParticleInSim,
                                           visualizeCollisionPointsInSim, prtclThrd);
         if (!rctCtrlThrd->start())
         {

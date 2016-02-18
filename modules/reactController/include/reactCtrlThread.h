@@ -26,20 +26,17 @@
 #include <yarp/os/Mutex.h>
 #include <yarp/os/LockGuard.h>
 #include <yarp/os/Port.h>
-
-
 #include <yarp/sig/Vector.h>
 #include <yarp/sig/Matrix.h>
 #include <yarp/sig/Image.h>
-
 #include <yarp/math/Math.h>
-
 #include <yarp/dev/PolyDriver.h>
 #include <yarp/dev/CartesianControl.h>
 #include <yarp/dev/Drivers.h>
 
 #include <iCub/iKin/iKinFwd.h>
 #include <iCub/skinDynLib/common.h>
+#include <iCub/ctrl/minJerkCtrl.h>
 
 #include <iostream>
 #include <fstream>
@@ -62,7 +59,7 @@ class reactCtrlThread: public yarp::os::RateThread
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & , const string &_ ,
-                    int , bool , double , double , double , double , bool, bool, bool, double, bool , bool , bool , particleThread * );
+                    int , bool , double , double , double , double , string , bool , bool , bool , double , bool , bool , bool , particleThread * );
     // INIT
     virtual bool threadInit();
     // RUN
@@ -139,6 +136,7 @@ protected:
     double globalTol;
     // Max velocity set for the joints
     double vMax;
+    string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk"
     bool boundSmoothnessFlag; //for ipopt - whether changes in velocity commands need to be smooth
     double boundSmoothnessValue; //actual allowed change in every joint velocity commands in deg/s from one time step to the next. Note: this is not adapted to the thread rate set by the rctCtrlRate param
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
@@ -152,7 +150,10 @@ protected:
     
     /***************************************************************************/
     // INTERNAL VARIABLES:
-    particleThread  *prtclThrd;     // Pointer to the particleThread in order to access its data
+    double dT;  //period of the thread in seconds  =getRate()/1000.0;
+
+    particleThread  *prtclThrd;     // Pointer to the particleThread in order to access its data - if referenceGen is "uniformParticle"
+    iCub::ctrl::minJerkTrajGen *refGenMinJerk; //If referenceGen is "minJerk"
 
     int        state;        // Flag to know in which state the thread is in
     
@@ -179,8 +180,6 @@ protected:
     
     size_t chainActiveDOF;
     
-    double      t_0;        // Time at which the trajectory starts - currently these params are not used 
-    double      t_d;        // Time at which the trajectory should end - currently these params are not used
     yarp::sig::Vector x_0;  // Initial end-effector position
     yarp::sig::Vector x_t;  // Current end-effector position
     yarp::sig::Vector x_n;  // Desired next end-effector position
