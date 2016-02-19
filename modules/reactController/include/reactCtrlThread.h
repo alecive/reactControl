@@ -37,6 +37,7 @@
 #include <iCub/iKin/iKinFwd.h>
 #include <iCub/skinDynLib/common.h>
 #include <iCub/ctrl/minJerkCtrl.h>
+#include <iCub/ctrl/pids.h>
 
 #include <iostream>
 #include <fstream>
@@ -157,6 +158,7 @@ protected:
 
     particleThread  *prtclThrd;     // Pointer to the particleThread in order to access its data - if referenceGen is "uniformParticle"
     iCub::ctrl::minJerkRefGen *refGenMinJerk; //If referenceGen is "minJerk"
+    iCub::ctrl::Integrator *I; //if controlMode == positionDirect, we need to integrate the velocity control commands
 
     int        state;        // Flag to know in which state the thread is in
     
@@ -167,6 +169,7 @@ protected:
     // "Classical" interfaces for the arm
     IEncoders            *iencsA;
     IVelocityControl2     *ivelA;
+    IPositionDirect       *iposDirA;
     IControlMode2         *imodA;
     IControlLimits        *ilimA;
     yarp::sig::Vector     *encsA;
@@ -176,6 +179,7 @@ protected:
     // "Classical" interfaces for the torso
     IEncoders            *iencsT;
     IVelocityControl2     *ivelT;
+    IPositionDirect       *iposDirT;
     IControlMode2         *imodT;
     IControlLimits        *ilimT;
     yarp::sig::Vector     *encsT;
@@ -198,9 +202,10 @@ protected:
     yarp::sig::Vector qT; //current values of torso joints (3, in the order expected for iKin: yaw, roll, pitch)
     yarp::sig::Vector q; //current joint angle values (10 if torso is on, 7 if off)
    
-    yarp::sig::Vector q_dot_0;    // Initial arm configuration
-    yarp::sig::Vector q_dot;  // Computed arm configuration to reach the target
+    yarp::sig::Vector q_dot_0;    // Initial/current joint velocities
+    yarp::sig::Vector q_dot;  // Computed joint velocities to reach the target
     
+    yarp::sig::Matrix lim;  //matrix with joint position limits for the current chain
     yarp::sig::Matrix vLimNominal;     //matrix with min/max velocity limits for the current chain
     yarp::sig::Matrix vLimAdapted;  //matrix with min/max velocity limits after adptation by avoidanceHandler
       
@@ -261,9 +266,9 @@ protected:
     void updateArmChain();
 
     /**
-    * Sends the computed velocities to the robot
+    * Sends the computed velocities or positions to the robot, depending on controlMode
     */
-    bool controlArm(const yarp::sig::Vector &);
+    bool controlArm(const string controlMode,const yarp::sig::Vector &);
 
     /**
      * Check the state of each joint to be controlled

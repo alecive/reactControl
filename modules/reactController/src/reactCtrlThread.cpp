@@ -104,7 +104,8 @@ bool reactCtrlThread::threadInit()
     if (useTorso)
         qT.resize(NR_TORSO_JOINTS,0.0); //current values of torso joints (3, in the order expected for iKin: yaw, roll, pitch)
     q.resize(chainActiveDOF,0.0); //current joint angle values (10 if torso is on, 7 if off)
-   
+    lim.resize(chainActiveDOF,2); //joint pos limits
+    
     q_dot_0.resize(chainActiveDOF,0.0);
     vLimNominal.resize(chainActiveDOF,2);
     vLimAdapted.resize(chainActiveDOF,2);
@@ -146,6 +147,7 @@ bool reactCtrlThread::threadInit()
     {
         okA = okA && ddA.view(iencsA);
         okA = okA && ddA.view(ivelA);
+        okA = okA && ddA.view(iposDirA);
         okA = okA && ddA.view(imodA);
         okA = okA && ddA.view(ilimA);
     }
@@ -176,6 +178,7 @@ bool reactCtrlThread::threadInit()
     {
         okT = okT && ddT.view(iencsT);
         okT = okT && ddT.view(ivelT);
+        okT = okT && ddT.view(iposDirT);
         okT = okT && ddT.view(imodT);
         okT = okT && ddT.view(ilimT);
     }
@@ -192,6 +195,14 @@ bool reactCtrlThread::threadInit()
     {
         yError("[reactCtrlThread]alignJointsBounds failed!!!\n");
         return false;
+    }
+   
+    //filling joint pos limits Matrix
+    iCub::iKin::iKinChain chainTemp = *(arm->asChain());
+    for (size_t jointIndex=0; jointIndex<chainActiveDOF; jointIndex++)
+    {
+        lim(jointIndex,0)= CTRL_RAD2DEG*(chainTemp(jointIndex).getMin());
+        lim(jointIndex,1)= CTRL_RAD2DEG*(chainTemp(jointIndex).getMax());
     }
    
     /************ variables related to target and the optimization problem for ipopt *******/
@@ -211,7 +222,13 @@ bool reactCtrlThread::threadInit()
     x_t.resize(3,0.0);
     x_n.resize(3,0.0);
     x_d.resize(3,0.0);
-          
+   
+    updateArmChain();
+    if(controlMode == "positionDirect"){
+         I = new Integrator(dT,q,lim);        
+    }
+   
+    
     /*** visualize in iCubGui  ***************/
     visualizeIniCubGui = true;
     visualizeParticleIniCubGui = true;
@@ -229,12 +246,11 @@ bool reactCtrlThread::threadInit()
     fout_param.open("param.log");
     
     /***** writing to param file ******************************************************/
-    iCub::iKin::iKinChain chainTemp = *(arm->asChain());
     fout_param<<chainActiveDOF<<" ";
     for (size_t i=0; i<chainActiveDOF; i++)
     {
-        fout_param<<CTRL_RAD2DEG*(chainTemp(i).getMin())<<" ";
-        fout_param<<CTRL_RAD2DEG*(chainTemp(i).getMax())<<" ";
+        fout_param<<lim(i,0)<<" ";
+        fout_param<<lim(i,1)<<" ";
     }
     for (size_t j=0; j<chainActiveDOF; j++)
     {
@@ -350,13 +366,20 @@ void reactCtrlThread::run()
             q_dot = solveIK(ipoptExitCode);
             timeToSolveProblem_s  = yarp::os::Time::now()-t_1;
             
+            
             if (ipoptExitCode==Ipopt::Solve_Succeeded || ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
             {
                 if (ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
                     yWarning("[reactCtrlThread] Ipopt cpu time was higher than the rate of the thread!");
                 
-                if (!controlArm(q_dot))
-                    yError("I am not able to properly control the arm!");
+                if(controlMode == "positionDirect"){
+                        if (!controlArm(controlMode,I->integrate(q_dot)))
+                            yError("I am not able to properly control the arm in positionDirect!");
+                }
+                else if (controlMode == "velocity"){
+                    if (!controlArm(controlMode,q_dot))
+                        yError("I am not able to properly control the arm in velocity!");
+                }
             }
             else
                   yWarning("[reactCtrlThread] Ipopt solve did not succeed!");
@@ -378,10 +401,9 @@ void reactCtrlThread::run()
 
 void reactCtrlThread::threadRelease()
 {
-    yInfo("Returning to position mode..");
-        delete encsA; encsA = NULL;
-        delete encsT; encsT = NULL;
-        delete   arm;   arm = NULL;
+    delete encsA; encsA = NULL;
+    delete encsT; encsT = NULL;
+    delete   arm;   arm = NULL;
 
     collisionPoints.clear();    
     
@@ -389,6 +411,11 @@ void reactCtrlThread::threadRelease()
         delete refGenMinJerk;
         refGenMinJerk = NULL;    
     }
+    if(I != NULL){
+        delete I;
+        I = NULL;    
+    }
+    
     
     if (visualizeIniCubGui)
         if (outPortiCubGui.getOutputCount()>0)
@@ -788,6 +815,11 @@ bool reactCtrlThread::areJointsHealthyAndSet(VectorOf<int> &jointsToSet,
             if ((modes[i]!=VOCAB_CM_MIXED) && (modes[i]!=VOCAB_CM_POSITION))
                 jointsToSet.push_back(i);
         }
+        else if (_s=="positionDirect")
+        {
+            if (modes[i]!=VOCAB_CM_POSITION_DIRECT)
+                jointsToSet.push_back(i);
+        }
 
     }
     if(verbosity >= 10){
@@ -809,7 +841,7 @@ bool reactCtrlThread::areJointsHealthyAndSet(VectorOf<int> &jointsToSet,
 bool reactCtrlThread::setCtrlModes(const VectorOf<int> &jointsToSet,
                                    const string &_p, const string &_s)
 {
-    if (_s!="position" && _s!="velocity")
+    if (_s!="position" && _s!="velocity" && _s!="positionDirect")
         return false;
 
     if (jointsToSet.size()==0)
@@ -825,6 +857,10 @@ bool reactCtrlThread::setCtrlModes(const VectorOf<int> &jointsToSet,
         else if (_s=="velocity")
         {
             modes.push_back(VOCAB_CM_VELOCITY);
+        }
+        else if (_s=="positionDirect")
+        {
+            modes.push_back(VOCAB_CM_POSITION_DIRECT);
         }
     }
 
@@ -846,12 +882,12 @@ bool reactCtrlThread::setCtrlModes(const VectorOf<int> &jointsToSet,
     return true;
 }
 
-
-bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
+//N.B. the targeValues can be either positions or velocities, depending on the control mode!
+bool reactCtrlThread::controlArm(const string _controlMode, const yarp::sig::Vector &_targetValues)
 {   
     VectorOf<int> jointsToSetA;
     VectorOf<int> jointsToSetT;
-    if (!areJointsHealthyAndSet(jointsToSetA,"arm","velocity"))
+    if (!areJointsHealthyAndSet(jointsToSetA,"arm",_controlMode))
     {
         yWarning("[reactCtrlThread::controlArm] Stopping control because arm joints are not healthy!");
         stopControlHelper();
@@ -860,7 +896,7 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
  
     if (useTorso)
     {
-        if (!areJointsHealthyAndSet(jointsToSetT,"torso","velocity"))
+        if (!areJointsHealthyAndSet(jointsToSetT,"torso",_controlMode))
         {
             yWarning("[reactCtrlThread::controlArm] Stopping control because torso joints are not healthy!");
             stopControlHelper();
@@ -868,21 +904,21 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
         }
     }
     
-    if (!setCtrlModes(jointsToSetA,"arm","velocity"))
+    if (!setCtrlModes(jointsToSetA,"arm",_controlMode))
     {
-        yError("[reactCtrlThread::controlArm] I am not able to set the arm joints to velocity mode!");
+        yError("[reactCtrlThread::controlArm] I am not able to set the arm joints to %s mode!",_controlMode.c_str());
         return false;
     }   
 
     if (useTorso)
     {
-        if (!setCtrlModes(jointsToSetT,"torso","velocity"))
+        if (!setCtrlModes(jointsToSetT,"torso",_controlMode))
         {
-            yError("[reactCtrlThread::controlArm] I am not able to set the torso joints to velocity mode!");
+            yError("[reactCtrlThread::controlArm] I am not able to set the torso joints to %s mode!",_controlMode.c_str());
             return false;
         }
     }
-    if(verbosity>=10){
+    /*if(verbosity>=10){
         printf("[reactCtrlThread::controlArm] setting following arm joints to %s: ",Vocab::decode(VOCAB_CM_VELOCITY).c_str());
         for (size_t k=0; k<jointsToSetA.size(); k++){
                 printf("%d ",jointsToSetA[k]);
@@ -895,25 +931,45 @@ bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
             }
             printf("\n");       
         }
+    }*/
+    if (_controlMode == "velocity"){
+        printMessage(1,"[reactCtrlThread::controlArm] Joint velocities (iKin order, deg/s): %s\n",_targetValues.toString(3,3).c_str());
+        if (useTorso)
+        {
+            Vector velsT(TORSO_DOF,0.0);
+            velsT[0] = _targetValues[2]; //swapping pitch and yaw as per iKin vs. motor interface convention
+            velsT[1] = _targetValues[1];
+            velsT[2] = _targetValues[0]; //swapping pitch and yaw as per iKin vs. motor interface convention
+        
+            printMessage(2,"    velocityMove(): torso (swap pitch & yaw): %s\n",velsT.toString(3,3).c_str());
+            ivelT->velocityMove(velsT.data());
+            ivelA->velocityMove(_targetValues.subVector(3,9).data()); //indexes 3 to 9 are the arm joints velocities
+        }
+        else
+        {
+            ivelA->velocityMove(_targetValues.data()); //if there is not torso, _targetValues has only the 7 arm joints
+        }
     }
-    printMessage(1,"[reactCtrlThread::controlArm] Joint velocities (iKin order, deg/s): %s\n",_vels.toString(3,3).c_str());
-    if (useTorso)
-    {
-        Vector velsT(3,0.0);
-        velsT[0] = _vels[2]; //swapping pitch and yaw as per iKin vs. motor interface convention
-        velsT[1] = _vels[1];
-        velsT[2] = _vels[0]; //swapping pitch and yaw as per iKin vs. motor interface convention
-       
-        printMessage(2,"    velocityMove(): torso (swap pitch & yaw): %s\n",velsT.toString(3,3).c_str());
-        ivelT->velocityMove(velsT.data());
-        ivelA->velocityMove(_vels.subVector(3,9).data()); //indexes 3 to 9 are the arm joints velocities
+    else if(_controlMode == "positionDirect"){ 
+         printMessage(1,"[reactCtrlThread::controlArm] Target joint positions (iKin order, deg): %s\n",_targetValues.toString(3,3).c_str());
+        if (useTorso)
+        {
+            Vector posT(3,0.0);
+            posT[0] = _targetValues[2]; //swapping pitch and yaw as per iKin vs. motor interface convention
+            posT[1] = _targetValues[1];
+            posT[2] = _targetValues[0]; //swapping pitch and yaw as per iKin vs. motor interface convention
+        
+            printMessage(2,"    positionDirect: torso (swap pitch & yaw): %s\n",posT.toString(3,3).c_str());
+            iposDirT->setPositions(posT.data());
+            iposDirA->setPositions(_targetValues.subVector(3,9).data()); //indexes 3 to 9 are the arm joints 
+        }
+        else
+        {
+            iposDirA->setPositions(_targetValues.data()); //if there is not torso, _targetValues has only the 7 arm joints
+        }
         
     }
-    else
-    {
-        ivelA->velocityMove(_vels.data()); //if there is not torso, _vels has only the 7 arm joints
-    }
-
+        
     return true;
 }
 
