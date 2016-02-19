@@ -37,7 +37,7 @@ service reactController_IDL
   bool set_relative_xd(1:Vector _rel_xd);
 
   /**
-  * Sets a moving target along a circular trajectory in the y and z axes, relative to the current end-effector configuration
+  * Sets a moving target along a circular trajectory in the y and z axes, relative to the current end-effector position
   * @param _radius  Radius of the circle in meters.
   * @param _frequency Frequency according to the formula 
   *      xd[1]+=_radius*cos(2.0*M_PI*frequency*t);

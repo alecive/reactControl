@@ -15,13 +15,21 @@
     </module>
 
     <module>
+        <name>iCubGui</name>
+        <parameters></parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>iCubGui</tag>
+    </module>
+
+    <module>
         <name>skinEventsAggregator</name>
         <parameters>general::robot icub</parameters>
         <node>localhost</node>
         <stdio></stdio>
         <tag>skinEventsAggreg</tag>
     </module>
-
+ 
 
     <!--module>
         <name></name>

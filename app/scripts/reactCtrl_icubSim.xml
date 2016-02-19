@@ -13,6 +13,15 @@
     </module>
 
    <module>
+        <name>iCubGui</name>
+        <parameters></parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>iCubGui</tag>
+    </module>
+
+
+   <module>
         <name>reactController</name>
         <parameters></parameters>
         <node>localhost</node>
@@ -45,6 +54,12 @@
         <tag></tag>
     </module-->
 
+    <connection>
+      <from>/reactController/gui:o</from>
+	  <to>/iCubGui/objects</to>
+      <protocol>udp</protocol>
+    </connection>
+    
     <connection>
       <from>/virtualContactGeneration/virtualContacts:o</from>
 	<to>/skinEventsAggregator/skin_events:i</to>

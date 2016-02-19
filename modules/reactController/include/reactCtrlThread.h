@@ -74,10 +74,13 @@ public:
     bool disableTorso();
 
     // Sets the new target
-    bool setNewTarget(const yarp::sig::Vector&);
+    bool setNewTarget(const yarp::sig::Vector& _x_d, const bool _movingCircle);
 
     // Sets the new target relative to the current position
     bool setNewRelativeTarget(const yarp::sig::Vector&);
+
+    // Sets a moving target along a circular trajectory in the y and z axes, relative to the current end-effector position
+    bool setNewCircularTarget(const double _radius,const double _frequency);
 
     // Sets the tolerance
     bool setTol(const double );
@@ -153,7 +156,7 @@ protected:
     double dT;  //period of the thread in seconds  =getRate()/1000.0;
 
     particleThread  *prtclThrd;     // Pointer to the particleThread in order to access its data - if referenceGen is "uniformParticle"
-    iCub::ctrl::minJerkTrajGen *refGenMinJerk; //If referenceGen is "minJerk"
+    iCub::ctrl::minJerkRefGen *refGenMinJerk; //If referenceGen is "minJerk"
 
     int        state;        // Flag to know in which state the thread is in
     
@@ -185,6 +188,11 @@ protected:
     yarp::sig::Vector x_n;  // Desired next end-effector position
     yarp::sig::Vector x_d;  // Vector that stores the new target
 
+    bool movingTargetCircle;
+    double radius;
+    double frequency;
+    yarp::sig::Vector circleCenter;
+
     //N.B. All angles in this thread are in degrees
     yarp::sig::Vector qA; //current values of arm joints (should be 7)
     yarp::sig::Vector qT; //current values of torso joints (3, in the order expected for iKin: yaw, roll, pitch)
@@ -197,8 +205,7 @@ protected:
     yarp::sig::Matrix vLimAdapted;  //matrix with min/max velocity limits after adptation by avoidanceHandler
       
     yarp::sig::Matrix H;      // End-effector pose
-  
-    
+      
     // ports and files
     yarp::os::BufferedPort<yarp::os::Bottle> aggregSkinEventsInPort; //coming from /skinEventsAggregator/skin_events_aggreg:o
     yarp::os::BufferedPort<yarp::os::Bottle> aggregPPSeventsInPort; //coming from visuoTactileRF/pps_activations_aggreg:o 
@@ -231,6 +238,12 @@ protected:
     int collisionPointsVisualizedCount; //objects will be created in simulator and then their positions updated every iteration
     yarp::sig::Vector collisionPointsSimReservoirPos; //inactive collision points will be stored in the world
         
+    /**
+    * Solves the Inverse Kinematic task
+    */
+    yarp::sig::Vector solveIK(int &);
+
+    /**** kinematic chain, control, ..... *****************************/
     
     /**
     * Aligns joint bounds according to the actual limits of the robot
@@ -246,21 +259,6 @@ protected:
     * Updates the arm's kinematic chain with the encoders from the robot
     **/
     void updateArmChain();
-
-    /**
-    * Computes the spatial step that will be performed by the robot
-    **/
-    yarp::sig::Vector computeDeltaX();
-
-    /**
-    * Sends useful data to a port in order to track it on matlab
-    **/
-    void sendData();
-
-    /**
-    * Solves the Inverse Kinematic task
-    */
-    yarp::sig::Vector solveIK(int &);
 
     /**
     * Sends the computed velocities to the robot
@@ -286,21 +284,45 @@ protected:
     bool setCtrlModes(const yarp::sig::VectorOf<int> &jointsToSet,
                       const string &_p, const string &_s);
 
-    
+
+    bool stopControlHelper();
+
+    /***************** auxiliary computations  *******************************/
+
+    /**
+    * Computes the next target on a circular trajectory, using global vars frequency, radius, and circleCenter
+    * @return new target position
+    **/
+    yarp::sig::Vector  getPosMovingTargetOnCircle();
+
+    /**
+    * Computes the spatial step that will be performed by the robot
+    **/
+    yarp::sig::Vector computeDeltaX();
+
+
     void convertPosFromRootToSimFoR(const yarp::sig::Vector &pos, yarp::sig::Vector &outPos);
     
     void convertPosFromLinkToRootFoR(const yarp::sig::Vector &pos,const iCub::skinDynLib::SkinPart skinPart, yarp::sig::Vector &outPos);
         
+
+   /************************** communication through ports in/out ***********************************/
+
     bool getCollisionPointsFromPort(yarp::os::BufferedPort<yarp::os::Bottle> &inPort, double gain, string whichChain,std::vector<collisionPoint_t> &collPoints);
-    
-    
-    /*** visualizations in icubGui  *********/
+
+    /**
+    * Sends useful data to a port in order to track it on matlab
+    **/
+    void sendData();
+
+
+    /***************************** visualizations in icubGui  ****************************/
     //uses corresponding global variables for target pos (x_d) or particle pos (x_n) and creates bottles for the port to iCubGui
     void sendiCubGuiObject(const std::string object_type);
     
     void deleteiCubGuiObject(const std::string object_type);
     
-    /*** visualizations in icub simulator   *********/
+    /****************** visualizations in icub simulator   *************************************/
     /**
     * Creates a sphere (not affected by gravity) in the iCub simulator through the /icubSim/world port
     * @param radius
@@ -316,9 +338,7 @@ protected:
     
     void showCollisionPointsInSim();
 
-    
-    bool stopControlHelper();
-    
+
     /**
     * Prints a message according to the verbosity level:
     * @param l will be checked against the global var verbosity: if verbosity >= l, something is printed

@@ -163,7 +163,7 @@ public:
         {
             yInfo("");
             yInfo("[reactController] received new x_d: %s", _xd.toString(3,3).c_str());
-            return rctCtrlThrd->setNewTarget(_xd);
+            return rctCtrlThrd->setNewTarget(_xd, false);
         }
         return false;
     }
@@ -184,8 +184,7 @@ public:
             yInfo("");
             yInfo("[reactController] received new relative circular x_d: radius %f, frequency: %f. No implementation yet. :)",_radius,_frequency);
             if ((_radius>=0.0) && (_radius <= 0.3) && (_frequency >=0.0) && (_frequency<=1.0)  )
-                //return rctCtrlThrd->setNewCircularTarget(_radius,_frequency);   
-                return true;
+                return rctCtrlThrd->setNewCircularTarget(_radius,_frequency);   
             else{
                 yWarning("[reactController] set_relative_circular_xd(): expecting radius <0,0.3>, frequency <0,1>");    
                 return false;
