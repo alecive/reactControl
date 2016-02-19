@@ -675,12 +675,15 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // So, q_dot_0 is in degrees, but I have to convert it in radians before sending it to ipopt
     Vector res=slv->solve(x_n,q_dot_0*CTRL_DEG2RAD,dT,vLimAdapted*CTRL_DEG2RAD,boundSmoothnessFlag,boundSmoothnessValue*CTRL_DEG2RAD,&exit_code)*CTRL_RAD2DEG;
 
+    
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
-    printMessage(0,"x_n: %s\tx_d: %s\tdT %g\n",x_n.toString(3,3).c_str(),x_d.toString(3,3).c_str(),dT);
-    printMessage(0,"x_0: %s\tx_t: %s\n",       x_0.toString(3,3).c_str(),x_t.toString(3,3).c_str());
-    printMessage(0,"norm(x_n-x_t): %g\tnorm(x_d-x_n): %g\tnorm(x_d-x_t): %g\n",
+    if(verbosity >= 1){
+        printf("x_n: %s\tx_d: %s\tdT %g\n",x_n.toString(3,3).c_str(),x_d.toString(3,3).c_str(),dT);
+        printf("x_0: %s\tx_t: %s\n",       x_0.toString(3,3).c_str(),x_t.toString(3,3).c_str());
+        printf("norm(x_n-x_t): %g\tnorm(x_d-x_n): %g\tnorm(x_d-x_t): %g\n",
                     norm(x_n-x_t), norm(x_d-x_n), norm(x_d-x_t));
-    printMessage(0,"Result (solved velocities (deg/s)): %s\n",res.toString(3,3).c_str());
+        printf("Result (solved velocities (deg/s)): %s\n",res.toString(3,3).c_str());
+    }
     _exit_code=exit_code;
     q_dot_0=res;  //result at this step will be prepared as q_dot_0 for the next iteration of the solver
 
