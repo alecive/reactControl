@@ -13,7 +13,7 @@ chosen_time_column = 6; % 4 for sender, 6 for receiver
 
 %path_prefix = 'input/';
 %path_prefix = 'icubTests/test_20160212a/';
-path_prefix = 'icubSimTests/test_20160218c/';
+path_prefix = 'icubSimTests/test_20160219a/';
 path_prefix_dumper = 'data/';
 
 if save_figs
@@ -23,8 +23,9 @@ end
 % param file - columns: 1:#DOF, then joint pos min max for every DOF, then
 % joint vel limits for every DOF, then ...
 %  fout_param<<trajTime<<" "<<trajSpeed<<" "<<tol<<" "<<globalTol<<" "<<getRate()/1000.0<<" "<<boundSmoothnessFlag<<" "<<boundSmoothnessValue;
+%if(controlMode == "velocity") fout_param<<"1 "; else if(controlMode == "positionDirect")    fout_param<<"2 ";
 % for 10 DOF case: 1:nDOF, 2-21 joint pos min/max, 22-41 joint vel limits, 42 traj time, 43 traj speed (deg/s), 44: tol, 45: globalTol, 46: rate is s, 47: bound_smoothness flag,
-% 48: bound smoothness value 
+% 48: bound smoothness value, 49: controlMode 
 d_params=importdata([path_prefix 'param.log']);
 
 NR_EXTRA_TIME_COLUMNS = 4; % these will be created so that there is time starting from 0, plus time increment column - this 2 times (sender and receiver time stamp) - for diagnostics
@@ -69,6 +70,11 @@ joint_info(4).name = '1st shoulder'; joint_info(5).name = '2nd shoulder'; joint_
 joint_info(7).name = '1st elbow'; joint_info(8).name = '2nd elbow'; 
 joint_info(9).name = '1st wrist'; joint_info(10).name = '2nd wrist'; 
 
+controlMode = 'velocity';
+%controlMode = 'positionDirect'; % should be picked up automatically from
+%the param file
+
+
 if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 arm
     chainActiveDOF = 10;
         
@@ -77,6 +83,7 @@ if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 
         joint_info(i).vel_limit_min = d_params(20+2*i); joint_info(i).vel_limit_max = d_params(20+2*i+1);
         joint_info(i).vel_column = 13+i+NR_EXTRA_TIME_COLUMNS; joint_info(i).pos_column = 23+i+NR_EXTRA_TIME_COLUMNS; 
         joint_info(i).vel_limit_min_avoid_column = 32+2*i+NR_EXTRA_TIME_COLUMNS; joint_info(i).vel_limit_max_avoid_column = 32+2*i+1+NR_EXTRA_TIME_COLUMNS;
+        joint_info(i).integrated_pos_column = 55+i+NR_EXTRA_TIME_COLUMNS; 
     end
     
     if (length(d_params) == 41) % old format before outputting extra params (prior to 13.2.2016)
@@ -93,8 +100,22 @@ if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 
         else
             boundSmoothnessFlag = false
         end
+    elseif  (length(d_params) == 49) % logging controlMode as of 19.2.
+        dT = d_params(46)
+        if (d_params(47) ==1)
+            boundSmoothnessFlag = true
+            boundSmoothnessValue = d_params(48)
+        else
+            boundSmoothnessFlag = false
+        end
+        if(d_params(49) == 1)
+            controlMode = 'velocity'
+        elseif(d_params(49) == 2)
+            controlMode = 'positionDirect'    
+        end
     end
-    if(size(d_orig,2) >= 55)
+    
+     if(size(d_orig,2) >= 55)
        ipoptExitCode_col = 58; % setting the cols already for the new d, after adding extra time xols
        timeToSolve_s_col = 59;
     end
@@ -103,6 +124,9 @@ else
    error('This script is currently not supporting other than 10 DOF chains'); 
 end
 
+if ( (strcmp(controlMode,'positionDirect')) && (size(d_orig,2) <  65) )
+    error('It seems that intergrated positions were not logged.'); 
+end
 
 
 %% create extra time columns
@@ -312,6 +336,9 @@ if visualize_all_joint_pos
                 plot(t,data(:,joint_info(j).pos_column));
                 plot([t(1) t(end)],[joint_info(j).pos_limit_min joint_info(j).pos_limit_min],'r--'); % min joint pos limit
                 plot([t(1) t(end)],[joint_info(j).pos_limit_max joint_info(j).pos_limit_max],'r--'); % max joint pos limit   
+                if (controlMode == 'positionDirect')
+                    plot(t,data(:,joint_info(j).integrated_pos_column),'g-.');
+                end
                 xlabel('t [s]');
                 ylabel('angle [deg]');
                 title(joint_info(j).name);

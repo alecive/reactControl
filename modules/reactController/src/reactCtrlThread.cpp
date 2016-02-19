@@ -104,6 +104,7 @@ bool reactCtrlThread::threadInit()
     if (useTorso)
         qT.resize(NR_TORSO_JOINTS,0.0); //current values of torso joints (3, in the order expected for iKin: yaw, roll, pitch)
     q.resize(chainActiveDOF,0.0); //current joint angle values (10 if torso is on, 7 if off)
+    qIntegrated.resize(chainActiveDOF,0.0); //joint angle pos predictions from integrator
     lim.resize(chainActiveDOF,2); //joint pos limits
     
     q_dot_0.resize(chainActiveDOF,0.0);
@@ -257,8 +258,12 @@ bool reactCtrlThread::threadInit()
         fout_param<<vLimNominal(j,0)<<" ";
         fout_param<<vLimNominal(j,1)<<" ";
     }
-    fout_param<<-1<<" "<<trajSpeed<<" "<<tol<<" "<<globalTol<<" "<<dT<<" "<<boundSmoothnessFlag<<" "<<boundSmoothnessValue;
+    fout_param<<-1<<" "<<trajSpeed<<" "<<tol<<" "<<globalTol<<" "<<dT<<" "<<boundSmoothnessFlag<<" "<<boundSmoothnessValue<<" ";
     // the -1 used to be trajTime, keep it for compatibility with matlab scripts 
+    if(controlMode == "velocity")
+        fout_param<<"1 ";
+    else if(controlMode == "positionDirect")
+        fout_param<<"2 ";
     
     yInfo("Written to param file and closing..");    
     fout_param.close();
@@ -373,7 +378,8 @@ void reactCtrlThread::run()
                     yWarning("[reactCtrlThread] Ipopt cpu time was higher than the rate of the thread!");
                 
                 if(controlMode == "positionDirect"){
-                        if (!controlArm(controlMode,I->integrate(q_dot)))
+                    qIntegrated = I->integrate(q_dot);    
+                    if (!controlArm(controlMode,qIntegrated))
                             yError("I am not able to properly control the arm in positionDirect!");
                 }
                 else if (controlMode == "velocity"){
@@ -1127,6 +1133,8 @@ void reactCtrlThread::sendData()
             matrixIntoBottle(vLimAdapted,b); // assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
             b.addInt(ipoptExitCode);
             b.addDouble(timeToSolveProblem_s);
+            if (controlMode == "positionDirect")
+                vectorIntoBottle(qIntegrated,b);
             // the delta_x, that is the 3D vector that ipopt commands to 
             //    the robot in order for x_t to reach x_n
             //yarp::os::Bottle &b_delta_x=out.addList();
