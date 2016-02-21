@@ -618,12 +618,14 @@ public:
         yInfo("REACT CONTROLLER: Stopping threads..");
         if (rctCtrlThrd)
         {
+            yInfo("REACT CONTROLLER: Stopping rctCtrlThrd...");
             rctCtrlThrd->stop();
             delete rctCtrlThrd;
             rctCtrlThrd=0;
         }
         if (prtclThrd)
         {
+            yInfo("REACT CONTROLLER: Stopping prtclThrd...");
             prtclThrd->stop();
             delete prtclThrd;
             prtclThrd=0;
