@@ -223,7 +223,7 @@ if visualize_target
         subplot(4,1,2);
             hold on;
             title('reference (z)');
-            plot(t,100*d(:,targetEE_z.column),'-bo');
+            plot(t,100*d(:,targetEE_z.column));
             ylabel('position (cm)');
             hold off;
 
@@ -261,7 +261,7 @@ if visualize_target
         subplot(4,1,2);
             hold on;
             title('Position (z)');
-            plot(t,100*d(:,EE_z.column),'-bo');
+            plot(t,100*d(:,EE_z.column));
             ylabel('position (cm)');
             hold off;
 
@@ -386,7 +386,7 @@ if visualize_all_joint_vel
                 plot([t(1) t(end)],[joint_info(j).vel_limit_min joint_info(j).vel_limit_min],'-.r'); % min joint vel limit
                 plot([t(1) t(end)],[joint_info(j).vel_limit_max joint_info(j).vel_limit_max],'-.r'); % max joint vel limit   
                 plot(t,data(:,joint_info(j).vel_column),'-k'); % current joint velocity
-                ylim([-52 52]);
+                ylim([(joint_info(j).vel_limit_min - 1) (joint_info(j).vel_limit_max + 1) ]);
                 xlabel('t [s]');
                 ylabel('joint velocity [deg/s]');
                 title(joint_info(j).name);
