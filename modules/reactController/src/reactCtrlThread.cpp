@@ -225,9 +225,11 @@ bool reactCtrlThread::threadInit()
     x_d.resize(3,0.0);
    
     updateArmChain();
-    if(controlMode == "positionDirect"){
+    if(controlMode == "positionDirect")
          I = new Integrator(dT,q,lim);        
-    }
+    else
+        I = NULL;
+    
    
     
     /*** visualize in iCubGui  ***************/
