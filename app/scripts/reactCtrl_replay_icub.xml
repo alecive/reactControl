@@ -28,6 +28,12 @@
     </connection>
     
     <connection>
+        <from>/ppsAggregEventsForiCubGui/contacts:o</from>
+	<to>/iCubGui/forces</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
     	<from>/icub/head/state:o</from>
     	<to>/iCubGui/head:i</to>
     	<protocol>udp</protocol>
