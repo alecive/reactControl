@@ -597,9 +597,9 @@ public:
     {
         type="tactile";
 
-        // produce 50 deg/s repulsive
-        // velocity for 1 mm of penetration
-        k=50.0/0.001;
+        // produce 20 deg/s repulsive
+        // velocity for 5 mm of penetration
+        k=20.0/0.005;
 
         parameters.unput("k");
         parameters.put("k",k);
