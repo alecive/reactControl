@@ -49,6 +49,7 @@ using namespace iCub::iKin;
 class ControllerNLP : public Ipopt::TNLP
 {
     iKinChain &chain;
+    deque<Vector> memory;
 
     Vector xr;
     Vector x0;
@@ -59,6 +60,8 @@ class ControllerNLP : public Ipopt::TNLP
     Matrix J0;
     Vector v;
     double dt;
+    double kp;
+    double td;
 
     Vector qGuard;
     Vector qGuardMinExt;
@@ -140,7 +143,10 @@ public:
         bounds=v_lim;
 
         computeGuard();
+
         dt=0.0;
+        kp=1.0;
+        td=0.0;
     }
 
     /****************************************************************/
@@ -170,6 +176,24 @@ public:
     }
 
     /****************************************************************/
+    void set_kp(const double kp)
+    {
+        yAssert(kp>0.0);
+        this->kp=kp;
+    }
+
+    /****************************************************************/
+    void set_td(const double td)
+    {
+        yAssert(td>=0.0);
+        this->td=td;
+
+        memory.clear();
+        memory.insert(memory.begin(),(int)floor(td/dt),
+                      zeros(v0.length()));
+    }
+
+    /****************************************************************/
     void set_v0(const Vector &v0)
     {
         yAssert(this->v0.length()==v0.length());
@@ -179,7 +203,11 @@ public:
     /****************************************************************/
     void init()
     {
-        x0=chain.EndEffPosition();
+        Integrator I(dt,chain.getAng());
+        for (size_t i=0; i<memory.size(); i++)
+            I.integrate((kp*CTRL_DEG2RAD)*memory[i]);
+
+        x0=chain.EndEffPosition(I.get()); 
         J0=chain.GeoJacobian().submatrix(0,2,0,chain.getDOF()-1);
         computeBounds();
     }
@@ -188,6 +216,17 @@ public:
     Vector get_result() const
     {
         return v;
+    }
+
+    /****************************************************************/
+    Property getParameters() const
+    {
+        Property parameters;
+        parameters.put("dt",dt);
+        parameters.put("kp",kp);
+        parameters.put("td",td);
+        parameters.put("memory-buffer",(int)memory.size());
+        return parameters;
     }
 
     /****************************************************************/
@@ -229,7 +268,7 @@ public:
         {
             for (size_t i=0; i<v.length(); i++)
                 v[i]=x[i];
-            delta_x=xr-(x0+dt*(J0*v));
+            delta_x=xr-(x0+(kp*dt)*(J0*v));
         }
     }
 
@@ -248,7 +287,7 @@ public:
     {
         computeQuantities(x,new_x);
         for (Ipopt::Index i=0; i<n; i++)
-            grad_f[i]=-2.0*dt*dot(delta_x,J0.getCol(i));
+            grad_f[i]=-2.0*(kp*dt)*dot(delta_x,J0.getCol(i));
         return true; 
     }
 
@@ -277,6 +316,9 @@ public:
     {
         for (Ipopt::Index i=0; i<n; i++)
             v[i]=CTRL_RAD2DEG*x[i];
+
+        memory.push_back(v);
+        memory.pop_front();
     }
 };
 
@@ -284,7 +326,8 @@ public:
 /****************************************************************/
 class Motor
 {
-    deque<Vector> buffer;
+    deque<Vector> memory;
+    Property parameters;
     Integrator I;
     double kp;    
 
@@ -295,23 +338,34 @@ public:
           const double dt) :
           I(dt,q0,lim), kp(kp_)
     {
-        buffer.insert(buffer.begin(),(int)floor(td_/dt),
+        memory.insert(memory.begin(),(int)floor(td_/dt),
                       zeros(q0.length()));
+
+        parameters.put("dt",dt);
+        parameters.put("kp",kp);
+        parameters.put("td",td_);
+        parameters.put("memory-buffer",(int)memory.size());
     }
 
     /****************************************************************/
     Vector move(const Vector &v)
     {
-        buffer.push_front(v);
-        Vector v_=buffer.back();
-        buffer.pop_back();
-        return I.integrate(v_);
+        memory.push_front(v);
+        Vector v_=memory.back();
+        memory.pop_back();
+        return I.integrate(kp*v_);
     }
 
     /****************************************************************/
     Vector getPosition() const
     {
         return I.get();
+    }
+
+    /****************************************************************/
+    Property getParameters() const
+    {
+        return parameters;
     }
 };
 
@@ -652,10 +706,12 @@ int main(int argc, char *argv[])
     ResourceFinder rf;
     rf.configure(argc,argv);
 
-    double dt=rf.check("dt",Value(0.01)).asDouble();
-    double T=rf.check("T",Value(1.0)).asDouble();    
+    double dt=rf.check("dt",Value(0.01)).asDouble();    
     double motor_kp=rf.check("motor-kp",Value(1.0)).asDouble();
     double motor_td=rf.check("motor-td",Value(0.0)).asDouble();
+    double model_kp=rf.check("model-kp",Value(1.0)).asDouble();
+    double model_td=rf.check("model-td",Value(0.0)).asDouble();
+    double T=rf.check("T",Value(1.0)).asDouble();
     double sim_time=rf.check("sim-time",Value(10.0)).asDouble();
 
     string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();    
@@ -708,10 +764,10 @@ int main(int argc, char *argv[])
         yError()<<"unrecognized avoidance type! exiting ...";
         return 1;
     }
-    yInfo()<<"Avoidance-Handler="<<avhdl->getType();
-    yInfo()<<"Avoidance Parameters="<<avhdl->getParameters().toString();
 
     nlp->set_dt(dt);
+    nlp->set_kp(model_kp);
+    nlp->set_td(model_td);
     Motor motor(q0,lim,motor_kp,motor_td,dt);
     Vector v(chain.getDOF(),0.0);
 
@@ -730,6 +786,11 @@ int main(int argc, char *argv[])
     Vector vo(3,0.0);
     vo[2]=-0.1;
     Obstacle obstacle(xo,0.07,vo,dt);
+
+    yInfo()<<"Motor Parameters="<<motor.getParameters().toString();
+    yInfo()<<"Model Parameters="<<nlp->getParameters().toString();
+    yInfo()<<"Avoidance-Handler="<<avhdl->getType();
+    yInfo()<<"Avoidance Parameters="<<avhdl->getParameters().toString();    
 
     ofstream fout;
     fout.open("data.log");
