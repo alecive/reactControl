@@ -30,6 +30,14 @@
         <tag>skinEventsAggreg</tag>
     </module>
  
+    <module>
+        <name>ppsAggregEventsForiCubGui</name>
+        <parameters></parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>aggregEvForiCubGui</tag>
+    </module>
+
 
     <!--module>
         <name></name>
@@ -58,6 +66,11 @@
        <protocol>udp</protocol>
     </connection>
 
+    <connection>
+        <from>/ppsAggregEventsForiCubGui/contacts:o</from>
+	<to>/iCubGui/forces</to>
+        <protocol>udp</protocol>
+    </connection>
         
     <!--connection>
         <from></from>
