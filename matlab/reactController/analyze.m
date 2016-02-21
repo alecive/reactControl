@@ -13,7 +13,7 @@ chosen_time_column = 6; % 4 for sender, 6 for receiver
 
 %path_prefix = 'input/';
 %path_prefix = 'icubTests/test_20160212a/';
-path_prefix = 'icubSimTests/test_20160219a/';
+path_prefix = 'icubTests/test_20160221e/';
 path_prefix_dumper = 'data/';
 
 if save_figs
@@ -336,7 +336,7 @@ if visualize_all_joint_pos
                 plot(t,data(:,joint_info(j).pos_column));
                 plot([t(1) t(end)],[joint_info(j).pos_limit_min joint_info(j).pos_limit_min],'r--'); % min joint pos limit
                 plot([t(1) t(end)],[joint_info(j).pos_limit_max joint_info(j).pos_limit_max],'r--'); % max joint pos limit   
-                if (controlMode == 'positionDirect')
+                if (strcmp(controlMode,'positionDirect'))
                     plot(t,data(:,joint_info(j).integrated_pos_column),'g-.');
                 end
                 xlabel('t [s]');
