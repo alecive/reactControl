@@ -407,6 +407,7 @@ void reactCtrlThread::run()
 
 void reactCtrlThread::threadRelease()
 {
+    yInfo("threadRelease(): deleting encoder arrays and arm object.");
     delete encsA; encsA = NULL;
     delete encsT; encsT = NULL;
     delete   arm;   arm = NULL;
@@ -414,16 +415,19 @@ void reactCtrlThread::threadRelease()
     collisionPoints.clear();    
     
     if(refGenMinJerk != NULL){
+        yDebug("deleting refGenMinJerk.");
         delete refGenMinJerk;
         refGenMinJerk = NULL;    
     }
     if(I != NULL){
+        yDebug("deleting integrator I");
         delete I;
         I = NULL;    
     }
     
     
     if (visualizeIniCubGui)
+        yInfo("Resetting objects in iCubGui");
         if (outPortiCubGui.getOutputCount()>0)
         {
             Bottle b;
