@@ -20,7 +20,16 @@
         <tag>dataDumperSkinEvAggreg</tag>
     </module>
 
-   <module>
+    <module>
+        <name>yarpdatadumper</name>
+	<parameters>--name /data/iCubGuiObjects --txTime --rxTime</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>dataDumperObjectsiCubGui</tag>
+    </module>
+       
+
+    <module>
         <name>yarpdatadumper</name>
 	<parameters>--name /data/skin_events --txTime --rxTime</parameters>
         <node>localhost</node>
@@ -199,6 +208,11 @@
     	<protocol>udp</protocol>
     </connection>
      
+    <connection>
+        <from>/reactController/gui:o</from>
+	<to>/data/iCubGuiObjects</to>
+        <protocol>udp</protocol>
+    </connection>
 
     <connection>
         <from>/skinManager/skin_events:o</from>
