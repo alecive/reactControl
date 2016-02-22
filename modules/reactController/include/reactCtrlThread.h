@@ -45,6 +45,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <vector>
+#include <deque>
 
 #include "reactIpOpt.h"
 #include "particleThread.h"
@@ -60,7 +61,7 @@ class reactCtrlThread: public yarp::os::RateThread
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & , const string &_ ,
-                    int , bool , string , double , double , double , double , string , bool , bool , bool , double , bool , bool , bool , particleThread * );
+                    int , bool , string , double , double , double , double , string , bool , bool , bool , bool , double , bool , bool , bool , particleThread * );
     // INIT
     virtual bool threadInit();
     // RUN
@@ -141,6 +142,7 @@ protected:
     // Max velocity set for the joints
     double vMax;
     string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk"
+    bool ipOptMemoryOn; // whether ipopt should account for the real motor model
     bool boundSmoothnessFlag; //for ipopt - whether changes in velocity commands need to be smooth
     double boundSmoothnessValue; //actual allowed change in every joint velocity commands in deg/s from one time step to the next. Note: this is not adapted to the thread rate set by the rctCtrlRate param
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
@@ -203,7 +205,6 @@ protected:
     yarp::sig::Vector q; //current joint angle values (10 if torso is on, 7 if off)
     yarp::sig::Vector qIntegrated; //joint angle values integrated from velocity commands by Integrator - controlMode positionDirect only
    
-    yarp::sig::Vector q_dot_0;    // Initial/current joint velocities
     yarp::sig::Vector q_dot;  // Computed joint velocities to reach the target
     
     yarp::sig::Matrix lim;  //matrix with joint position limits for the current chain
@@ -227,6 +228,11 @@ protected:
     reactIpOpt    *slv;    // solver
     int ipoptExitCode;
     double timeToSolveProblem_s; //time taken by q_dot = solveIK(ipoptExitCode) ~ ipopt + avoidance handler
+    std::deque<yarp::sig::Vector> memory; //buffer to store
+    double motorModel_kp;
+    double motorModel_td;
+    iCub::ctrl::Integrator *I_ipOptWithMemory; //if ipOptMemoryOn, we will integrate velocity control commands to get pos
+
 
     // Mutex for handling things correctly
     yarp::os::Mutex mutex;

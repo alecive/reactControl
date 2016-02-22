@@ -49,14 +49,16 @@ using namespace iCub::skinDynLib;
 
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,  const string &_part,
                                  int _verbosity, bool _disableTorso,  string _controlMode, 
-                                 double _trajSpeed, double _globalTol, double _vMax, double _tol, string _referenceGen, 
+                                 double _trajSpeed, double _globalTol, double _vMax, double _tol,
+                                 string _referenceGen, bool _ipOptMemoryOn, 
                                  bool _tactileCollisionPointsOn, bool _visualCollisionPointsOn,
                                  bool _boundSmoothnessFlag, double _boundSmoothnessValue, 
                                  bool _visualizeTargetInSim, bool _visualizeParticleInSim, bool _visualizeCollisionPointsInSim,
                                  particleThread *_pT) :
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
                                  verbosity(_verbosity), useTorso(!_disableTorso), controlMode(_controlMode),
-                                 trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol), referenceGen(_referenceGen),
+                                 trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol),
+                                 referenceGen(_referenceGen), ipOptMemoryOn(_ipOptMemoryOn),
                                  tactileCollisionPointsOn(_tactileCollisionPointsOn), visualCollisionPointsOn(_visualCollisionPointsOn),
                                  boundSmoothnessFlag(_boundSmoothnessFlag), boundSmoothnessValue(_boundSmoothnessValue),                                 visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
                                  visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim)
@@ -107,7 +109,6 @@ bool reactCtrlThread::threadInit()
     qIntegrated.resize(chainActiveDOF,0.0); //joint angle pos predictions from integrator
     lim.resize(chainActiveDOF,2); //joint pos limits
     
-    q_dot_0.resize(chainActiveDOF,0.0);
     vLimNominal.resize(chainActiveDOF,2);
     vLimAdapted.resize(chainActiveDOF,2);
     for (size_t r=0; r<chainActiveDOF; r++)
@@ -216,22 +217,38 @@ bool reactCtrlThread::threadInit()
     radius = 0.0; frequency = 0.0;
     circleCenter.resize(3,0.0);
     circleCenter(0) = -0.3; //for safety, we assign the x-coordinate on in it within iCub's reachable space
+  
+    updateArmChain(); 
+        
     
-    slv=NULL;
-   
     x_0.resize(3,0.0);
     x_t.resize(3,0.0);
     x_n.resize(3,0.0);
     x_d.resize(3,0.0);
+       
+    slv=NULL; //ipOpt solver - our wrapper class
+    memory.clear();
+    if (ipOptMemoryOn){
+        motorModel_kp = 1.1;
+        motorModel_td = 0.08;
+        memory.insert(memory.begin(),(int)floor(motorModel_td/dT),
+                      zeros(chainActiveDOF)); //for say lag td 0.08s and dT 0.01, we will have 8 velocity vectors in the memory 
    
-    updateArmChain();
+        I_ipOptWithMemory = new Integrator(dT,q,lim);
+    }
+    else{
+        motorModel_kp = 1.0;
+        motorModel_td = 0.0;
+        I_ipOptWithMemory = NULL;
+    }
+        
+  
     if(controlMode == "positionDirect")
          I = new Integrator(dT,q,lim);        
     else
         I = NULL;
     
-   
-    
+      
     /*** visualize in iCubGui  ***************/
     visualizeIniCubGui = true;
     visualizeParticleIniCubGui = true;
@@ -266,6 +283,10 @@ bool reactCtrlThread::threadInit()
         fout_param<<"1 ";
     else if(controlMode == "positionDirect")
         fout_param<<"2 ";
+    if(ipOptMemoryOn)
+        fout_param<<"1 ";
+    else 
+        fout_param<<"0 ";
     
     yInfo("Written to param file and closing..");    
     fout_param.close();
@@ -313,8 +334,13 @@ void reactCtrlThread::run()
     //yarp::sig::Matrix J1_temp=chain_temp.GeoJacobian();
     //yDebug("GeoJacobian: \n %s \n",J1_temp.toString(3,3).c_str());    
         
+    if (ipOptMemoryOn){
+        for (size_t i=0; i<memory.size(); i++)
+            I_ipOptWithMemory->integrate((motorModel_kp)*memory[i]);
+    }
+        
     collisionPoints.clear();
-    
+        
     /* For now, let's experiment with some fixed points on the forearm skin, emulating the vectors coming from margin of safety, 
      to test the performance of the algorithm
     Let's try 3 triangle midpoints on the upper patch on the forearm, taking positions from CAD, 
@@ -404,7 +430,12 @@ void reactCtrlThread::run()
         default:
             yFatal("[reactCtrlThread] reactCtrlThread should never be here!!! Step: %d",state);
     }
-
+    
+    if(ipOptMemoryOn){
+        memory.push_back(q_dot);
+        memory.pop_front();
+    }
+    
     sendData();
     if (tactileCollisionPointsOn || visualCollisionPointsOn)
         vLimAdapted = vLimNominal; //if it was changed by the avoidanceHandler, we reset it
@@ -431,7 +462,12 @@ void reactCtrlThread::threadRelease()
         delete I;
         I = NULL;    
     }
-    
+    memory.clear(); 
+    if(I_ipOptWithMemory != NULL){
+        yDebug("deleting integrator I_IpOptWithMemory");
+        delete I_ipOptWithMemory;
+        I_ipOptWithMemory = NULL;    
+    }
     
     if (visualizeIniCubGui)
         yInfo("Resetting objects in iCubGui");
@@ -568,7 +604,6 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
     if (_x_d.size()==3)
     {
         movingTargetCircle = _movingCircle;
-        q_dot_0.resize(chainActiveDOF,0.0);
         q_dot.resize(chainActiveDOF,0.0);
         x_0=x_t;
         x_n=x_0;
@@ -720,7 +755,9 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
     // So, q_dot_0 is in degrees, but I have to convert it in radians before sending it to ipopt
-    Vector res=slv->solve(x_n,q_dot_0*CTRL_DEG2RAD,dT,vLimAdapted*CTRL_DEG2RAD,boundSmoothnessFlag,boundSmoothnessValue*CTRL_DEG2RAD,&exit_code)*CTRL_RAD2DEG;
+    
+   
+    Vector res=slv->solve(x_n,q_dot*CTRL_DEG2RAD,dT,vLimAdapted*CTRL_DEG2RAD,boundSmoothnessFlag,boundSmoothnessValue*CTRL_DEG2RAD,&exit_code)*CTRL_RAD2DEG;
 
     
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
@@ -732,7 +769,6 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
         printf("Result (solved velocities (deg/s)): %s\n",res.toString(3,3).c_str());
     }
     _exit_code=exit_code;
-    q_dot_0=res;  //result at this step will be prepared as q_dot_0 for the next iteration of the solver
     
     delete slv; slv = NULL;
     return res;
@@ -1149,6 +1185,9 @@ void reactCtrlThread::sendData()
             b.addDouble(timeToSolveProblem_s);
             if (controlMode == "positionDirect")
                 vectorIntoBottle(qIntegrated,b);
+            if (ipOptMemoryOn)
+                vectorIntoBottle(I_ipOptWithMemory->get(),b); //these will be positions integrated with the joint model 
+            
             // the delta_x, that is the 3D vector that ipopt commands to 
             //    the robot in order for x_t to reach x_n
             //yarp::os::Bottle &b_delta_x=out.addList();

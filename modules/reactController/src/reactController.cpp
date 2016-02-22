@@ -106,6 +106,7 @@ private:
     double       vMax;  // max velocity set for the joints
     
     string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk" 
+    bool ipOptMemoryOn; // whether ipopt should account for the real motor model
     
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
@@ -138,6 +139,7 @@ public:
         vMax         =  30.0;
         
         referenceGen = "uniformParticle";
+        bool ipOptMemoryOn = false;
         
         tactileCollisionPointsOn = false;
         visualCollisionPointsOn = false;
@@ -447,8 +449,25 @@ public:
                     yInfo("[reactController] referenceGen to use is: %s", referenceGen.c_str());
             }
             else yInfo("[reactController] Could not find referenceGen option in the config file; using %s as default",referenceGen.c_str());
-            
-            //************** getting collision points either from aggregated skin events or from pps (predictions from vision)
+        
+            //********************** ipopt using memory - motor model ***********************
+            if (rf.check("ipOptMemoryOn"))
+            {
+                if(rf.find("ipOptMemoryOn").asString()=="on"){
+                    ipOptMemoryOn = true;
+                    yInfo("[reactController] ipOptMemoryOn flag set to on.");
+                }
+                else{
+                    ipOptMemoryOn = false;
+                    yInfo("[reactController] ipOptMemoryOn flag set to off.");
+                }
+            }
+            else
+            {
+                 yInfo("[reactController] Could not find ipOptMemoryOn flag (on/off) in the config file; using %d as default",ipOptMemoryOn);
+            }  
+        
+         //************** getting collision points either from aggregated skin events or from pps (predictions from vision)
         if (rf.check("tactileCollisionPoints"))
         {
             if(rf.find("tactileCollisionPoints").asString()=="on"){
@@ -580,7 +599,7 @@ public:
             
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
                                           disableTorso, controlMode, trajSpeed, 
-                                          globalTol, vMax, tol, referenceGen, 
+                                          globalTol, vMax, tol, referenceGen, ipOptMemoryOn,
                                           tactileCollisionPointsOn,visualCollisionPointsOn,
                                           boundSmoothnessFlag,boundSmoothnessValue,
                                           visualizeTargetInSim, visualizeParticleInSim,
