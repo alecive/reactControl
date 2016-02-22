@@ -68,7 +68,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
 bool reactCtrlThread::threadInit()
 {
    
-    printMessage(5,"[reactCtrlThread] threadInit()\n");
+    printMessage(2,"[reactCtrlThread] threadInit()\n");
     state=STATE_WAIT;
 
     if (part=="left_arm")
@@ -304,7 +304,7 @@ bool reactCtrlThread::threadInit()
 
 void reactCtrlThread::run()
 {
-    printMessage(5,"[reactCtrlThread::run()] started, state: %d.\n",state);
+    printMessage(2,"[reactCtrlThread::run()] started, state: %d.\n",state);
     yarp::os::LockGuard lg(mutex);
     updateArmChain();
     printMessage(10,"[reactCtrlThread::run()] updated arm chain.\n");
@@ -369,6 +369,7 @@ void reactCtrlThread::run()
                 break;
             }
 
+            printMessage(2,"[reactCtrlThread::run()]: Will call solveIK.\n");
             double t_1=yarp::os::Time::now();
             q_dot = solveIK(ipoptExitCode);
             timeToSolveProblem_s  = yarp::os::Time::now()-t_1;
@@ -405,6 +406,10 @@ void reactCtrlThread::run()
     }
 
     sendData();
+    if (tactileCollisionPointsOn || visualCollisionPointsOn)
+        vLimAdapted = vLimNominal; //if it was changed by the avoidanceHandler, we reset it
+    printMessage(2,"[reactCtrlThread::run()] finished, state: %d.\n\n\n",state);
+    
 }
 
 void reactCtrlThread::threadRelease()
@@ -703,11 +708,14 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
         convertPosFromRootToSimFoR(x_n,x_n_sim);
         moveSphere(2,x_n_sim); //sphere created as second (particle) will keep the index 2  
     }
-    
-    AvoidanceHandlerAbstract *avhdl; 
-    avhdl = new AvoidanceHandlerTactile(*arm->asChain(),collisionPoints,verbosity);
-    vLimAdapted=avhdl->getVLIM(vLimNominal);
-    printMessage(2,"calling ipopt with the following joint velocity limits (deg): \n %s \n",vLimAdapted.toString(3,3).c_str());
+   
+    if (tactileCollisionPointsOn || visualCollisionPointsOn){
+        AvoidanceHandlerAbstract *avhdl; 
+        avhdl = new AvoidanceHandlerTactile(*arm->asChain(),collisionPoints,verbosity); //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
+        vLimAdapted=avhdl->getVLIM(vLimNominal);
+        delete avhdl; avhdl = NULL; //TODO this is not efficient, in the future find a way to reset the handler, not recreate
+    }
+    printMessage(3,"calling ipopt with the following joint velocity limits (deg): \n %s \n",vLimAdapted.toString(3,3).c_str());
     //printf("calling ipopt with the following joint velocity limits (rad): \n %s \n",(vLimAdapted*CTRL_DEG2RAD).toString(3,3).c_str());
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
@@ -725,8 +733,8 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     }
     _exit_code=exit_code;
     q_dot_0=res;  //result at this step will be prepared as q_dot_0 for the next iteration of the solver
-
-    delete slv;
+    
+    delete slv; slv = NULL;
     return res;
 }
 
