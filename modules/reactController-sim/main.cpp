@@ -55,6 +55,7 @@ class ControllerNLP : public Ipopt::TNLP
     Vector x0;
     Vector delta_x;
     Vector v0;
+    Matrix q_lim;
     Matrix v_lim;
     Matrix bounds;
     Matrix J0;
@@ -134,9 +135,13 @@ public:
         v0.resize(chain.getDOF(),0.0);
         v=v0;
 
-        v_lim.resize(chain.getDOF(),2);
+        q_lim.resize(chain.getDOF(),2);
+        v_lim.resize(chain.getDOF(),2);        
         for (size_t r=0; r<chain.getDOF(); r++)
         {
+            q_lim(r,0)=chain(r).getMin();
+            q_lim(r,1)=chain(r).getMax();
+
             v_lim(r,1)=std::numeric_limits<double>::max();
             v_lim(r,0)=-v_lim(r,1);
         }
@@ -203,11 +208,11 @@ public:
     /****************************************************************/
     void init()
     {
-        Integrator I(dt,chain.getAng());
+        Integrator I(dt,chain.getAng(),q_lim);
         for (size_t i=0; i<memory.size(); i++)
-            chain.setAng(I.integrate((kp*CTRL_DEG2RAD)*memory[i]));
+            I.integrate((kp*CTRL_DEG2RAD)*memory[i]);
 
-        x0=chain.EndEffPosition(I.get()); 
+        x0=chain.EndEffPosition(I.get());
         J0=chain.GeoJacobian().submatrix(0,2,0,chain.getDOF()-1);
         computeBounds();
     }
