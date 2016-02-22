@@ -205,7 +205,7 @@ public:
     {
         Integrator I(dt,chain.getAng());
         for (size_t i=0; i<memory.size(); i++)
-            I.integrate((kp*CTRL_DEG2RAD)*memory[i]);
+            chain.setAng(I.integrate((kp*CTRL_DEG2RAD)*memory[i]));
 
         x0=chain.EndEffPosition(I.get()); 
         J0=chain.GeoJacobian().submatrix(0,2,0,chain.getDOF()-1);
