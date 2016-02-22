@@ -10,7 +10,7 @@ global plot_asynchronously;
 
 save_movie=false;
 save_pics=false;
-plot_asynchronously = true; % in this mode, the timer will not be used, allowing to step the visualization
+plot_asynchronously = false; % in this mode, the timer will not be used, allowing to step the visualization
 
 if nargin>1
     mode=varargin{1};

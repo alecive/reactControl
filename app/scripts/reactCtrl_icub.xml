@@ -1,0 +1,86 @@
+<application>
+    <name>Reactcontrol</name>
+
+    <dependencies>
+    </dependencies>
+ 
+   
+
+   <module>
+        <name>reactController</name>
+        <parameters></parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>reactController</tag>
+    </module>
+
+    <module>
+        <name>iCubGui</name>
+        <parameters></parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>iCubGui</tag>
+    </module>
+
+    <module>
+        <name>skinEventsAggregator</name>
+        <parameters>general::robot icub</parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>skinEventsAggreg</tag>
+    </module>
+ 
+    <module>
+        <name>ppsAggregEventsForiCubGui</name>
+        <parameters></parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>aggregEvForiCubGui</tag>
+    </module>
+
+
+    <!--module>
+        <name></name>
+        <parameters></parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag></tag>
+    </module-->
+
+    <connection>
+      <from>/reactController/gui:o</from>
+	  <to>/iCubGui/objects</to>
+      <protocol>udp</protocol>
+    </connection>
+
+
+    <connection>
+      <from>/skinManager/skin_events:o</from>
+	  <to>/skinEventsAggregator/skin_events:i</to>
+      <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+       <from>/skinEventsAggregator/skin_events_aggreg:o</from>
+	   <to>/reactController/skin_events_aggreg:i</to>
+       <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/skinEventsAggregator/skin_events_aggreg:o</from>
+	<to>/ppsAggregEventsForiCubGui/skin_events_aggreg:i</to>
+        <protocol>udp</protocol>
+    </connection>	
+
+    <connection>
+        <from>/ppsAggregEventsForiCubGui/contacts:o</from>
+	<to>/iCubGui/forces</to>
+        <protocol>udp</protocol>
+    </connection>
+        
+    <!--connection>
+        <from></from>
+	<to></to>
+        <protocol>udp</protocol>
+    </connection-->
+</application>

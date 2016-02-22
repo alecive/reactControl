@@ -94,9 +94,9 @@ public:
     * @param xd        is the End-Effector target Pose to be attained. 
     * @param q_dot_0   are the initial joint velocities of the chain.
     * @param dt        is the time step to use in order to solve the task. 
-    * @param vm        is the max velocity allowed to the joints.
-    * @param avoidance_vectors collision threats from safety margin representation
-    * @param cpu_time  is the total time spent by IPOPT to solve the task.
+    * @param v_lim     are the joint velocity limits for individual joints.
+    * @param boundSmoothnessFlag whether the optimization should limit changes in joint vel control commmands between time steps
+    * @param boundSmoothnessValue  the actual value of the max allowed change in joint vel
     * @param exit_code stores the exit code (NULL by default). It is one of these:
     *                   SUCCESS
     *                   MAXITER_EXCEEDED
@@ -115,8 +115,7 @@ public:
     * @return estimated joint velocities.
     */
     virtual yarp::sig::Vector solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_dot_0,
-                                    double dt, const yarp::sig::Matrix &v_lim, bool bonundSmoothnessOn,
-                                    int *exit_code);
+                                    double dt, const yarp::sig::Matrix &v_lim, bool boundSmoothnessFlag, double boundSmoothnessValue, int *exit_code);
 
     /**
     * Default destructor.

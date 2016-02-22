@@ -98,14 +98,22 @@ private:
 
     bool disableTorso;  // flag to know if the torso has to be used or not
 
-    double   trajTime;  // trajectory time (deprecated)
+    string controlMode; //either "velocity" (original) or "positionDirect" (new option after problems with oscillations)
+    
     double  trajSpeed;  // trajectory speed
     double        tol;  // Tolerance of the ipopt task. The solver exits if norm2(x_d-x)<tol.
     double  globalTol;  // global tolerance of the task. The controller exits if norm(x_d-x)<globalTol
     double       vMax;  // max velocity set for the joints
     
+    string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk" 
+    bool ipOptMemoryOn; // whether ipopt should account for the real motor model
+    
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
+    
+    bool boundSmoothnessFlag; //for ipopt - whether changes in velocity commands need to be smooth
+    double boundSmoothnessValue; //actual allowed change in every joint velocity commands in deg/s from one time step to the next. Note: this is not adapted to the thread rate set by the rctCtrlRate param
+    
     bool visualizeTargetInSim; // will use the yarp rpc /icubSim/world to visualize the target
     bool visualizeParticleInSim; // will use the yarp rpc /icubSim/world to visualize the particle (trajectory - intermediate targets)
     bool visualizeCollisionPointsInSim; // will visualize the (potential) collision points in iCub simulator 
@@ -121,17 +129,23 @@ public:
         part  =        "left_arm";
 
         verbosity    =     0;
-        rctCtrlRate  =    20;    
+        rctCtrlRate  =    10;    
         prtclRate    =    10;
         disableTorso = false;
-        trajTime     =   3.0; //deprecated
+        controlMode = "velocity";        
         trajSpeed    =   0.1;
         tol          =  1e-5;
         globalTol    =  1e-2;
         vMax         =  30.0;
         
+        referenceGen = "uniformParticle";
+        bool ipOptMemoryOn = false;
+        
         tactileCollisionPointsOn = false;
         visualCollisionPointsOn = false;
+        
+        boundSmoothnessFlag = false;
+        boundSmoothnessValue = 30; // 30 deg/s change in a time step is huge - would have no effect 
         
         if(robot == "icubSim"){
             visualizeTargetInSim = true;
@@ -151,7 +165,7 @@ public:
         {
             yInfo("");
             yInfo("[reactController] received new x_d: %s", _xd.toString(3,3).c_str());
-            return rctCtrlThrd->setNewTarget(_xd);
+            return rctCtrlThrd->setNewTarget(_xd, false);
         }
         return false;
     }
@@ -167,6 +181,18 @@ public:
         return false;
     }
 
+    bool set_relative_circular_xd(const double _radius, const double _frequency)
+    {
+            yInfo("");
+            yInfo("[reactController] received new relative circular x_d: radius %f, frequency: %f.",_radius,_frequency);
+            if ((_radius>=0.0) && (_radius <= 0.3) && (_frequency >=0.0) && (_frequency<=1.0)  )
+                return rctCtrlThrd->setNewCircularTarget(_radius,_frequency);   
+            else{
+                yWarning("[reactController] set_relative_circular_xd(): expecting radius <0,0.3>, frequency <0,1>");    
+                return false;
+            }
+    }
+    
     bool set_tol(const double _tol)
     {
         return rctCtrlThrd->setTol(_tol);
@@ -210,33 +236,58 @@ public:
 
     bool setup_new_particle(const yarp::sig::Vector& _x_0_vel)
     {
-        yarp::sig::Vector _x_0 = _x_0_vel.subVector(0,2);
-        yarp::sig::Vector _vel = _x_0_vel.subVector(3,5);
-        yInfo("[reactController] Setting up new particle.. x_0: %s\tvel: %s\n",
+        if (referenceGen == "uniformParticle"){
+            yarp::sig::Vector _x_0 = _x_0_vel.subVector(0,2);
+            yarp::sig::Vector _vel = _x_0_vel.subVector(3,5);
+            yInfo("[reactController] Setting up new particle.. x_0: %s\tvel: %s\n",
                 _x_0.toString(3,3).c_str(), _vel.toString(3,3).c_str());
-        return prtclThrd->setupNewParticle(_x_0,_vel);
+            return prtclThrd->setupNewParticle(_x_0,_vel);
+        }
+        else{
+            yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
+            return false;
+        }
     }
 
     bool reset_particle(const yarp::sig::Vector& _x_0)
     {
-        if (_x_0.size()<3)
-        {
+        if (referenceGen == "uniformParticle"){
+            if (_x_0.size()<3)
+            {
+                return false;
+            }
+            yInfo("[reactController] Resetting particle to %s..",_x_0.toString(3,3).c_str());
+            return prtclThrd->resetParticle(_x_0);
+        }
+        else{
+            yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
             return false;
         }
-        yInfo("[reactController] Resetting particle to %s..",_x_0.toString(3,3).c_str());
-        return prtclThrd->resetParticle(_x_0);
     }
 
     bool stop_particle()
     {
-        yInfo("[reactController] Stopping particle..");
-        return prtclThrd->stopParticle();
+        if (referenceGen == "uniformParticle"){
+            yInfo("[reactController] Stopping particle..");
+            return prtclThrd->stopParticle();
+        }
+        else{
+            yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
+            return false;
+        }
     }
 
     yarp::sig::Vector get_particle()
     {
-        yInfo("[reactController] Getting particle..");
-        return prtclThrd->getParticle();
+        if (referenceGen == "uniformParticle"){
+            yInfo("[reactController] Getting particle..");
+            return prtclThrd->getParticle();
+        }
+        else{
+            yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
+            yarp::sig::Vector v(3,0.0);
+            return v;
+        }
     }
 
     bool enable_torso()
@@ -330,6 +381,21 @@ public:
             {
                  yInfo("[reactController] Could not find disableTorso flag (on/off) in the config file; using %d as default",disableTorso);
             }
+        
+        //*** we will command the robot in velocity or in positionDirect
+           if (rf.check("controlMode"))
+            {
+                controlMode = rf.find("controlMode").asString();
+                if(controlMode!="velocity" && controlMode!="positionDirect")
+                {
+                    controlMode="velocity";
+                    yWarning("[reactController] controlMode was not in the admissible values (velocity / positionDirect). Using %s as default.",controlMode.c_str());
+                }
+                else 
+                    yInfo("[reactController] controlMode to use is: %s", controlMode.c_str());
+            }
+            else yInfo("[reactController] Could not find controlMode option in the config file; using %s as default",controlMode.c_str());
+        
         //****************** prtclRate ******************
             if (rf.check("prtclRate"))
             {
@@ -370,7 +436,38 @@ public:
             }
             else yInfo("[reactController] Could not find globalTol in the config file; using %g as default",globalTol);
             
-        //************** getting collision points either from aggregated skin events or from pps (predictions from vision)
+         //*** generating positions for end-effector - trajectory between current pos and final target
+           if (rf.check("referenceGen"))
+            {
+                referenceGen = rf.find("referenceGen").asString();
+                if(referenceGen!="uniformParticle" && referenceGen!="minJerk")
+                {
+                    referenceGen="uniformParticle";
+                    yWarning("[reactController] referenceGen was not in the admissible values (uniformParticle / minJerk). Using %s as default.",referenceGen.c_str());
+                }
+                else 
+                    yInfo("[reactController] referenceGen to use is: %s", referenceGen.c_str());
+            }
+            else yInfo("[reactController] Could not find referenceGen option in the config file; using %s as default",referenceGen.c_str());
+        
+            //********************** ipopt using memory - motor model ***********************
+            if (rf.check("ipOptMemoryOn"))
+            {
+                if(rf.find("ipOptMemoryOn").asString()=="on"){
+                    ipOptMemoryOn = true;
+                    yInfo("[reactController] ipOptMemoryOn flag set to on.");
+                }
+                else{
+                    ipOptMemoryOn = false;
+                    yInfo("[reactController] ipOptMemoryOn flag set to off.");
+                }
+            }
+            else
+            {
+                 yInfo("[reactController] Could not find ipOptMemoryOn flag (on/off) in the config file; using %d as default",ipOptMemoryOn);
+            }  
+        
+         //************** getting collision points either from aggregated skin events or from pps (predictions from vision)
         if (rf.check("tactileCollisionPoints"))
         {
             if(rf.find("tactileCollisionPoints").asString()=="on"){
@@ -402,6 +499,29 @@ public:
         {
             yInfo("[reactController] Could not find visualCollisionPoints flag (on/off) in the config file; using %d as default",visualCollisionPointsOn);
         }
+        
+        if (rf.check("boundSmoothnessFlag"))
+        {
+            if(rf.find("boundSmoothnessFlag").asString()=="on"){
+                boundSmoothnessFlag = true;
+                yInfo("[reactController] boundSmoothnessFlag flag set to on.");
+                
+            }
+            else{
+                boundSmoothnessFlag = false;
+                yInfo("[reactController] boundSmoothnessFlag flag set to off.");
+            }
+        }
+        else
+        {
+            yInfo("[reactController] Could not find boundSmoothnessFlag flag (on/off) in the config file; using %d as default",boundSmoothnessFlag);
+        }
+        if (rf.check("boundSmoothnessValue"))
+        {
+              boundSmoothnessValue = rf.find("boundSmoothnessValue").asDouble();
+               yInfo("[reactController] boundSmoothnessValue set to %g deg/s (allowed change in joint vel in a time step).",boundSmoothnessValue);
+        }
+        else yInfo("[reactController] Could not find boundSmoothnessValue in the config file; using %g as default",boundSmoothnessValue);
            
          //********************** Visualizations in simulator ***********************
             if (robot == "icubSim"){
@@ -452,21 +572,37 @@ public:
                     yInfo("[reactController] Could not find visualizeCollisionPointsInSim flag (on/off) in the config file; using %d as default",visualizeCollisionPointsInSim);
                 }
             }
+            else{
+                visualizeTargetInSim = false;
+                yInfo("[reactController] visualizeTargetInSim flag set to off.");
+                visualizeParticleInSim = false;
+                yInfo("[reactController] visualizeParticleInSim flag set to off.");
+                visualizeCollisionPointsInSim = false;
+                yInfo("[reactController] visualizeCollisionPointsInSim flag set to off.");
+
+            }
 
         //************* THREAD *************
-        prtclThrd = new particleThread(prtclRate, name, verbosity);
-        if (!prtclThrd->start())
-        {
-            delete prtclThrd;
-            prtclThrd=0;
+        if(referenceGen == "uniformParticle"){
+            prtclThrd = new particleThread(prtclRate, name, verbosity);
+            if (!prtclThrd->start())
+            {
+                delete prtclThrd;
+                prtclThrd=0;
 
-            yError("[reactController] particleThread wasn't instantiated!!");
-            return false;
+                yError("[reactController] particleThread wasn't instantiated!!");
+                return false;
+            }
         }
-
+        else
+            prtclThrd = NULL;
+            
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
-                                          disableTorso, trajSpeed, globalTol, vMax,
-                                          tol, tactileCollisionPointsOn, visualCollisionPointsOn, visualizeTargetInSim, visualizeParticleInSim,
+                                          disableTorso, controlMode, trajSpeed, 
+                                          globalTol, vMax, tol, referenceGen, ipOptMemoryOn,
+                                          tactileCollisionPointsOn,visualCollisionPointsOn,
+                                          boundSmoothnessFlag,boundSmoothnessValue,
+                                          visualizeTargetInSim, visualizeParticleInSim,
                                           visualizeCollisionPointsInSim, prtclThrd);
         if (!rctCtrlThrd->start())
         {
@@ -501,12 +637,14 @@ public:
         yInfo("REACT CONTROLLER: Stopping threads..");
         if (rctCtrlThrd)
         {
+            yInfo("REACT CONTROLLER: Stopping rctCtrlThrd...");
             rctCtrlThrd->stop();
             delete rctCtrlThrd;
             rctCtrlThrd=0;
         }
         if (prtclThrd)
         {
+            yInfo("REACT CONTROLLER: Stopping prtclThrd...");
             prtclThrd->stop();
             delete prtclThrd;
             prtclThrd=0;

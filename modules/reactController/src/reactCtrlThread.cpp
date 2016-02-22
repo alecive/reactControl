@@ -42,27 +42,35 @@ using namespace iCub::skinDynLib;
 #define STATE_REACH             1
 #define STATE_IDLE              2
 
+#define NR_ARM_JOINTS 7
+#define NR_TORSO_JOINTS 3 
+
 /*********** public methods ****************************************************************************/ 
 
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,  const string &_part,
-                                 int _verbosity, bool _disableTorso,  double _trajSpeed, double _globalTol, 
-                                 double _vMax, double _tol, bool _tactileCollisionPointsOn, bool _visualCollisionPointsOn,
-                                 bool _visualizeTargetInSim, bool _visualizeParticleInSim,
-                                 bool _visualizeCollisionPointsInSim,particleThread *_pT) :
+                                 int _verbosity, bool _disableTorso,  string _controlMode, 
+                                 double _trajSpeed, double _globalTol, double _vMax, double _tol,
+                                 string _referenceGen, bool _ipOptMemoryOn, 
+                                 bool _tactileCollisionPointsOn, bool _visualCollisionPointsOn,
+                                 bool _boundSmoothnessFlag, double _boundSmoothnessValue, 
+                                 bool _visualizeTargetInSim, bool _visualizeParticleInSim, bool _visualizeCollisionPointsInSim,
+                                 particleThread *_pT) :
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
-                                 verbosity(_verbosity), useTorso(!_disableTorso),
+                                 verbosity(_verbosity), useTorso(!_disableTorso), controlMode(_controlMode),
                                  trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol),
+                                 referenceGen(_referenceGen), ipOptMemoryOn(_ipOptMemoryOn),
                                  tactileCollisionPointsOn(_tactileCollisionPointsOn), visualCollisionPointsOn(_visualCollisionPointsOn),
-                                 visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
+                                 boundSmoothnessFlag(_boundSmoothnessFlag), boundSmoothnessValue(_boundSmoothnessValue),                                 visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
                                  visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim)
 {
-   prtclThrd=_pT;
+    dT=getRate()/1000.0;
+    prtclThrd=_pT;  //in case of referenceGen != uniformParticle, NULL will be received
 }
 
 bool reactCtrlThread::threadInit()
 {
    
-    printMessage(5,"[reactCtrlThread] threadInit()\n");
+    printMessage(2,"[reactCtrlThread] threadInit()\n");
     state=STATE_WAIT;
 
     if (part=="left_arm")
@@ -78,7 +86,7 @@ bool reactCtrlThread::threadInit()
    
     arm = new iCub::iKin::iCubArm(part_short.c_str());
     // Release / block torso links (blocked by default)
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < NR_TORSO_JOINTS; i++)
     {
         if (useTorso)
         {
@@ -92,12 +100,23 @@ bool reactCtrlThread::threadInit()
 
     //we set up the variables based on the current DOF - that is without torso joints if torso is blocked
     chainActiveDOF = arm->getDOF();
-    q_dot_0.resize(chainActiveDOF,0.0);
+ 
+    //N.B. All angles in this thread are in degrees
+    qA.resize(NR_ARM_JOINTS,0.0); //current values of arm joints (should be 7)
+    if (useTorso)
+        qT.resize(NR_TORSO_JOINTS,0.0); //current values of torso joints (3, in the order expected for iKin: yaw, roll, pitch)
+    q.resize(chainActiveDOF,0.0); //current joint angle values (10 if torso is on, 7 if off)
+    qIntegrated.resize(chainActiveDOF,0.0); //joint angle pos predictions from integrator
+    lim.resize(chainActiveDOF,2); //joint pos limits
+    
     vLimNominal.resize(chainActiveDOF,2);
+    vLimAdapted.resize(chainActiveDOF,2);
     for (size_t r=0; r<chainActiveDOF; r++)
     {
         vLimNominal(r,0)=-vMax;
+        vLimAdapted(r,0)=-vMax;
         vLimNominal(r,1)=vMax;
+        vLimAdapted(r,1)=vMax;
     }
     //optionally: if (useTorso) vLimNominal(1,0)=vLimNominal(1,1)=0.0;  // disable torso roll
          
@@ -130,6 +149,7 @@ bool reactCtrlThread::threadInit()
     {
         okA = okA && ddA.view(iencsA);
         okA = okA && ddA.view(ivelA);
+        okA = okA && ddA.view(iposDirA);
         okA = okA && ddA.view(imodA);
         okA = okA && ddA.view(ilimA);
     }
@@ -160,6 +180,7 @@ bool reactCtrlThread::threadInit()
     {
         okT = okT && ddT.view(iencsT);
         okT = okT && ddT.view(ivelT);
+        okT = okT && ddT.view(iposDirT);
         okT = okT && ddT.view(imodT);
         okT = okT && ddT.view(ilimT);
     }
@@ -178,22 +199,101 @@ bool reactCtrlThread::threadInit()
         return false;
     }
    
-    /************ variables related to the optimization problem for ipopt *******/
+    //filling joint pos limits Matrix
+    iCub::iKin::iKinChain chainTemp = *(arm->asChain());
+    for (size_t jointIndex=0; jointIndex<chainActiveDOF; jointIndex++)
+    {
+        lim(jointIndex,0)= CTRL_RAD2DEG*(chainTemp(jointIndex).getMin());
+        lim(jointIndex,1)= CTRL_RAD2DEG*(chainTemp(jointIndex).getMax());
+    }
    
-    slv=NULL;
-    ipoptBoundSmoothnessOn = true;
+    /************ variables related to target and the optimization problem for ipopt *******/
+    if(referenceGen == "minJerk") 
+        refGenMinJerk = new minJerkRefGen(3,dT,1.0); //dim 3, dT, trajTime 1s - will be overwritten later
+    else
+        refGenMinJerk = NULL;
+  
+    movingTargetCircle = false;
+    radius = 0.0; frequency = 0.0;
+    circleCenter.resize(3,0.0);
+    circleCenter(0) = -0.3; //for safety, we assign the x-coordinate on in it within iCub's reachable space
+  
+    updateArmChain(); 
+        
+    
     x_0.resize(3,0.0);
     x_t.resize(3,0.0);
     x_n.resize(3,0.0);
     x_d.resize(3,0.0);
+       
+    slv=NULL; //ipOpt solver - our wrapper class
+    memory.clear();
+    if (ipOptMemoryOn){
+        motorModel_kp = 1.1;
+        motorModel_td = 0.08;
+        memory.insert(memory.begin(),(int)floor(motorModel_td/dT),
+                      zeros(chainActiveDOF)); //for say lag td 0.08s and dT 0.01, we will have 8 velocity vectors in the memory 
+   
+        I_ipOptWithMemory = new Integrator(dT,q,lim);
+    }
+    else{
+        motorModel_kp = 1.0;
+        motorModel_td = 0.0;
+        I_ipOptWithMemory = NULL;
+    }
+        
   
-    /***************** ports *************************************************************************************/
+    if(controlMode == "positionDirect")
+         I = new Integrator(dT,q,lim);        
+    else
+        I = NULL;
+    
+      
+    /*** visualize in iCubGui  ***************/
+    visualizeIniCubGui = true;
+    visualizeParticleIniCubGui = true;
+    visualizeTargetIniCubGui = true;
+    
+    /***************** ports and files*************************************************************************************/
+    
     aggregPPSeventsInPort.open("/"+name+"/pps_events_aggreg:i");
     aggregSkinEventsInPort.open("/"+name+"/skin_events_aggreg:i");
     
-    outPort.open("/"+name +"/data:o"); //for dumping
+    if (visualizeIniCubGui)
+        outPort.open("/"+name +"/data:o"); //for dumping
+    outPortiCubGui.open(("/"+name+"/gui:o").c_str());
     
+    fout_param.open("param.log");
+    
+    /***** writing to param file ******************************************************/
+    fout_param<<chainActiveDOF<<" ";
+    for (size_t i=0; i<chainActiveDOF; i++)
+    {
+        fout_param<<lim(i,0)<<" ";
+        fout_param<<lim(i,1)<<" ";
+    }
+    for (size_t j=0; j<chainActiveDOF; j++)
+    {
+        fout_param<<vLimNominal(j,0)<<" ";
+        fout_param<<vLimNominal(j,1)<<" ";
+    }
+    fout_param<<-1<<" "<<trajSpeed<<" "<<tol<<" "<<globalTol<<" "<<dT<<" "<<boundSmoothnessFlag<<" "<<boundSmoothnessValue<<" ";
+    // the -1 used to be trajTime, keep it for compatibility with matlab scripts 
+    if(controlMode == "velocity")
+        fout_param<<"1 ";
+    else if(controlMode == "positionDirect")
+        fout_param<<"2 ";
+    if(ipOptMemoryOn)
+        fout_param<<"1 ";
+    else 
+        fout_param<<"0 ";
+    
+    yInfo("Written to param file and closing..");    
+    fout_param.close();
+     
+      
     /**** visualizing targets and collision points in simulator ***************************/
+    
     if((robot == "icubSim") && (visualizeTargetInSim || visualizeParticleInSim || visualizeCollisionPointsInSim) ){ 
         string port2icubsim = "/" + name + "/sim:o";
         if (!portToSimWorld.open(port2icubsim.c_str())) {
@@ -225,16 +325,22 @@ bool reactCtrlThread::threadInit()
 
 void reactCtrlThread::run()
 {
+    printMessage(2,"[reactCtrlThread::run()] started, state: %d.\n",state);
     yarp::os::LockGuard lg(mutex);
     updateArmChain();
-    
+    printMessage(10,"[reactCtrlThread::run()] updated arm chain.\n");
     //debug - see Jacobian
     //iCub::iKin::iKinChain &chain_temp=*arm->asChain();
     //yarp::sig::Matrix J1_temp=chain_temp.GeoJacobian();
     //yDebug("GeoJacobian: \n %s \n",J1_temp.toString(3,3).c_str());    
         
+    if (ipOptMemoryOn){
+        for (size_t i=0; i<memory.size(); i++)
+            I_ipOptWithMemory->integrate((motorModel_kp)*memory[i]);
+    }
+        
     collisionPoints.clear();
-    
+        
     /* For now, let's experiment with some fixed points on the forearm skin, emulating the vectors coming from margin of safety, 
      to test the performance of the algorithm
     Let's try 3 triangle midpoints on the upper patch on the forearm, taking positions from CAD, 
@@ -261,14 +367,19 @@ void reactCtrlThread::run()
     collisionPointStruct.magnitude = 0.1; //~ "probability of collision" */
     
     if (tactileCollisionPointsOn){
+        printMessage(9,"[reactCtrlThread::run()] Getting tactile collisions from port.\n");
         getCollisionPointsFromPort(aggregSkinEventsInPort, TACTILE_INPUT_GAIN, part_short,collisionPoints);
     }
-    if (visualCollisionPointsOn) //note, these are not mutually exclusive - they can co-exist
+    if (visualCollisionPointsOn){ //note, these are not mutually exclusive - they can co-exist
+        printMessage(9,"[reactCtrlThread::run()] Getting visual collisions from port.\n");
         getCollisionPointsFromPort(aggregPPSeventsInPort, VISUAL_INPUT_GAIN, part_short,collisionPoints);
+    }
     //after this point, we don't care where did the collision points come from - our relative confidence in the two modalities is expressed in the gains
     
-    if (visualizeCollisionPointsInSim)
+    if (visualizeCollisionPointsInSim){
+        printMessage(5,"[reactCtrlThread::run()] will visualize collision points in simulator.\n");
         showCollisionPointsInSim();
+    }
     
     switch (state)
     {
@@ -276,7 +387,7 @@ void reactCtrlThread::run()
             break;
         case STATE_REACH:
         {
-            if (norm(x_t-x_d) < globalTol) //we keep solving until we reach the desired target
+            if ((norm(x_t-x_d) < globalTol) && (!movingTargetCircle)) //we keep solving until we reach the desired target
             {
                 yDebug(0,"[reactCtrlThread] norm(x_t-x_d) %g\tglobalTol %g\n",norm(x_t-x_d),globalTol);
                 if (!stopControlHelper())
@@ -284,17 +395,29 @@ void reactCtrlThread::run()
                 break;
             }
 
-            int exit_code;
-            q_dot = solveIK(exit_code);
+            printMessage(2,"[reactCtrlThread::run()]: Will call solveIK.\n");
+            double t_1=yarp::os::Time::now();
+            q_dot = solveIK(ipoptExitCode);
+            timeToSolveProblem_s  = yarp::os::Time::now()-t_1;
             
-            if (exit_code==Ipopt::Solve_Succeeded || exit_code==Ipopt::Maximum_CpuTime_Exceeded)
+            
+            if (ipoptExitCode==Ipopt::Solve_Succeeded || ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
             {
-                if (exit_code==Ipopt::Maximum_CpuTime_Exceeded)
+                if (ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
                     yWarning("[reactCtrlThread] Ipopt cpu time was higher than the rate of the thread!");
                 
-                if (!controlArm(q_dot))
-                    yError("I am not able to properly control the arm!");
+                if(controlMode == "positionDirect"){
+                    qIntegrated = I->integrate(q_dot);    
+                    if (!controlArm(controlMode,qIntegrated))
+                            yError("I am not able to properly control the arm in positionDirect!");
+                }
+                else if (controlMode == "velocity"){
+                    if (!controlArm(controlMode,q_dot))
+                        yError("I am not able to properly control the arm in velocity!");
+                }
             }
+            else
+                  yWarning("[reactCtrlThread] Ipopt solve did not succeed!");
 
             break;
         }
@@ -307,18 +430,53 @@ void reactCtrlThread::run()
         default:
             yFatal("[reactCtrlThread] reactCtrlThread should never be here!!! Step: %d",state);
     }
-
+    
+    if(ipOptMemoryOn){
+        memory.push_back(q_dot);
+        memory.pop_front();
+    }
+    
     sendData();
+    if (tactileCollisionPointsOn || visualCollisionPointsOn)
+        vLimAdapted = vLimNominal; //if it was changed by the avoidanceHandler, we reset it
+    printMessage(2,"[reactCtrlThread::run()] finished, state: %d.\n\n\n",state);
+    
 }
 
 void reactCtrlThread::threadRelease()
 {
-    yInfo("Returning to position mode..");
-        delete encsA; encsA = NULL;
-        delete encsT; encsT = NULL;
-        delete   arm;   arm = NULL;
+    yInfo("threadRelease(): deleting encoder arrays and arm object.");
+    delete encsA; encsA = NULL;
+    delete encsT; encsT = NULL;
+    delete   arm;   arm = NULL;
 
     collisionPoints.clear();    
+    
+    if(refGenMinJerk != NULL){
+        yDebug("deleting refGenMinJerk.");
+        delete refGenMinJerk;
+        refGenMinJerk = NULL;    
+    }
+    if(I != NULL){
+        yDebug("deleting integrator I");
+        delete I;
+        I = NULL;    
+    }
+    memory.clear(); 
+    if(I_ipOptWithMemory != NULL){
+        yDebug("deleting integrator I_IpOptWithMemory");
+        delete I_ipOptWithMemory;
+        I_ipOptWithMemory = NULL;    
+    }
+    
+    if (visualizeIniCubGui)
+        yInfo("Resetting objects in iCubGui");
+        if (outPortiCubGui.getOutputCount()>0)
+        {
+            Bottle b;
+            b.addString("reset");
+            outPortiCubGui.write(b);
+        }
     
     if((robot == "icubSim") && (visualizeTargetInSim || visualizeParticleInSim || visualizeCollisionPointsInSim) ){ 
         yInfo("Deleting objects from simulator world.");
@@ -336,10 +494,16 @@ void reactCtrlThread::threadRelease()
         aggregSkinEventsInPort.close();
         outPort.interrupt();
         outPort.close();
+        if (outPortiCubGui.isOpen()){
+            outPortiCubGui.interrupt();
+            outPortiCubGui.close();
+        }
         if (portToSimWorld.isOpen()){
             portToSimWorld.interrupt();
             portToSimWorld.close();
         }
+   // yInfo("Closing files..");    
+     //   fout_param.close();
     yInfo("Closing controllers..");
         stopControl();
         ddA.close();
@@ -435,12 +599,12 @@ bool reactCtrlThread::setVerbosity(const int _verbosity)
     return true;
 }
 
-bool reactCtrlThread::setNewTarget(const Vector& _x_d)
+bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
 {
     if (_x_d.size()==3)
     {
-        q_dot_0.resize(arm->getDOF(),0.0);
-        q_dot.resize(arm->getDOF(),0.0);
+        movingTargetCircle = _movingCircle;
+        q_dot.resize(chainActiveDOF,0.0);
         x_0=x_t;
         x_n=x_0;
         x_d=_x_d;
@@ -455,41 +619,45 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d)
                 moveSphere(1,x_d_sim);
             }
         }
-        
-        t_0=yarp::os::Time::now();
-        yarp::sig::Vector vel(3,0.0);
-        vel=trajSpeed * (x_d-x_0) / norm(x_d-x_0);
-        t_d=t_0+trajTime;
-
-        if (prtclThrd->setupNewParticle(x_0,vel))
-        {
-            yInfo("[reactCtrlThread] got new target: x_0: %s",x_0.toString(3,3).c_str());
-            yInfo("[reactCtrlThread]                 x_d: %s",x_d.toString(3,3).c_str());
-            yInfo("[reactCtrlThread]                 vel: %s",vel.toString(3,3).c_str());
-            state=STATE_REACH;
-
-            if(visualizeParticleInSim){
-                    Vector x_0_sim(3,0.0);
-                    convertPosFromRootToSimFoR(x_0,x_0_sim);
-                    if (firstTarget){
-                        createStaticSphere(0.02,x_0_sim);
-                    }
-                    else{
-                       moveSphere(2,x_0_sim); //sphere created as second will keep the index 2  
-                    }
+                
+        if (referenceGen == "uniformParticle"){
+            yarp::sig::Vector vel(3,0.0);
+            vel=trajSpeed * (x_d-x_0) / norm(x_d-x_0);
+            if (!prtclThrd->setupNewParticle(x_0,vel)){
+                yWarning("prtclThrd->setupNewParticle(x_0,vel) returned false.\n");
+                return false;
             }
-            
-           
         }
-        else{
-            yWarning("prtclThrd->setupNewParticle(x_0,vel) returned false.\n");
-            return false;
-        }
+        else if(referenceGen == "minJerk"){
+            refGenMinJerk->init(x_0); //initial pos
+            refGenMinJerk->setTs(dT); //time step
+            //calculate the time to reach from the distance to target and desired velocity
+            double T = sqrt( (x_d(0)-x_0(0))*(x_d(0)-x_0(0)) + (x_d(1)-x_0(1))*(x_d(1)-x_0(1)) + (x_d(2)-x_0(2))*(x_d(2)-x_0(2)) )  / trajSpeed; 
+            refGenMinJerk->setT(T);
+       }
         
-        if (firstTarget){
-            firstTarget = false;
+        yInfo("[reactCtrlThread] got new target: x_0: %s",x_0.toString(3,3).c_str());
+        yInfo("[reactCtrlThread]                 x_d: %s",x_d.toString(3,3).c_str());
+        //yInfo("[reactCtrlThread]                 vel: %s",vel.toString(3,3).c_str());
+        state=STATE_REACH;
+
+        if(visualizeTargetIniCubGui)
+            sendiCubGuiObject("target");
+               
+        if(visualizeParticleInSim){
+            Vector x_0_sim(3,0.0);
+            convertPosFromRootToSimFoR(x_0,x_0_sim);
+            if (firstTarget)
+               createStaticSphere(0.02,x_0_sim);
+            else
+               moveSphere(2,x_0_sim); //sphere created as second will keep the index 2  
         }
+          
     }
+        
+    if (firstTarget)
+        firstTarget = false;
+        
     return true;
 }
 
@@ -497,8 +665,18 @@ bool reactCtrlThread::setNewRelativeTarget(const Vector& _rel_x_d)
 {
     if(_rel_x_d == Vector(3,0.0)) return false;
 
-    Vector x_d = x_t + _rel_x_d;
-    return setNewTarget(x_d);
+    Vector _x_d = x_t + _rel_x_d;
+    return setNewTarget(_x_d,false);
+}
+
+bool reactCtrlThread::setNewCircularTarget(const double _radius,const double _frequency)
+{
+    radius = _radius;
+    frequency = _frequency;
+    circleCenter = x_t; // set it to end-eff position at this point 
+    
+    setNewTarget(getPosMovingTargetOnCircle(),true);
+    
 }
 
 
@@ -518,8 +696,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // Next step will be provided iteratively.
     // The equation is x(t_next) = x_t + (x_d - x_t) * (t_next - t_now/T-t_now)
     //                              s.t. t_next = t_now + dT
-    double dT=getRate()/1000.0;
-    double t_t=yarp::os::Time::now();
+    
     int    exit_code=-1;
 
     // if (t_t>=t_d)
@@ -534,178 +711,92 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // x_n = x_0 + (x_d-x_0) * ((t_t+dT-t_0)/(t_d-t_0));
     // Third solution: use the particleThread
     // If the particle reached the target, let's stop it
-    if (norm(x_n-x_0) > norm(x_d-x_0)) //if the particle is farther than the final target, we reset the particle - it will stay with the target
-    {
-        prtclThrd->resetParticle(x_d);
+    if (movingTargetCircle){
+        x_d = getPosMovingTargetOnCircle();
+        if (visualizeTargetIniCubGui){
+            sendiCubGuiObject("target");
+        }
+        if(visualizeTargetInSim){
+            Vector x_d_sim(3,0.0);
+            convertPosFromRootToSimFoR(x_d,x_d_sim);
+            moveSphere(1,x_d_sim);
+        }
     }
-
-    x_n=prtclThrd->getParticle(); //to get next target 
+    if (referenceGen == "uniformParticle"){
+        if ( (norm(x_n-x_0) > norm(x_d-x_0)) || movingTargetCircle) //if the particle is farther than the final target, we reset the particle - it will stay with the target; or if target is moving
+        {
+            prtclThrd->resetParticle(x_d);
+        }
+        x_n=prtclThrd->getParticle(); //to get next target
+    }
+    else if(referenceGen == "minJerk"){
+        refGenMinJerk->computeNextValues(x_t,x_d);    
+        x_n = refGenMinJerk->getPos();
+    }
  
+    if(visualizeParticleIniCubGui){
+        sendiCubGuiObject("particle");
+    }
+    
     if(visualizeParticleInSim){
         Vector x_n_sim(3,0.0);
         convertPosFromRootToSimFoR(x_n,x_n_sim);
         moveSphere(2,x_n_sim); //sphere created as second (particle) will keep the index 2  
     }
-    
-    AvoidanceHandlerAbstract *avhdl; 
-    avhdl = new AvoidanceHandlerTactile(*arm->asChain(),collisionPoints,verbosity);
-    Matrix vLimAdapted=avhdl->getVLIM(vLimNominal);
-    printf("calling ipopt with the following joint velocity limits (deg): \n %s \n",vLimAdapted.toString(3,3).c_str());
+   
+    if (tactileCollisionPointsOn || visualCollisionPointsOn){
+        AvoidanceHandlerAbstract *avhdl; 
+        avhdl = new AvoidanceHandlerTactile(*arm->asChain(),collisionPoints,verbosity); //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
+        vLimAdapted=avhdl->getVLIM(vLimNominal);
+        delete avhdl; avhdl = NULL; //TODO this is not efficient, in the future find a way to reset the handler, not recreate
+    }
+    printMessage(3,"calling ipopt with the following joint velocity limits (deg): \n %s \n",vLimAdapted.toString(3,3).c_str());
     //printf("calling ipopt with the following joint velocity limits (rad): \n %s \n",(vLimAdapted*CTRL_DEG2RAD).toString(3,3).c_str());
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
     // So, q_dot_0 is in degrees, but I have to convert it in radians before sending it to ipopt
-    Vector res=slv->solve(x_n,q_dot_0*CTRL_DEG2RAD,dT,vLimAdapted*CTRL_DEG2RAD,ipoptBoundSmoothnessOn,&exit_code)*CTRL_RAD2DEG;
+    
+   
+    Vector res=slv->solve(x_n,q_dot*CTRL_DEG2RAD,dT,vLimAdapted*CTRL_DEG2RAD,boundSmoothnessFlag,boundSmoothnessValue*CTRL_DEG2RAD,&exit_code)*CTRL_RAD2DEG;
 
+    
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
-    printMessage(0,"x_n: %s\tx_d: %s\tdT %g\n",x_n.toString(3,3).c_str(),x_d.toString(3,3).c_str(),dT);
-    printMessage(0,"x_0: %s\tx_t: %s\n",       x_0.toString(3,3).c_str(),x_t.toString(3,3).c_str());
-    printMessage(0,"norm(x_n-x_t): %g\tnorm(x_d-x_n): %g\tnorm(x_d-x_t): %g\n",
+    if(verbosity >= 1){
+        printf("x_n: %s\tx_d: %s\tdT %g\n",x_n.toString(3,3).c_str(),x_d.toString(3,3).c_str(),dT);
+        printf("x_0: %s\tx_t: %s\n",       x_0.toString(3,3).c_str(),x_t.toString(3,3).c_str());
+        printf("norm(x_n-x_t): %g\tnorm(x_d-x_n): %g\tnorm(x_d-x_t): %g\n",
                     norm(x_n-x_t), norm(x_d-x_n), norm(x_d-x_t));
-    printMessage(0,"Result: %s\n",res.toString(3,3).c_str());
+        printf("Result (solved velocities (deg/s)): %s\n",res.toString(3,3).c_str());
+    }
     _exit_code=exit_code;
-    q_dot_0=res;  //result at this step will be prepared as q_dot_0 for the next iteration of the solver
-
-    delete slv;
+    
+    delete slv; slv = NULL;
     return res;
 }
 
-bool reactCtrlThread::controlArm(const yarp::sig::Vector &_vels)
-{   
-    VectorOf<int> jointsToSetA;
-    VectorOf<int> jointsToSetT;
-    if (!areJointsHealthyAndSet(jointsToSetA,"arm","velocity"))
-    {
-        yWarning("[reactCtrlThread]Stopping control because arm joints are not healthy!");
-        stopControlHelper();
-        return false;
-    }
 
-    if (useTorso)
-    {
-        if (!areJointsHealthyAndSet(jointsToSetT,"torso","velocity"))
-        {
-            yWarning("[reactCtrlThread]Stopping control because torso joints are not healthy!");
-            stopControlHelper();
-            return false;
-        }
-    }
-
-    if (!setCtrlModes(jointsToSetA,"arm","velocity"))
-    {
-        yError("[reactCtrlThread]I am not able to set the arm joints to velocity mode!");
-        return false;
-    }   
-
-    if (useTorso)
-    {
-        if (!setCtrlModes(jointsToSetT,"torso","velocity"))
-        {
-            yError("[reactCtrlThread]I am not able to set the torso joints to velocity mode!");
-            return false;
-        }
-    }
-
-    printMessage(1,"Moving the robot with velocities: %s\n",_vels.toString(3,3).c_str());
-    if (useTorso)
-    {
-        Vector velsT(3,0.0);
-        velsT[0] = _vels[2]; //swapping pitch and yaw as per iKin vs. motor interface convention
-        velsT[1] = _vels[1];
-        velsT[2] = _vels[0]; //swapping pitch and yaw as per iKin vs. motor interface convention
-        
-        ivelT->velocityMove(velsT.data());
-        ivelA->velocityMove(_vels.subVector(3,9).data()); //indexes 3 to 9 are the arm joints velocities
-    }
-    else
-    {
-        ivelA->velocityMove(_vels.data()); //if there is not torso, _vels has only the 7 arm joints
-    }
-
-    return true;
-}
-
-Vector reactCtrlThread::computeDeltaX()
-{
-    iCub::iKin::iKinChain &chain=*arm->asChain();
-    yarp::sig::Matrix J1=chain.GeoJacobian();
-    yarp::sig::Matrix J_cst;
-    J_cst.resize(3,arm->getDOF());
-    J_cst.zero();
-    submatrix(J1,J_cst,0,2,0,arm->getDOF()-1);
-    double dT=getRate()/1000.0;
-
-    return dT*J_cst*q_dot;
-}
-
-void reactCtrlThread::sendData()
-{
-    if (outPort.getOutputCount()>0)
-    {
-        if (state==STATE_REACH)
-        {
-            yarp::os::Bottle out;
-            out.clear();
-
-            // 1: the sate of the robot
-            out.addInt(state);
-
-            // 2: the desired final target
-            yarp::os::Bottle &b_x_d=out.addList();
-            iCub::skinDynLib::vectorIntoBottle(x_d,b_x_d);
-
-            // 3: the current desired target given by the particle
-            yarp::os::Bottle &b_x_n=out.addList();
-            iCub::skinDynLib::vectorIntoBottle(x_n,b_x_n);
-
-            // 4: the end effector position in which the robot currently is
-            yarp::os::Bottle &b_x_t=out.addList();
-            iCub::skinDynLib::vectorIntoBottle(x_t,b_x_t);
-
-            // 5: the delta_x, that is the 3D vector that ipopt commands to 
-            //    the robot in order for x_t to reach x_n
-            yarp::os::Bottle &b_delta_x=out.addList();
-            iCub::skinDynLib::vectorIntoBottle(computeDeltaX(),b_delta_x);
-
-            outPort.write(out);
-        }
-    }
-}
-
-bool reactCtrlThread::stopControlHelper()
-{
-    state=STATE_IDLE;
-    if (useTorso)
-    {
-        return ivelA->stop() && ivelT->stop();
-    }
-
-    return ivelA->stop();
-}
+ /**** kinematic chain, control, ..... *****************************/
 
 void reactCtrlThread::updateArmChain()
 {    
     iencsA->getEncoders(encsA->data());
-    Vector qA=encsA->subVector(0,6);
+    qA=encsA->subVector(0,NR_ARM_JOINTS-1);
 
     if (useTorso)
     {
         iencsT->getEncoders(encsT->data());
-        Vector qT(3,0.0);
         qT[0]=(*encsT)[2];
         qT[1]=(*encsT)[1];
         qT[2]=(*encsT)[0];
 
-        Vector q(10,0.0);
         q.setSubvector(0,qT);
-        q.setSubvector(3,qA);
-        arm->setAng(q*CTRL_DEG2RAD);
+        q.setSubvector(NR_TORSO_JOINTS,qA);
     }
     else
     {
-        arm->setAng(qA*CTRL_DEG2RAD);
+        q = qA;        
     }
-
+    arm->setAng(q*CTRL_DEG2RAD);
     H=arm->getH();
     x_t=H.subcol(0,3,3);
 }
@@ -737,7 +828,7 @@ void reactCtrlThread::printJointsBounds()
     double min, max;
     iCub::iKin::iKinChain &chain=*arm->asChain();
 
-    for (size_t i = 0; i < arm->getDOF(); i++)
+    for (size_t i = 0; i < chainActiveDOF; i++)
     {
         min=chain(i).getMin()*CTRL_RAD2DEG;
         max=chain(i).getMax()*CTRL_RAD2DEG;
@@ -748,45 +839,65 @@ void reactCtrlThread::printJointsBounds()
 bool reactCtrlThread::areJointsHealthyAndSet(VectorOf<int> &jointsToSet,
                                              const string &_p, const string &_s)
 {
+    jointsToSet.clear();
     VectorOf<int> modes;
     if (_p=="arm")
     {
-        modes=encsA->size();
+        modes.resize(NR_ARM_JOINTS,VOCAB_CM_IDLE);
         imodA->getControlModes(modes.getFirst());
     }
     else if (_p=="torso")
     {
-        modes=encsT->size();
+        modes.resize(NR_TORSO_JOINTS,VOCAB_CM_IDLE);
         imodT->getControlModes(modes.getFirst());
     }
     else
         return false;
-
-    for (size_t i=0; i<modes.size(); i++)
+    
+    for (size_t i=0; i<modes.size(); i++) //TODO in addition, one might check if some joints are blocked like here:  ServerCartesianController::areJointsHealthyAndSet
     {
         if ((modes[i]==VOCAB_CM_HW_FAULT) || (modes[i]==VOCAB_CM_IDLE))
             return false;
 
         if (_s=="velocity")
         {
-            if (modes[i]!=VOCAB_CM_MIXED || modes[i]!=VOCAB_CM_VELOCITY)
+            if ((modes[i]!=VOCAB_CM_MIXED) && (modes[i]!=VOCAB_CM_VELOCITY)){ // we will set only those that are not in correct modes already
+                //printMessage(3,"    joint %d in %s mode, pushing to jointsToSet \n",i,Vocab::decode(modes[i]).c_str());
                 jointsToSet.push_back(i);
+            }
         }
         else if (_s=="position")
         {
-            if (modes[i]!=VOCAB_CM_MIXED || modes[i]!=VOCAB_CM_POSITION)
+            if ((modes[i]!=VOCAB_CM_MIXED) && (modes[i]!=VOCAB_CM_POSITION))
+                jointsToSet.push_back(i);
+        }
+        else if (_s=="positionDirect")
+        {
+            if (modes[i]!=VOCAB_CM_POSITION_DIRECT)
                 jointsToSet.push_back(i);
         }
 
     }
-
+    if(verbosity >= 10){
+        printf("[reactCtrlThread::areJointsHealthyAndSet] %s: ctrl Modes retreived: ",_p.c_str());
+        for (size_t j=0; j<modes.size(); j++){
+                printf("%s ",Vocab::decode(modes[j]).c_str());
+        }
+        printf("\n");
+        printf("Indexes of joints to set: ");
+        for (size_t k=0; k<jointsToSet.size(); k++){
+                printf("%d ",jointsToSet[k]);
+        }
+        printf("\n");
+    }
+    
     return true;
 }
 
 bool reactCtrlThread::setCtrlModes(const VectorOf<int> &jointsToSet,
                                    const string &_p, const string &_s)
 {
-    if (_s!="position" && _s!="velocity")
+    if (_s!="position" && _s!="velocity" && _s!="positionDirect")
         return false;
 
     if (jointsToSet.size()==0)
@@ -802,6 +913,10 @@ bool reactCtrlThread::setCtrlModes(const VectorOf<int> &jointsToSet,
         else if (_s=="velocity")
         {
             modes.push_back(VOCAB_CM_VELOCITY);
+        }
+        else if (_s=="positionDirect")
+        {
+            modes.push_back(VOCAB_CM_POSITION_DIRECT);
         }
     }
 
@@ -822,6 +937,137 @@ bool reactCtrlThread::setCtrlModes(const VectorOf<int> &jointsToSet,
 
     return true;
 }
+
+//N.B. the targeValues can be either positions or velocities, depending on the control mode!
+bool reactCtrlThread::controlArm(const string _controlMode, const yarp::sig::Vector &_targetValues)
+{   
+    VectorOf<int> jointsToSetA;
+    VectorOf<int> jointsToSetT;
+    if (!areJointsHealthyAndSet(jointsToSetA,"arm",_controlMode))
+    {
+        yWarning("[reactCtrlThread::controlArm] Stopping control because arm joints are not healthy!");
+        stopControlHelper();
+        return false;
+    }
+ 
+    if (useTorso)
+    {
+        if (!areJointsHealthyAndSet(jointsToSetT,"torso",_controlMode))
+        {
+            yWarning("[reactCtrlThread::controlArm] Stopping control because torso joints are not healthy!");
+            stopControlHelper();
+            return false;
+        }
+    }
+    
+    if (!setCtrlModes(jointsToSetA,"arm",_controlMode))
+    {
+        yError("[reactCtrlThread::controlArm] I am not able to set the arm joints to %s mode!",_controlMode.c_str());
+        return false;
+    }   
+
+    if (useTorso)
+    {
+        if (!setCtrlModes(jointsToSetT,"torso",_controlMode))
+        {
+            yError("[reactCtrlThread::controlArm] I am not able to set the torso joints to %s mode!",_controlMode.c_str());
+            return false;
+        }
+    }
+    /*if(verbosity>=10){
+        printf("[reactCtrlThread::controlArm] setting following arm joints to %s: ",Vocab::decode(VOCAB_CM_VELOCITY).c_str());
+        for (size_t k=0; k<jointsToSetA.size(); k++){
+                printf("%d ",jointsToSetA[k]);
+        }
+        printf("\n");
+        if(useTorso){
+            printf("[reactCtrlThread::controlArm] setting following torso joints to %s: ",Vocab::decode(VOCAB_CM_VELOCITY).c_str());
+            for (size_t l=0; l<jointsToSetT.size(); l++){
+                printf("%d ",jointsToSetT[l]);
+            }
+            printf("\n");       
+        }
+    }*/
+    if (_controlMode == "velocity"){
+        printMessage(1,"[reactCtrlThread::controlArm] Joint velocities (iKin order, deg/s): %s\n",_targetValues.toString(3,3).c_str());
+        if (useTorso)
+        {
+            Vector velsT(TORSO_DOF,0.0);
+            velsT[0] = _targetValues[2]; //swapping pitch and yaw as per iKin vs. motor interface convention
+            velsT[1] = _targetValues[1];
+            velsT[2] = _targetValues[0]; //swapping pitch and yaw as per iKin vs. motor interface convention
+        
+            printMessage(2,"    velocityMove(): torso (swap pitch & yaw): %s\n",velsT.toString(3,3).c_str());
+            ivelT->velocityMove(velsT.data());
+            ivelA->velocityMove(_targetValues.subVector(3,9).data()); //indexes 3 to 9 are the arm joints velocities
+        }
+        else
+        {
+            ivelA->velocityMove(_targetValues.data()); //if there is not torso, _targetValues has only the 7 arm joints
+        }
+    }
+    else if(_controlMode == "positionDirect"){ 
+         printMessage(1,"[reactCtrlThread::controlArm] Target joint positions (iKin order, deg): %s\n",_targetValues.toString(3,3).c_str());
+        if (useTorso)
+        {
+            Vector posT(3,0.0);
+            posT[0] = _targetValues[2]; //swapping pitch and yaw as per iKin vs. motor interface convention
+            posT[1] = _targetValues[1];
+            posT[2] = _targetValues[0]; //swapping pitch and yaw as per iKin vs. motor interface convention
+        
+            printMessage(2,"    positionDirect: torso (swap pitch & yaw): %s\n",posT.toString(3,3).c_str());
+            iposDirT->setPositions(posT.data());
+            iposDirA->setPositions(_targetValues.subVector(3,9).data()); //indexes 3 to 9 are the arm joints 
+        }
+        else
+        {
+            iposDirA->setPositions(_targetValues.data()); //if there is not torso, _targetValues has only the 7 arm joints
+        }
+        
+    }
+        
+    return true;
+}
+
+
+bool reactCtrlThread::stopControlHelper()
+{
+    state=STATE_IDLE;
+    if (useTorso)
+    {
+        return ivelA->stop() && ivelT->stop();
+    }
+
+    return ivelA->stop();
+}
+
+
+/***************** auxiliary computations  *******************************/
+ 
+Vector reactCtrlThread::getPosMovingTargetOnCircle()
+{
+      Vector _x_d=circleCenter; 
+      //x-coordinate will stay constant; we set y, and z
+      _x_d[1]+=radius*cos(2.0*M_PI*frequency*yarp::os::Time::now());
+      _x_d[2]+=radius*sin(2.0*M_PI*frequency*yarp::os::Time::now());
+
+      return _x_d;
+}
+
+
+Vector reactCtrlThread::computeDeltaX()
+{
+    iCub::iKin::iKinChain &chain=*arm->asChain();
+    yarp::sig::Matrix J1=chain.GeoJacobian();
+    yarp::sig::Matrix J_cst;
+    J_cst.resize(3,chainActiveDOF);
+    J_cst.zero();
+    submatrix(J1,J_cst,0,2,0,chainActiveDOF-1);
+    double dT=getRate()/1000.0;
+
+    return dT*J_cst*q_dot;
+}
+
 
 
 void reactCtrlThread::convertPosFromRootToSimFoR(const Vector &pos, Vector &outPos)
@@ -867,11 +1113,12 @@ void reactCtrlThread::convertPosFromLinkToRootFoR(const Vector &pos,const SkinPa
  
 }
 
+ /**** communication through ports in/out ****************/
 
 
 bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, double gain, string which_chain,std::vector<collisionPoint_t> &collPoints)
 {
-    
+    printMessage(9,"[reactCtrlThread::getCollisionPointsFromPort].\n");
     collisionPoint_t collPoint;    
     SkinPart sp = SKIN_PART_UNKNOWN;
     
@@ -904,12 +1151,138 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
         return true;
     }
     else{
-       yDebug("getAvoidanceVectorsFromPort(): no avoidance vectors on the port.") ;  
+       printMessage(9,"[reactCtrlThread::getCollisionPointsFromPort]: no avoidance vectors on the port.\n") ;
        return false;
     };   
 }
-    
 
+void reactCtrlThread::sendData()
+{
+    ts.update();
+    printMessage(5,"[reactCtrlThread::sendData()]\n");
+    if (outPort.getOutputCount()>0)
+    {
+        if (state==STATE_REACH)
+        {
+            yarp::os::Bottle b;
+            b.clear();
+
+            //col 1
+            b.addInt(chainActiveDOF);
+            //cols 2-4: the desired final target (for end-effector)
+            vectorIntoBottle(x_d,b);
+            // 5:7 the end effector position in which the robot currently is
+            vectorIntoBottle(x_t,b);
+            // 8:10 the current desired target given by the particle (for end-effector)
+            vectorIntoBottle(x_n,b);
+            //variable - if torso on: 11:20: joint velocities as solution to control and sent to robot 
+            vectorIntoBottle(q_dot,b); 
+            //variable - if torso on: 21:30: joint positions as solution from ipopt and sent to robot 
+            vectorIntoBottle(q,b); 
+            //variable - if torso on: 31:50; joint vel limits as input to ipopt, after avoidanceHandler,
+            matrixIntoBottle(vLimAdapted,b); // assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
+            b.addInt(ipoptExitCode);
+            b.addDouble(timeToSolveProblem_s);
+            if (controlMode == "positionDirect")
+                vectorIntoBottle(qIntegrated,b);
+            if (ipOptMemoryOn)
+                vectorIntoBottle(I_ipOptWithMemory->get(),b); //these will be positions integrated with the joint model 
+            
+            // the delta_x, that is the 3D vector that ipopt commands to 
+            //    the robot in order for x_t to reach x_n
+            //yarp::os::Bottle &b_delta_x=out.addList();
+            //iCub::skinDynLib::vectorIntoBottle(computeDeltaX(),b_delta_x);
+                         
+            outPort.setEnvelope(ts);
+            outPort.write(b);
+        }
+    }
+}
+
+
+/**** visualizations using iCubGui **************************************/
+
+
+void reactCtrlThread::sendiCubGuiObject(const string object_type)
+{
+    if (outPortiCubGui.getOutputCount()>0)
+    {
+        Bottle obj;
+        if (object_type == "particle"){
+            obj.addString("object");
+            obj.addString("particle");
+     
+            // size 
+            obj.addDouble(20.0);
+            obj.addDouble(20.0);
+            obj.addDouble(20.0);
+        
+            // positions - iCubGui works in mm
+            obj.addDouble(1000*x_n(0));
+            obj.addDouble(1000*x_n(1));
+            obj.addDouble(1000*x_n(2));
+        
+            // orientation
+            obj.addDouble(0.0);
+            obj.addDouble(0.0);
+            obj.addDouble(0.0);
+        
+            // color
+            obj.addInt(255);
+            obj.addInt(125);
+            obj.addInt(125);
+        
+            // transparency
+            obj.addDouble(0.9);
+        }
+        else if(object_type == "target"){
+            obj.addString("object");
+            obj.addString("target");
+     
+            // size 
+            obj.addDouble(40.0);
+            obj.addDouble(40.0);
+            obj.addDouble(40.0);
+        
+            // positions - iCubGui works in mm
+            obj.addDouble(1000*x_d(0));
+            obj.addDouble(1000*x_d(1));
+            obj.addDouble(1000*x_d(2));
+        
+            // orientation
+            obj.addDouble(0.0);
+            obj.addDouble(0.0);
+            obj.addDouble(0.0);
+        
+            // color
+            obj.addInt(255);
+            obj.addInt(125);
+            obj.addInt(125);
+        
+            // transparency
+            obj.addDouble(0.7);
+            
+        }
+       
+        outPortiCubGui.write(obj);
+        
+    }
+}
+
+void reactCtrlThread::deleteiCubGuiObject(const string object_type)
+{
+    if (outPortiCubGui.getOutputCount()>0)
+    {
+        Bottle obj;
+        obj.addString("delete");
+        obj.addString(object_type);
+        outPortiCubGui.write(obj);
+    }
+}
+ 
+ 
+  
+ /***** visualizations in iCub simulator ********************************/
 
 void reactCtrlThread::createStaticSphere(double radius, const Vector &pos)
 {

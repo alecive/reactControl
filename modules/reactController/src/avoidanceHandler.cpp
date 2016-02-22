@@ -40,14 +40,16 @@ AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &
                     printf("chain.getH() (end-effector): \n %s \n",chain.getH().toString(3,3).c_str());
                 }
                 int linkNrForCurrentSkinPartFrame = 0;
-                if (dim ==7){
-                    printf("SkinPart %s, linkNum %d, chain.getH() (skin part frame): \n %s \n",SkinPart_s[(*it).skin_part].c_str(),SkinPart_2_LinkNum[(*it).skin_part].linkNum,chain.getH(SkinPart_2_LinkNum[(*it).skin_part].linkNum).toString(3,3).c_str());
+                if (verbosity >= 5){
+                    if (dim ==7){
+                        printf("SkinPart %s, linkNum %d, chain.getH() (skin part frame): \n %s \n",SkinPart_s[(*it).skin_part].c_str(),SkinPart_2_LinkNum[(*it).skin_part].linkNum,chain.getH(SkinPart_2_LinkNum[(*it).skin_part].linkNum).toString(3,3).c_str());
+                    }
+                    else if (dim == 10){
+                        printf("SkinPart %s, linkNum %d + 3, chain.getH() (skin part frame): \n %s \n",SkinPart_s[(*it).skin_part].c_str(),SkinPart_2_LinkNum[(*it).skin_part].linkNum,chain.getH(SkinPart_2_LinkNum[(*it).skin_part].linkNum + 3).toString(3,3).c_str());
+                    }
                 }
-                else if (dim == 10){
-                    printf("SkinPart %s, linkNum %d + 3, chain.getH() (skin part frame): \n %s \n",SkinPart_s[(*it).skin_part].c_str(),SkinPart_2_LinkNum[(*it).skin_part].linkNum,chain.getH(SkinPart_2_LinkNum[(*it).skin_part].linkNum + 3).toString(3,3).c_str());
-                }      
                 yarp::sig::Matrix JfullChain = chain.GeoJacobian(); //6 rows, n columns for every active DOF
-                printf("GeoJacobian matrix for canonical end-effector (palm): \n %s \n",JfullChain.toString(3,3).c_str());
+                //printf("GeoJacobian matrix for canonical end-effector (palm): \n %s \n",JfullChain.toString(3,3).c_str());
                                  
                 // Remove all the more distal links after the collision point 
                 // if the skin part is a hand, no need to remove any links from the chain

@@ -1,14 +1,15 @@
 % Author: Ugo Pattacini, Matej Hoffmann
 
 plot_target = true; % useful in Fig. if target is static
-visualize_all_joint_pos = false;
-visualize_all_joint_vel = false;
+visualize_all_joint_pos = true;
+visualize_all_joint_vel = true;
 visualize_single_joint_in_detail = false;
 save_figs = false;
 
 %path_prefix = 'circular_target/'; %'static_target/';
 %path_prefix = 'staticTarget_staticObst/obstRad_0.04_pos_-0.35_-0.05_0.04/';
-path_prefix = 'staticTarget_staticObst/obstRad_0.04_pos_-0.35_-0.05_0.02/';
+%path_prefix = 'staticTarget_staticObst/obstRad_0.04_pos_-0.35_-0.05_0.02/';
+path_prefix = 'input/';
 
 if save_figs
   mkdir('output'); 
@@ -18,10 +19,7 @@ end
 % joint vel limits for every DOF
 d_params=importdata([path_prefix 'param.log']);
 % data file -  in columns on the output for 10 DOF case: 1:time, 2:4 target, 5:8 obstacle, 9:11 end-eff target, 12:21 joint velocities, 22:31 joint pos, 32:end - control points
-d_n=importdata([path_prefix 'none.log']);
-d_v=importdata([path_prefix 'visuoSscalingGain4.log']);
-%d_v=importdata([path_prefix 'visuo.log']);
-d_t=importdata([path_prefix 'tactile.log']);
+d=importdata([path_prefix 'data.log']);
 
 if(d_params(1) == 10) % 10 DOF situation - 3 torso, 7 arm
     joint_info(1).name = '1st torso - pitch'; joint_info(2).name = '2nd torso - roll'; joint_info(3).name = '3rd torso - yaw'; 
@@ -38,35 +36,22 @@ if(d_params(1) == 10) % 10 DOF situation - 3 torso, 7 arm
 end
 
 
-sz_n=size(d_n);
-sz_v=size(d_v);
-sz_t=size(d_t);
-if (~prod(sz_n==sz_v) || ~prod(sz_v==sz_t))
-    error('input data with different sizes!');
-end
-L=sz_n(1);
+sz=size(d);
+L=sz(1);
 
-c_n=[0.000 0.447 0.741];
-c_v=[0.929 0.694 0.125];
-c_t=[0.850 0.325 0.098];
+c1=[0.000 0.447 0.741];
 
 %% reference vs. end-effector
 f1 = figure(1); clf(f1); set(f1,'Color','white','Name','Reference vs. end-effector');  
 hold; axis equal; view([-130 30]); grid;
-xlim([-1.0 -0.2]); xlabel('x [m]');
-ylim([-0.1 0.1]); ylabel('y [m]');
-zlim([-0.2 0.2]); zlabel('z [m]');
+xlim([-1.0 0.1]); xlabel('x [m]');
+ylim([-0.5 0.5]); ylabel('y [m]');
+zlim([-0.3 0.3]); zlabel('z [m]');
 
-plot3(d_n(:,52),d_n(:,53),d_n(:,54),'color',c_n,'linewidth',1.3);
-plot3(-0.3+d_v(:,52),d_v(:,53),d_v(:,54),'color',c_v,'linewidth',1.3);
-plot3(-0.6+d_t(:,52),d_t(:,53),d_t(:,54),'color',c_t,'linewidth',1.3);
-
-legend({'none','vision','tactile'});
+plot3(d(:,52),d(:,53),d(:,54),'color',c1,'linewidth',1.3);
 
 if plot_target
-   plot3(d_n(1,2),d_n(1,3),d_n(1,4),'go','LineWidth',10); % plots the actual target
-   plot3(-0.3+d_v(1,2),d_v(1,3),d_v(1,4),'go','LineWidth',10); % plots the actual target
-   plot3(-0.6+d_t(1,2),d_t(1,3),d_t(1,4),'go','LineWidth',10); % plots the actual target
+   plot3(d(1,2),d(1,3),d(1,4),'go','LineWidth',10); % plots the actual target
 end
 
 n=10;
@@ -76,17 +61,10 @@ c(:,:,2)=ones(n); c(:,:,2) = c(:,:,2) * .7;
 c(:,:,3)=ones(n); c(:,:,3) = c(:,:,3) * .7;
 % obstacle
 for i=1:10:L
-    r=d_n(i,8);
-    h=surf(d_n(i,5)+r*x,d_n(i,6)+r*y,d_n(i,7)+r*z,c,'EdgeColor','none');
+    r=d(i,8);
+    h=surf(d(i,5)+r*x,d(i,6)+r*y,d(i,7)+r*z,c,'EdgeColor','none');
     alpha(h,0.03);
 
-    r=d_v(i,8);
-    h=surf(-0.3+d_v(i,5)+r*x,d_v(i,6)+r*y,d_v(i,7)+r*z,c,'EdgeColor','none');
-    alpha(h,0.03);
-
-    r=d_t(i,8);
-    h=surf(-0.6+d_t(i,5)+r*x,d_t(i,6)+r*y,d_t(i,7)+r*z,c,'EdgeColor','none');
-    alpha(h,0.03);
     
     drawnow;
 end
@@ -97,47 +75,25 @@ end
 %% distance control-points/obstacle-center
 f2 = figure(2); clf(f2); set(f2,'Color','white','Name','Distance control-points obstacle-center');
 
-dist_n=zeros(L,3);
-dist_v=zeros(L,3);
-dist_t=zeros(L,3);
+dist=zeros(L,3);
 for i=1:L
-    dist_n(i,:)=[norm(d_n(i,5:7)-d_n(i,52:54)) ...
-                 norm(d_n(i,5:7)-d_n(i,55:57)) ...
-                 norm(d_n(i,5:7)-d_n(i,58:60))];
+    dist(i,:)=[norm(d(i,5:7)-d(i,52:54)) ...
+                 norm(d(i,5:7)-d(i,55:57)) ...
+                 norm(d(i,5:7)-d(i,58:60))];
 
-    dist_v(i,:)=[norm(d_v(i,5:7)-d_v(i,52:54)) ...
-                 norm(d_v(i,5:7)-d_v(i,55:57)) ...
-                 norm(d_v(i,5:7)-d_v(i,58:60))];
-
-    dist_t(i,:)=[norm(d_t(i,5:7)-d_t(i,52:54)) ...
-                 norm(d_t(i,5:7)-d_t(i,55:57)) ...
-                 norm(d_t(i,5:7)-d_t(i,58:60))];            
+                
 end
 
-t=d_n(:,1);
-r=d_n(1,8);
+t=d(:,1);
+r=d(1,8);
 
 subplot(131); hold; grid;
-plot(t,[dist_n(:,1) dist_v(:,1) dist_t(:,1)]);
+plot(t,dist(:,1));
 plot([t(1) t(end)],[r r],'r--');
 xlim([0 7]); xlabel('t [s]');
 ylim([0 0.2]); ylabel('distance [m]');
 title('control point #1');
 
-subplot(132); hold; grid;
-plot(t,[dist_n(:,2) dist_v(:,2) dist_t(:,2)]);
-plot([t(1) t(end)],[r r],'r--');
-xlim([0 7]); xlabel('t [s]');
-ylim([0 0.2]);
-title('control point #2');
-
-subplot(133); hold; grid;
-plot(t,[dist_n(:,3) dist_v(:,3) dist_t(:,3)]);
-xlim([0 7]); xlabel('t [s]');
-ylim([0 0.2]);
-title('control point #3');
-legend({'none','vision','tactile'});
-plot([t(1) t(end)],[r r],'r--');
 
 if save_figs
    saveas(f2,'output/DistanceControlPointsObstacleCenter.fig');
@@ -148,14 +104,14 @@ if visualize_all_joint_pos
     if(d_params(1) == 10) % 10 DOF situation - 3 torso, 7 arm
         data = [];
         f3 = figure(3); clf(f3); set(f3,'Color','white','Name','Joint positions - No avoidance');  
-        f4 = figure(4); clf(f4); set(f4,'Color','white','Name','Joint positions - Visual avoidance');  
-        f5 = figure(5); clf(f5); set(f5,'Color','white','Name','Joint positions - Tactile avoidance');  
+       % f4 = figure(4); clf(f4); set(f4,'Color','white','Name','Joint positions - Visual avoidance');  
+       % f5 = figure(5); clf(f5); set(f5,'Color','white','Name','Joint positions - Tactile avoidance');  
 
-        for i=1:3 % for all variants of the simulation
+        for i=1:1 % for all variants of the simulation
             switch i
                 case 1 
                     set(0, 'currentfigure', f3); 
-                    data = d_n;
+                    data = d;
                 case 2 
                     set(0, 'currentfigure', f4); 
                     data = d_v;
@@ -180,8 +136,8 @@ if visualize_all_joint_pos
     end
     if save_figs
         saveas(f3,'output/JointPositionsNoAvoidance.fig');
-        saveas(f4,'output/JointPositionsVisualAvoidance.fig');
-        saveas(f5,'output/JointPositionsTactileAvoidance.fig');
+        %saveas(f4,'output/JointPositionsVisualAvoidance.fig');
+        %saveas(f5,'output/JointPositionsTactileAvoidance.fig');
     end    
 end
 
@@ -193,14 +149,14 @@ if visualize_all_joint_vel
     if(d_params(1) == 10) % 10 DOF situation - 3 torso, 7 arm
         data = [];
         f6 = figure(6); clf(f6); set(f6,'Color','white','Name','Joint velocities - No avoidance');  
-        f7 = figure(7); clf(f7); set(f7,'Color','white','Name','Joint velocities - Visual avoidance');  
-        f8 = figure(8); clf(f8); set(f8,'Color','white','Name','Joint velocities - Tactile avoidance');  
+        %f7 = figure(7); clf(f7); set(f7,'Color','white','Name','Joint velocities - Visual avoidance');  
+        %f8 = figure(8); clf(f8); set(f8,'Color','white','Name','Joint velocities - Tactile avoidance');  
 
-        for i=1:3 % for all variants of the simulation
+        for i=1:1 % for all variants of the simulation
             switch i
                 case 1 
                     set(0, 'currentfigure', f6); 
-                    data = d_n;
+                    data = d;
                 case 2 
                     set(0, 'currentfigure', f7); 
                     data = d_v;
@@ -231,8 +187,8 @@ if visualize_all_joint_vel
     end
     if save_figs
         saveas(f6,'output/JointVelocitiesNoAvoidance.fig');
-        saveas(f7,'output/JointVelocitiesVisualAvoidance.fig');
-        saveas(f8,'output/JointVelocitiesTactileAvoidance.fig');
+        %saveas(f7,'output/JointVelocitiesVisualAvoidance.fig');
+        %saveas(f8,'output/JointVelocitiesTactileAvoidance.fig');
     end
 end
 
@@ -247,14 +203,14 @@ if visualize_single_joint_in_detail
     if(d_params(1) == 10) % 10 DOF situation - 3 torso, 7 arm
         data = [];
         f10 = figure(10); clf(f10); set(f10,'Color','white','Name',['No avoidance - ' joint_info(j).name]);  
-        f11 = figure(11); clf(f11); set(f11,'Color','white','Name',['Visual avoidance - ' joint_info(j).name]);  
-        f12 = figure(12); clf(f12); set(f12,'Color','white','Name',['Tactile avoidance - ' joint_info(j).name]);  
+        %f11 = figure(11); clf(f11); set(f11,'Color','white','Name',['Visual avoidance - ' joint_info(j).name]);  
+        %f12 = figure(12); clf(f12); set(f12,'Color','white','Name',['Tactile avoidance - ' joint_info(j).name]);  
 
-        for i=1:3 % for all variants of the simulation
+        for i=1:1 % for all variants of the simulation
             switch i
                 case 1 
                     set(0, 'currentfigure', f10); 
-                    data = d_n;
+                    data = d;
                 case 2 
                     set(0, 'currentfigure', f11); 
                     data = d_v;
@@ -289,8 +245,8 @@ if visualize_single_joint_in_detail
     
     if save_figs
         saveas(f10,'output/SelectedJointDetailNoAvoidance.fig');
-        saveas(f11,'output/SelectedJointDetailVisualAvoidance.fig');
-        saveas(f12,'output/SelectedJointDetailTactileAvoidance.fig');
+        %saveas(f11,'output/SelectedJointDetailVisualAvoidance.fig');
+        %saveas(f12,'output/SelectedJointDetailTactileAvoidance.fig');
     end
 end
 

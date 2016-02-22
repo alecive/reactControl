@@ -29,6 +29,7 @@
 #include "reactIpOpt.h"
 
 #define CAST_IPOPTAPP(x)             (static_cast<IpoptApplication*>(x))
+#define EXTRA_MARGIN_SHOULDER_INEQ_RAD 0.05 //each of the ineq. constraints for shoulder joints will have an extra safety marging of 0.05 rad on each side - i.e. the actual allowed range will be smaller
 
 using namespace std;
 using namespace yarp::os;
@@ -78,8 +79,9 @@ protected:
     // The current joint configuration
     yarp::sig::Vector q_t;
     // The maximum allowed speed at the joints; joints in rows; first col minima, second col maxima
-    //They may be set adaptively by avoidanceHandler from the outside
+    //They may be set adaptively by avoidanceHandler from the outside - currently through constructor
     yarp::sig::Matrix v_lim;
+    yarp::sig::Matrix v_bounds; //identical structure like v_lim, but ensures that joint pos limits will be respected
     
     // The cost function
     yarp::sig::Vector cost_func;
@@ -102,8 +104,8 @@ protected:
     // The torso reduction rate at for the max velocities sent to the torso(default 3.0)
     double torsoReduction;  
     //for smooth changes in joint velocities
-    bool boundSmoothnessOn; 
-    double boundSmoothness; //new joint vel can differ by max boundSmoothness from the previous one (rad)
+    bool boundSmoothnessFlag; 
+    double boundSmoothnessValue; //new joint vel can differ by max boundSmoothness from the previous one (rad)
     
     //joint position limits handled in a smooth way - see Pattacini et al. 2010 - iCub Cart. control - Fig. 8
     yarp::sig::Vector qGuard;
@@ -147,64 +149,6 @@ protected:
         return ss.str();
     }
 
-    /************************************************************************/
-    bool computeWeight(const yarp::sig::Vector &q)
-    {
-        for (unsigned int i=0; i<dim; i++)
-        {
-            bool print=false;
-            if ((q[i]>=qGuardMinInt[i]) && (q[i]<=qGuardMaxInt[i]))
-                W(i)=W_min;
-            else if ((q[i]<=qGuardMinExt[i]) || (q[i]>=qGuardMaxExt[i]))
-                W(i)=W_min+W_gamma;
-            else if (q[i]<qGuardMinInt[i])
-            {
-                W(i)=0.5*W_gamma*(1.0+tanh(-6.0*(q[i]-qGuardMinCOG[i])/qGuard[i]))+W_min;
-            }
-            else
-            {
-                W(i)=0.5*W_gamma*(1.0+tanh( 6.0*(q[i]-qGuardMaxCOG[i])/qGuard[i]))+W_min;
-            }
-
-            if (print)
-            {
-                printf("weight vector: %s\n", W.toString(3,3).c_str());
-            }
-        }
-        
-        return true;
-    }
-
-    /************************************************************************/
-    bool computeWeightDerivatives(const yarp::sig::Vector &q)
-    {
-        for (unsigned int i=0; i<dim; i++)
-        {
-            bool print=false;
-            if ((q[i]>=qGuardMinInt[i]) && (q[i]<=qGuardMaxInt[i]))
-                W_dot(i)=0.0;
-            else if ((q[i]<=qGuardMinExt[i]) || (q[i]>=qGuardMaxExt[i]))
-                W_dot(i)=0.0;
-            else if (q[i]<qGuardMinInt[i])
-            {
-                W_dot(i)= (3*W_gamma*(pow(tanh((6*q[i] - 6*qGuardMinCOG[i])/qGuard[i]),2) - 1))/qGuard[i];
-                // W_dot(i)=0.5*W_gamma*(1.0+tanh(-6.0*(q[i]-qGuardMinCOG[i])/qGuard[i]))+W_min;
-            }
-            else
-            {
-                W_dot(i)=-(3*W_gamma*(pow(tanh((6*q[i] - 6*qGuardMaxCOG[i])/qGuard[i]),2) - 1))/qGuard[i];
-                // W_dot(i)=0.5*W_gamma*(1.0+tanh( 6.0*(q[i]-qGuardMaxCOG[i])/qGuard[i]))+W_min;
-            }
-
-            if (print)
-            {
-                printf("weight vector: %s\n", W_dot.toString(3,3).c_str());
-            }
-        }
-        
-        return true;
-    }
-    
     
     /********to ensure joint pos limits but in a smooth way around the limits****************************************/
     void computeGuard()
@@ -231,7 +175,37 @@ protected:
         printMessage(4,"qGuardMaxExt %s\n",(CTRL_RAD2DEG*qGuardMaxExt).toString(3,3).c_str());
     }
     
-   
+    /***********velocity limits are shaped to guarantee that joint pos limits are respected******************************************/
+    void computeBounds()
+    {
+        for (size_t i=0; i<dim; i++)
+        {
+            double qi=chain(i).getAng();
+            if ((qi>=qGuardMinInt[i]) && (qi<=qGuardMaxInt[i]))
+                v_bounds(i,0)=v_bounds(i,1)=1.0;
+            else if ((qi<=qGuardMinExt[i]) || (qi>=qGuardMaxExt[i]))
+                v_bounds(i,0)=v_bounds(i,1)=0.0;
+            else if (qi<qGuardMinInt[i])
+            {
+                v_bounds(i,0)=0.5*(1.0+tanh(+10.0*(qi-qGuardMinCOG[i])/qGuard[i]));
+                v_bounds(i,1)=1.0;
+            }
+            else
+            {
+                v_bounds(i,0)=1.0;
+                v_bounds(i,1)=0.5*(1.0+tanh(-10.0*(qi-qGuardMaxCOG[i])/qGuard[i]));
+            }
+        }
+        
+        for (size_t i=0; i<chain.getDOF(); i++)
+        {
+            v_bounds(i,0)*=v_lim(i,0);
+            v_bounds(i,1)*=v_lim(i,1);
+        }
+        
+        printMessage(4,"computeBounds \n      %s\n",(CTRL_RAD2DEG*v_bounds).toString(3,3).c_str());
+      
+    }
     
     /************************************************************************/
     int printMessage(const int l, const char *f, ...) const
@@ -255,8 +229,9 @@ public:
     /***** 8 pure virtual functions from TNLP class need to be implemented here **********/
     /************************************************************************/
     react_NLP(iKinChain &c, const yarp::sig::Vector &_xd, const yarp::sig::Vector &_q_dot_0,
-             double _dT, const yarp::sig::Matrix &_v_lim, bool _boundSmoothnessOn, int _verbosity) : chain(c),
-             xd(_xd), q_dot_0(_q_dot_0), dT(_dT), v_lim(_v_lim), boundSmoothnessOn(_boundSmoothnessOn),verbosity(_verbosity) 
+             double _dT, const yarp::sig::Matrix &_v_lim, bool _boundSmoothnessFlag, double _boundSmoothnessValue,int _verbosity) : chain(c),
+             xd(_xd), q_dot_0(_q_dot_0), dT(_dT), v_lim(_v_lim), boundSmoothnessFlag(_boundSmoothnessFlag),boundSmoothnessValue(_boundSmoothnessValue),
+             verbosity(_verbosity) 
     {
         name="react_NLP";
 
@@ -284,11 +259,10 @@ public:
         W_dot.resize(dim,0.0);
         W_min=1.0;
         W_gamma=3.0;
-        guardRatio=0.4;
+        guardRatio=0.1; // changing from 0.4 (orig Ale) to 0.1 - to comply with reactController-sim where the guard will be used to adapt velocity limits;
 
         torsoReduction=3.0;
-        boundSmoothness=10.0*CTRL_DEG2RAD;
-
+       
         qGuard.resize(dim,0.0);
         qGuardMinInt.resize(dim,0.0);
         qGuardMinExt.resize(dim,0.0);
@@ -297,11 +271,14 @@ public:
         qGuardMinCOG.resize(dim,0.0);
         qGuardMaxCOG.resize(dim,0.0);
 
+        v_bounds = v_lim;
+        
         computeGuard();
-
+        computeBounds();
+        
         firstGo=true;
     }
-
+    
     /************************************************************************/
     yarp::sig::Vector get_q_dot_d() { return q_dot_d; }
 
@@ -310,10 +287,8 @@ public:
                       IndexStyleEnum& index_style)
     {
         n=dim; // number of vars in the problem (dim(x)) ~ n DOF in chain in our case 
-        m=dim+0; // nr constraints - dim(g(x))
-        nnz_jac_g=dim; // the jacobian of g has dim non zero entries (the diagonal)
-
-        // nnz_h_lag=(dim*(dim+1))>>1;
+        m=3; // nr constraints - dim(g(x))
+        nnz_jac_g=7; // the jacobian of g has dim non zero entries
         nnz_h_lag=0; //number of nonzero entries in the Hessian
         index_style=TNLP::C_STYLE;
         printMessage(7,"[get_nlp_info]\tn: %i m: %i nnz_jac_g: %i\n",n,m,nnz_jac_g);
@@ -348,21 +323,21 @@ public:
   
         for (Index i=0; i<n; i++)
         {
-            if (boundSmoothnessOn)
+            if (boundSmoothnessFlag)
             {
                 // The joints velocities will be constrained by the v_lim constraints (after possible external modification by avoidanceHandlers) and 
                 // and the previous state (that is our current initial state), in order to avoid abrupt changes
-                double smoothnessMin = std::min(v_lim(i,1),q_dot_0[i]-boundSmoothness); //the smooth min vel should not be bigger than max vel
-                double smoothnessMax = std::max(v_lim(i,0),q_dot_0[i]+boundSmoothness); //the smooth max vel should not be smaller than min vel
+                double smoothnessMin = std::min(v_bounds(i,1),q_dot_0[i]-boundSmoothnessValue); //the smooth min vel should not be bigger than max vel
+                double smoothnessMax = std::max(v_bounds(i,0),q_dot_0[i]+boundSmoothnessValue); //the smooth max vel should not be smaller than min vel
                 
-                x_l[i]=max(v_lim(i,0),smoothnessMin); //lower bound
-                x_u[i]=min(v_lim(i,1),smoothnessMax); //upper bound
+                x_l[i]=max(v_bounds(i,0),smoothnessMin); //lower bound
+                x_u[i]=min(v_bounds(i,1),smoothnessMax); //upper bound
                 
                 
                 if (n==10 && i<3) //special handling of torso joints - should be moving less
                 {
-                    x_l[i]=max(v_lim(i,0)/torsoReduction,smoothnessMin);
-                    x_u[i]=min(v_lim(i,1)/torsoReduction,smoothnessMax);
+                    x_l[i]=max(v_bounds(i,0)/torsoReduction,smoothnessMin);
+                    x_u[i]=min(v_bounds(i,1)/torsoReduction,smoothnessMax);
                 }
 
                 // printf("-V_max*CTRL_DEG2RAD %g\tq_dot_0[i]-boundSmoothness*CTRL_DEG2RAD %g\n",
@@ -370,31 +345,33 @@ public:
             }
             else{
                 // The joints velocities will be constrained by the v_lim constraints (after possible external modification by avoidanceHandlers) 
-                x_l[i]=v_lim(i,0); //lower bound
-                x_u[i]=v_lim(i,1); //upper bound
+                x_l[i]=v_bounds(i,0); //lower bound
+                x_u[i]=v_bounds(i,1); //upper bound
                      
                 if (n==10 && i<3) //special handling of torso joints - should be moving less
                 {
-                    x_l[i]=v_lim(i,0)/torsoReduction;
-                    x_u[i]=v_lim(i,1)/torsoReduction;
+                    x_l[i]=v_bounds(i,0)/torsoReduction;
+                    x_u[i]=v_bounds(i,1)/torsoReduction;
                 }
             }
         }
         
-        //limits for the g function - in our case joint position limits
-        for (Index i=0; i<m; i++)
-        {
-            if (i<(Index)dim)
-            {
-                g_l[i]=chain(i).getMin(); //returns joint angle lower bound
-                g_u[i]=chain(i).getMax();  //returns joint angle upper bound
-            }
-        }
+        //Limits of shoulder assembly in real robot - taken from iKinIpOpt.cpp, iCubShoulderConstr::update(void*)
+        //1st ineq constraint -347deg/1.71 < q_0 - q_1
+        //2nd ineq constr., -366.57deg /1.71 < q_0 - q_1 - q_2 < 112.42deg / 1.71 
+        //-66.6 deg < q_1 + q_2 < 213.3 deg
+        g_l[0]= (-347/1.71)*CTRL_DEG2RAD + EXTRA_MARGIN_SHOULDER_INEQ_RAD;
+        g_u[0]= 4.0*M_PI - EXTRA_MARGIN_SHOULDER_INEQ_RAD; //the difference of two joint angles should never exceed 2 * 360deg 
+        g_l[1]= (-366.57/1.71)*CTRL_DEG2RAD + EXTRA_MARGIN_SHOULDER_INEQ_RAD;
+        g_u[1]= (112.42 / 1.71) * CTRL_DEG2RAD - EXTRA_MARGIN_SHOULDER_INEQ_RAD;
+        g_l[2]= -66.6*CTRL_DEG2RAD + EXTRA_MARGIN_SHOULDER_INEQ_RAD;
+        g_u[2]= 213.3*CTRL_DEG2RAD - EXTRA_MARGIN_SHOULDER_INEQ_RAD;
         
         printMessage(3,"[get_bounds_info (deg)]   x_l: %s\n", IPOPT_Number_toString(x_l,CTRL_RAD2DEG).c_str());
         printMessage(3,"[get_bounds_info (deg)]   x_u: %s\n", IPOPT_Number_toString(x_u,CTRL_RAD2DEG).c_str());
         printMessage(4,"[get_bounds_info (deg)]   g_l: %s\n", IPOPT_Number_toString(g_l,CTRL_RAD2DEG).c_str());
         printMessage(4,"[get_bounds_info (deg)]   g_u: %s\n", IPOPT_Number_toString(g_u,CTRL_RAD2DEG).c_str());
+       
         return true;
     }
     
@@ -421,74 +398,78 @@ public:
         return true;
     }
     
-    /********** Return the value of the constraint function at the point x***********************************************************/
+    /********** g will take care of cable constraints in shoulder assembly***********************************************************/
     bool eval_g(Index n, const Number* x, bool new_x, Index m, Number* g)
     {
-        printMessage(9,"[eval_g]\t\tq(t): %s\n",(q_t*CTRL_RAD2DEG).toString(3,3).c_str());
-        computeQuantities(x);
-        yarp::sig::Vector q(dim,0.0);
-
-        for (Index i=0; i<(Index)dim; i++)
-        {
-            q[i]=q_t(i) + dT * q_dot(i);
+        if(n==10){ //we have 3 torso joints and 7 arm joints
+            g[0] =  chain(3).getAng()+dT*x[3] - (chain(4).getAng()+dT*x[4]);   //1st ineq constraint -347deg/1.71 < q_0 - q_1
+            //2nd ineq constr., -366.57deg /1.71 < q_0 - q_1 - q_2 < 112.42deg / 1.71 
+            g[1] = chain(3).getAng()+dT*x[3] - (chain(4).getAng()+dT*x[4]) - (chain(5).getAng()+dT*x[5]);
+            g[2] = chain(4).getAng()+dT*x[4] + (chain(5).getAng()+dT*x[5]); //-66.6 deg < q_1 + q_2 < 213.3 deg
+            return true;
+          
         }
-        computeWeight(q);
-
-        for (Index i=0; i<m; i++)
-            if (i<(Index)dim)
-                g[i]=W[i]*q[i];
-
-        printMessage(7,"[eval_g] OK\t\tq(t+1): %s\n",IPOPT_Number_toString(g,CTRL_RAD2DEG).c_str());
-
-        return true;
+        else if (n==7){ //only arm joints
+            g[0] =  chain(0).getAng()+dT*x[0] - (chain(1).getAng()+dT*x[1]);   //1st ineq constraint -347deg/1.71 < q_0 - q_1
+            g[1] = chain(0).getAng()+dT*x[0] - (chain(1).getAng()+dT*x[1]) - (chain(2).getAng()+dT*x[2]);
+            g[2] = chain(1).getAng()+dT*x[1] + (chain(2).getAng()+dT*x[2]); //-66.6 deg < q_1 + q_2 < 213.3 deg
+            return true;
+        }
+       
+        return false;
+        
     }
     
     /************************************************************************/
     bool eval_jac_g(Index n, const Number* x, bool new_x, Index m, Index nele_jac,
                     Index* iRow, Index *jCol, Number* values)
     {
-        // printMessage(9,"[eval_jac_g] START\tx: %i\n",IPOPT_Number_toString(x,CTRL_RAD2DEG).c_str());
-
-        if (m>=n) // if there are at least the joint bounds as constraint
-        {
-            if (values==NULL)
-            {
-                Index idx=0;
-                
-                // Let's populate the diagonal matrix with dT
-                for (Index i=0; i<m; i++)
-                {
-                    iRow[idx]=i;
-                    jCol[idx]=i;
-                    idx++;
-                }
+        if (n==10){
+            if (values == NULL){ //return the structure of the Jacobian
+                iRow[0] = 0; jCol[0]= 3;
+                iRow[1] = 0; jCol[1]= 4;
+                iRow[2] = 1; jCol[2]= 3;
+                iRow[3] = 1; jCol[3]= 4;
+                iRow[4] = 1; jCol[4]= 5;
+                iRow[5] = 2; jCol[5]= 4;
+                iRow[6] = 2; jCol[6]= 5;
             }
-            else
-            {
-                computeQuantities(x);
-
-                yarp::sig::Vector q(dim,0.0);
-
-                for (Index i=0; i<(Index)dim; i++)
-                {
-                    q[i]=q_t(i) + dT * q_dot(i);
-                }
-                computeWeight(q);
-                computeWeightDerivatives(q);
-
-                Index idx=0;
-                
-                // Let's populate the diagonal matrix with dT
-                for (Index i=0; i<m; i++)
-                {
-                    values[idx]=dT*(W[i]+q[i]*W_dot[i]);
-                    idx++;
-                }
+            else{  //return the values of the Jacobian of the constraints
+                values[0]= dT;
+                values[1]= -dT;
+                values[2]= dT;
+                values[3]= -dT;
+                values[4]= -dT;
+                values[5]= dT;
+                values[6]= dT;   
             }
+            return true;
+        
         }
-
-        printMessage(7,"[eval_jac_g] OK\n");
-        return true;
+        else if (n==7){
+            if (values == NULL){ //return the structure of the Jacobian
+                iRow[0] = 0; jCol[0]= 0;
+                iRow[1] = 0; jCol[1]= 1;
+                iRow[2] = 1; jCol[2]= 0;
+                iRow[3] = 1; jCol[3]= 1;
+                iRow[4] = 1; jCol[4]= 2;
+                iRow[5] = 2; jCol[5]= 1;
+                iRow[6] = 2; jCol[6]= 2;
+            }
+            else{  //return the values of the Jacobian of the constraints
+                values[0]= dT;
+                values[1]= -dT;
+                values[2]= dT;
+                values[3]= -dT;
+                values[4]= -dT;
+                values[5]= dT;
+                values[6]= dT;   
+            }
+            return true;
+        }
+        else
+            return false;
+        
     }
     
     /************************************************************************/
@@ -582,10 +563,10 @@ void reactIpOpt::setVerbosity(const unsigned int verbose)
 
 /************************************************************************/
 yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_dot_0,
-                                    double dt, const yarp::sig::Matrix &v_lim, bool boundSmoothnessOn, int *exit_code)
+                                    double dt, const yarp::sig::Matrix &v_lim, bool boundSmoothnessFlag, double boundSmoothnessValue, int *exit_code)
 {
-    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,v_lim,boundSmoothnessOn, verbosity);
-    
+    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,v_lim,boundSmoothnessFlag,boundSmoothnessValue, verbosity);
+        
     CAST_IPOPTAPP(App)->Options()->SetNumericValue("max_cpu_time",dt);
     ApplicationReturnStatus status=CAST_IPOPTAPP(App)->OptimizeTNLP(GetRawPtr(nlp));
 
