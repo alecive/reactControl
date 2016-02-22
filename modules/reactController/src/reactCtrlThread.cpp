@@ -676,7 +676,7 @@ bool reactCtrlThread::setNewCircularTarget(const double _radius,const double _fr
     circleCenter = x_t; // set it to end-eff position at this point 
     
     setNewTarget(getPosMovingTargetOnCircle(),true);
-    
+    return true;
 }
 
 

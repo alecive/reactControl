@@ -948,7 +948,7 @@ int main(int argc, char *argv[])
         }
 
         ostringstream strVLIM;
-        for (size_t i=0; i<VLIM.rows(); i++)
+        for (int i=0; i<VLIM.rows(); i++)
             strVLIM<<VLIM.getRow(i).toString(3,3)<<" ";
         
         ostringstream strCtrlPoints;
