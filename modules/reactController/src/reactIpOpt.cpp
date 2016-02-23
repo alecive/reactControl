@@ -67,8 +67,9 @@ protected:
 
     // The delta T with which ipopt needs to solve the task - time in the task, not comp. time - delta x = delta T * J * q_dot 
     double dT;
-
-  
+    // The joint limits; joints in rows; first col minima, second col maxima
+    //will be extracted from the chain
+    yarp::sig::Matrix q_lim; 
     //N.B. Here within IPOPT, we will keep everyting in radians - joint pos in rad, joint vel in rad/s; same for limits 
     // The desired final joint velocities - the solution of this iteration 
     yarp::sig::Vector q_dot_d;
@@ -226,8 +227,8 @@ protected:
 public:
     /***** 8 pure virtual functions from TNLP class need to be implemented here **********/
     /************************************************************************/
-    react_NLP(iKinChain &c, const yarp::sig::Vector &_xd, const yarp::sig::Vector &_q_dot_0, 
-             double _dT, const yarp::sig::Matrix &_v_lim, const double _kp, bool _boundSmoothnessFlag, double _boundSmoothnessValue,int _verbosity) : chain(c), xd(_xd), q_dot_0(_q_dot_0),dT(_dT), v_lim(_v_lim), kp(_kp), boundSmoothnessFlag(_boundSmoothnessFlag),boundSmoothnessValue(_boundSmoothnessValue),
+    react_NLP(iKinChain &c, const yarp::sig::Vector &_xd, const yarp::sig::Vector &_q_dot_0,std::deque<yarp::sig::Vector> &_q_dot_memory, 
+             double _dT, const yarp::sig::Matrix &_v_lim, const double _useMemory, const double _kp, bool _boundSmoothnessFlag, double _boundSmoothnessValue,int _verbosity) : chain(c), xd(_xd), q_dot_0(_q_dot_0),dT(_dT), v_lim(_v_lim), kp(_kp), boundSmoothnessFlag(_boundSmoothnessFlag),boundSmoothnessValue(_boundSmoothnessValue),
              verbosity(_verbosity) 
     {
         name="react_NLP";
@@ -238,13 +239,26 @@ public:
         if (kp < 0.0)
             kp = 1.0;
         x0.resize(3,0.0);
-        yarp::sig::Matrix H=chain.getH();
-        x0=H.subcol(0,3,3);
-
+        
         dim=chain.getDOF(); //only active (not blocked) joints - e.g. 7 for the arm joints, 10 if torso is included
         if (!((dim == 7) || (dim == 10)) ){ 
             yError("react_NLP(): unexpected nr DOF on the chain : %d\n",dim);
         }
+        
+        if (_useMemory){
+            q_lim.resize(dim,2);
+            for (size_t r=0; r<dim; r++)
+            {
+                q_lim(r,0)=chain(r).getMin();
+                q_lim(r,1)=chain(r).getMax();
+            }
+            Integrator I(dT,chain.getAng(),q_lim); // we initialize the integrator to the current joint pos 
+            for (size_t i=0; i<_q_dot_memory.size(); i++)
+                I.integrate(kp*_q_dot_memory[i]);
+            chain.setAng(I.get()); //! Now we set the chain to the predicted configuration after n time steps corresponding to the buffer size as per the lag td of the motor model - ipOpt will be asked to solve the problem there
+            x0=chain.EndEffPosition();
+        }
+        
         q_dot.resize(dim,0.0);
         q_dot_d.resize(dim,0.0);
 
@@ -506,9 +520,9 @@ public:
 
 
 /************************************************************************/
-reactIpOpt::reactIpOpt(const iKinChain &c, const double _tol, const double _kp, 
+reactIpOpt::reactIpOpt(const iKinChain &c, const double _tol, const bool _useMemory, const double _kp, 
                        const unsigned int verbose) :
-                       chain(c), kp(_kp), verbosity(verbose)
+                       chain(c), useMemory(_useMemory), kp(_kp), verbosity(verbose)
 {
     //reactIpOpt makes a copy of the original chain; then it will be passed as reference to react_NLP in reactIpOpt::solve
     chain.setAllConstraints(false); // this is required since IpOpt initially relaxes constraints
@@ -558,12 +572,11 @@ void reactIpOpt::setVerbosity(const unsigned int verbose)
 
 
 /************************************************************************/
-yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_0, const yarp::sig::Vector &q_dot_0,
+yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_dot_0,std::deque<yarp::sig::Vector> &q_dot_memory,
                                     double dt, const yarp::sig::Matrix &v_lim, bool boundSmoothnessFlag, double boundSmoothnessValue, int *exit_code)
 {
-    chain.setAng(q_0); //this is a local copy of the chain - if ipOptMemory is on, we need to set it to the predicted position values passed in q_0 here
     
-    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,v_lim,kp,boundSmoothnessFlag,boundSmoothnessValue, verbosity);
+    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,q_dot_memory,dt,v_lim,useMemory,kp,boundSmoothnessFlag,boundSmoothnessValue, verbosity);
        
     CAST_IPOPTAPP(App)->Options()->SetNumericValue("max_cpu_time",dt);
     ApplicationReturnStatus status=CAST_IPOPTAPP(App)->OptimizeTNLP(GetRawPtr(nlp));

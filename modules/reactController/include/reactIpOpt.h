@@ -20,6 +20,8 @@
 #ifndef __REACTIPOPT_H__
 #define __REACTIPOPT_H__
 
+#include <deque>
+
 #include <yarp/sig/Vector.h>
 #include <yarp/sig/Matrix.h>
 
@@ -51,6 +53,7 @@ protected:
     void *App;
 
     iCub::iKin::iKinChain chain;
+    double useMemory;
     double kp;
 
     int verbosity;
@@ -61,6 +64,7 @@ public:
     * @param c is the Chain object on which the control operates. Do 
     *          not change Chain DOF from this point onwards!!
     * @param _tol exits if 0.5*norm(xd-x)^2<tol.
+    * @param _useMemory - whether buffer of past velocities should be used
     * @param _kp - constant for motor model
     * @param verbose is a integer number which progressively enables 
     *                different levels of warning messages or status
@@ -68,7 +72,7 @@ public:
     *                is the output (0=>off by default).
     */
     reactIpOpt(const iCub::iKin::iKinChain &c,
-               const double _tol, const double _kp, const unsigned int verbose=0);
+               const double _tol, const bool _useMemory, const double _kp, const unsigned int verbose=0);
 
     /**
     * Sets Tolerance.
@@ -95,6 +99,7 @@ public:
     * Executes the IpOpt algorithm trying to converge on target. 
     * @param xd        is the End-Effector target Pose to be attained. 
     * @param q_dot_0   are the initial joint velocities of the chain.
+    * @param q_dot_memory buffer of past velocity commands - depending on td in motor model
     * @param dt        is the time step to use in order to solve the task. 
     * @param v_lim     are the joint velocity limits for individual joints.
     * @param boundSmoothnessFlag whether the optimization should limit changes in joint vel control commmands between time steps
@@ -116,7 +121,7 @@ public:
     *                   INTERNAL_ERROR
     * @return estimated joint velocities.
     */
-    virtual yarp::sig::Vector solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_0, const yarp::sig::Vector &q_dot_0,
+    virtual yarp::sig::Vector solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_dot_0, std::deque<yarp::sig::Vector> &q_dot_memory,
                                     double dt, const yarp::sig::Matrix &v_lim, bool boundSmoothnessFlag, double boundSmoothnessValue, int *exit_code);
 
     /**

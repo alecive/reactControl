@@ -107,9 +107,9 @@ bool reactCtrlThread::threadInit()
         qT.resize(NR_TORSO_JOINTS,0.0); //current values of torso joints (3, in the order expected for iKin: yaw, roll, pitch)
     q.resize(chainActiveDOF,0.0); //current joint angle values (10 if torso is on, 7 if off)
     qIntegrated.resize(chainActiveDOF,0.0); //joint angle pos predictions from integrator
-    qIntegratedWithModel.resize(chainActiveDOF,0.0); //joint angle pos predictions from integrator with model and memory
     lim.resize(chainActiveDOF,2); //joint pos limits
     
+    q_dot.resize(chainActiveDOF,0.0); 
     vLimNominal.resize(chainActiveDOF,2);
     vLimAdapted.resize(chainActiveDOF,2);
     for (size_t r=0; r<chainActiveDOF; r++)
@@ -228,20 +228,22 @@ bool reactCtrlThread::threadInit()
     x_d.resize(3,0.0);
        
     slv=NULL; //ipOpt solver - our wrapper class
-    memory.clear();
+    memoryVelCommands_RAD.clear();
     if (ipOptMemoryOn){
-        motorModel_kp = 1.1;
-        motorModel_td = 0.08;
-        memory.insert(memory.begin(),(int)floor(motorModel_td/dT),
+        if (robot == "icub"){
+            motorModel_kp = 1.1;
+            motorModel_td = 0.08;
+        }
+        else if (robot == "icubSim"){
+            motorModel_kp = 1.1;
+            motorModel_td = 0.08;
+        }
+        memoryVelCommands_RAD.insert(memoryVelCommands_RAD.begin(),(int)floor(motorModel_td/dT),
                       zeros(chainActiveDOF)); //for say lag td 0.08s and dT 0.01, we will have 8 velocity vectors in the memory 
-   
-        I_ipOptWithMemory = new Integrator(dT,q,lim);
-       
     }
     else{
         motorModel_kp = 1.0;
         motorModel_td = 0.0;
-        I_ipOptWithMemory = NULL;
        
     }
         
@@ -336,13 +338,7 @@ void reactCtrlThread::run()
     //iCub::iKin::iKinChain &chain_temp=*arm->asChain();
     //yarp::sig::Matrix J1_temp=chain_temp.GeoJacobian();
     //yDebug("GeoJacobian: \n %s \n",J1_temp.toString(3,3).c_str());    
-        
-    if (ipOptMemoryOn){
-        for (size_t i=0; i<memory.size(); i++)
-            I_ipOptWithMemory->integrate((motorModel_kp)*memory[i]);
-        qIntegratedWithModel = I_ipOptWithMemory->get();
-    }
-        
+               
     collisionPoints.clear();
         
     /* For now, let's experiment with some fixed points on the forearm skin, emulating the vectors coming from margin of safety, 
@@ -403,8 +399,7 @@ void reactCtrlThread::run()
             double t_1=yarp::os::Time::now();
             q_dot = solveIK(ipoptExitCode);
             timeToSolveProblem_s  = yarp::os::Time::now()-t_1;
-            
-            
+               
             if (ipoptExitCode==Ipopt::Solve_Succeeded || ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
             {
                 if (ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
@@ -436,8 +431,8 @@ void reactCtrlThread::run()
     }
     
     if(ipOptMemoryOn){
-        memory.push_back(q_dot);
-        memory.pop_front();
+        memoryVelCommands_RAD.push_back(q_dot*CTRL_DEG2RAD);
+        memoryVelCommands_RAD.pop_front();
     }
     
     sendData();
@@ -467,13 +462,8 @@ void reactCtrlThread::threadRelease()
         delete I;
         I = NULL;    
     }
-    memory.clear(); 
-    if(I_ipOptWithMemory != NULL){
-        yDebug("deleting integrator I_IpOptWithMemory");
-        delete I_ipOptWithMemory;
-        I_ipOptWithMemory = NULL;    
-    }
-    
+    memoryVelCommands_RAD.clear(); 
+        
     if (visualizeIniCubGui)
         yInfo("Resetting objects in iCubGui");
         if (outPortiCubGui.getOutputCount()>0)
@@ -697,7 +687,7 @@ bool reactCtrlThread::stopControl()
 
 Vector reactCtrlThread::solveIK(int &_exit_code)
 {
-    slv=new reactIpOpt(*arm->asChain(),tol,motorModel_kp, verbosity);
+    slv=new reactIpOpt(*arm->asChain(),tol,ipOptMemoryOn, motorModel_kp, verbosity);
     // Next step will be provided iteratively.
     // The equation is x(t_next) = x_t + (x_d - x_t) * (t_next - t_now/T-t_now)
     //                              s.t. t_next = t_now + dT
@@ -762,11 +752,8 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // So, q_dot_0 is in degrees, but I have to convert it in radians before sending it to ipopt
     
    Vector res(chainActiveDOF,0.0); 
-   if (ipOptMemoryOn)
-       res=slv->solve(x_n,qIntegratedWithModel*CTRL_DEG2RAD, q_dot*CTRL_DEG2RAD,dT,vLimAdapted*CTRL_DEG2RAD,boundSmoothnessFlag,boundSmoothnessValue*CTRL_DEG2RAD,&exit_code)*CTRL_RAD2DEG;
-   else
-    res=slv->solve(x_n,q,q_dot*CTRL_DEG2RAD,dT,vLimAdapted*CTRL_DEG2RAD,boundSmoothnessFlag,boundSmoothnessValue*CTRL_DEG2RAD,&exit_code)*CTRL_RAD2DEG;
-
+   res=slv->solve(x_n, q_dot*CTRL_DEG2RAD,memoryVelCommands_RAD,dT,vLimAdapted*CTRL_DEG2RAD,boundSmoothnessFlag,boundSmoothnessValue*CTRL_DEG2RAD,&exit_code)*CTRL_RAD2DEG;
+   
     
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
     if(verbosity >= 1){
@@ -1193,8 +1180,6 @@ void reactCtrlThread::sendData()
             b.addDouble(timeToSolveProblem_s);
             if (controlMode == "positionDirect")
                 vectorIntoBottle(qIntegrated,b);
-            else if (ipOptMemoryOn)
-                vectorIntoBottle(qIntegratedWithModel,b); //these will be positions integrated with the joint model 
             
             // the delta_x, that is the 3D vector that ipopt commands to 
             //    the robot in order for x_t to reach x_n

@@ -204,8 +204,7 @@ protected:
     yarp::sig::Vector qT; //current values of torso joints (3, in the order expected for iKin: yaw, roll, pitch)
     yarp::sig::Vector q; //current joint angle values (10 if torso is on, 7 if off)
     yarp::sig::Vector qIntegrated; //joint angle values integrated from velocity commands by Integrator - controlMode positionDirect only
-    yarp::sig::Vector qIntegratedWithModel; // ipOptMemoryOn mode only - using motorModel_kp and motorModel_td and Memory
-   
+
     yarp::sig::Vector q_dot;  // Computed joint velocities to reach the target
     
     yarp::sig::Matrix lim;  //matrix with joint position limits for the current chain
@@ -229,11 +228,9 @@ protected:
     reactIpOpt    *slv;    // solver
     int ipoptExitCode;
     double timeToSolveProblem_s; //time taken by q_dot = solveIK(ipoptExitCode) ~ ipopt + avoidance handler
-    std::deque<yarp::sig::Vector> memory; //buffer to store
+    std::deque<yarp::sig::Vector> memoryVelCommands_RAD; //buffer to store past velocities- this one is expceptionally in RAD - will be passed to ipopt
     double motorModel_kp;
     double motorModel_td;
-    iCub::ctrl::Integrator *I_ipOptWithMemory; //if ipOptMemoryOn, we will integrate velocity control commands to get pos
-
 
     // Mutex for handling things correctly
     yarp::os::Mutex mutex;
