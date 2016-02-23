@@ -30,6 +30,7 @@
 
 #define CAST_IPOPTAPP(x)             (static_cast<IpoptApplication*>(x))
 #define EXTRA_MARGIN_SHOULDER_INEQ_RAD 0.05 //each of the ineq. constraints for shoulder joints will have an extra safety marging of 0.05 rad on each side - i.e. the actual allowed range will be smaller
+#define EXTRA_MARGIN_GENERAL_INEQ_RAD 0.05
 
 using namespace std;
 using namespace yarp::os;
@@ -111,6 +112,8 @@ protected:
     yarp::sig::Vector qGuard;
     yarp::sig::Vector qGuardMinInt, qGuardMinExt, qGuardMinCOG;
     yarp::sig::Vector qGuardMaxInt, qGuardMaxExt, qGuardMaxCOG;
+    
+    double shou_m, shou_n, elb_m, elb_n; //for ineq constraints
 
     bool firstGo;
 
@@ -233,6 +236,7 @@ public:
     {
         name="react_NLP";
 
+             
         // Time should always be positive
         if (dT<0.0)
            dT=0.05;
@@ -283,6 +287,24 @@ public:
 
         v_bounds = v_lim;
         
+        double joint1_0, joint1_1;
+        double joint2_0, joint2_1;
+        joint1_0= 28.0*CTRL_DEG2RAD;
+        joint1_1= 23.0*CTRL_DEG2RAD;
+        joint2_0=-37.0*CTRL_DEG2RAD;
+        joint2_1= 80.0*CTRL_DEG2RAD;
+        shou_m=(joint1_1-joint1_0)/(joint2_1-joint2_0);
+        shou_n=joint1_0-shou_m*joint2_0;
+
+        double joint3_0, joint3_1;
+        double joint4_0, joint4_1;
+        joint3_0= 85.0*CTRL_DEG2RAD;
+        joint3_1=105.0*CTRL_DEG2RAD;
+        joint4_0= 90.0*CTRL_DEG2RAD;
+        joint4_1= 40.0*CTRL_DEG2RAD;
+        elb_m=(joint4_1-joint4_0)/(joint3_1-joint3_0);
+        elb_n=joint4_0-elb_m*joint3_0;
+        
         computeGuard();
         computeBounds();
         
@@ -297,8 +319,8 @@ public:
                       IndexStyleEnum& index_style)
     {
         n=dim; // number of vars in the problem (dim(x)) ~ n DOF in chain in our case 
-        m=3; // nr constraints - dim(g(x))
-        nnz_jac_g=7; // the jacobian of g has dim non zero entries
+        m=6; // nr constraints - dim(g(x))
+        nnz_jac_g=13; // the jacobian of g has dim non zero entries
         nnz_h_lag=0; //number of nonzero entries in the Hessian
         index_style=TNLP::C_STYLE;
         printMessage(7,"[get_nlp_info]\tn: %i m: %i nnz_jac_g: %i\n",n,m,nnz_jac_g);
@@ -366,6 +388,10 @@ public:
             }
         }
         
+        double lowerBoundInf=-std::numeric_limits<double>::max();
+        double upperBoundInf=std::numeric_limits<double>::max();
+    
+        
         //Limits of shoulder assembly in real robot - taken from iKinIpOpt.cpp, iCubShoulderConstr::update(void*)
         //1st ineq constraint -347deg/1.71 < q_0 - q_1
         //2nd ineq constr., -366.57deg /1.71 < q_0 - q_1 - q_2 < 112.42deg / 1.71 
@@ -376,6 +402,14 @@ public:
         g_u[1]= (112.42 / 1.71) * CTRL_DEG2RAD - EXTRA_MARGIN_SHOULDER_INEQ_RAD;
         g_l[2]= -66.6*CTRL_DEG2RAD + EXTRA_MARGIN_SHOULDER_INEQ_RAD;
         g_u[2]= 213.3*CTRL_DEG2RAD - EXTRA_MARGIN_SHOULDER_INEQ_RAD;
+        //  constraints to prevent arm from touching torso
+        g_l[3]= shou_n + EXTRA_MARGIN_GENERAL_INEQ_RAD;
+        g_u[3] = upperBoundInf - EXTRA_MARGIN_GENERAL_INEQ_RAD;
+       // constraints to prevent the forearm from hitting the arm
+        g_l[4]= lowerBoundInf + EXTRA_MARGIN_GENERAL_INEQ_RAD;
+        g_u[4] = elb_n - EXTRA_MARGIN_GENERAL_INEQ_RAD;
+        g_l[5] = -elb_n + EXTRA_MARGIN_GENERAL_INEQ_RAD;
+        g_u[5] = upperBoundInf - EXTRA_MARGIN_GENERAL_INEQ_RAD;
         
         printMessage(3,"[get_bounds_info (deg)]   x_l: %s\n", IPOPT_Number_toString(x_l,CTRL_RAD2DEG).c_str());
         printMessage(3,"[get_bounds_info (deg)]   x_u: %s\n", IPOPT_Number_toString(x_u,CTRL_RAD2DEG).c_str());
@@ -408,7 +442,7 @@ public:
         return true;
     }
     
-    /********** g will take care of cable constraints in shoulder assembly***********************************************************/
+    /********** g will take care of cable constraints in shoulder assembly (g0-g2), arm to torso (g3) and upper arm to arm (g5,g6)************/
     bool eval_g(Index n, const Number* x, bool new_x, Index m, Number* g)
     {
         if(n==10){ //we have 3 torso joints and 7 arm joints
@@ -416,6 +450,9 @@ public:
             //2nd ineq constr., -366.57deg /1.71 < q_0 - q_1 - q_2 < 112.42deg / 1.71 
             g[1] = chain(3).getAng()+kp*dT*x[3] - (chain(4).getAng()+kp*dT*x[4]) - (chain(5).getAng()+kp*dT*x[5]);
             g[2] = chain(4).getAng()+kp*dT*x[4] + (chain(5).getAng()+kp*dT*x[5]); //-66.6 deg < q_1 + q_2 < 213.3 deg
+            g[3] = chain(4).getAng()+kp*dT*x[4] - shou_m*(chain(5).getAng()+kp*dT*x[5]); // shou_n < q1 - shou_m * q2
+            g[4] = -elb_m*(chain(6).getAng()+kp*dT*x[6]) + chain(7).getAng()+kp*dT*x[7];
+            g[5] = elb_m*(chain(6).getAng()+kp*dT*x[6]) + chain(7).getAng()+kp*dT*x[7];
             return true;
           
         }
@@ -423,6 +460,9 @@ public:
             g[0] =  chain(0).getAng()+kp*dT*x[0] - (chain(1).getAng()+kp*dT*x[1]);   //1st ineq constraint -347deg/1.71 < q_0 - q_1
             g[1] = chain(0).getAng()+kp*dT*x[0] - (chain(1).getAng()+kp*dT*x[1]) - (chain(2).getAng()+kp*dT*x[2]);
             g[2] = chain(1).getAng()+kp*dT*x[1] + (chain(2).getAng()+kp*dT*x[2]); //-66.6 deg < q_1 + q_2 < 213.3 deg
+            g[3] = chain(1).getAng()+kp*dT*x[1] - shou_m*(chain(2).getAng()+kp*dT*x[2]); // shou_n < q1 - shou_m * q2
+            g[4] = -elb_m*(chain(3).getAng()+kp*dT*x[3]) + chain(4).getAng()+kp*dT*x[4];
+            g[5] = elb_m*(chain(3).getAng()+kp*dT*x[3]) + chain(4).getAng()+kp*dT*x[4];
             return true;
         }
        
@@ -443,6 +483,12 @@ public:
                 iRow[4] = 1; jCol[4]= 5;
                 iRow[5] = 2; jCol[5]= 4;
                 iRow[6] = 2; jCol[6]= 5;
+                iRow[7] = 3; jCol[7]= 4;
+                iRow[8] = 3; jCol[8]= 5;
+                iRow[9] = 4; jCol[9]= 6;
+                iRow[10] = 4; jCol[10]= 7;
+                iRow[11] = 5; jCol[11]= 6;
+                iRow[12] = 5; jCol[12]= 7;
             }
             else{  //return the values of the Jacobian of the constraints
                 values[0]= kp*dT;
@@ -452,6 +498,12 @@ public:
                 values[4]= -kp*dT;
                 values[5]= kp*dT;
                 values[6]= kp*dT;   
+                values[7]= kp*dT;
+                values[8]= -shou_m*kp*dT;
+                values[9]= -elb_m*kp*dT;
+                values[10]= kp*dT;
+                values[11]= elb_m*kp*dT;
+                values[12]= kp*dT;
             }
             return true;
         
@@ -465,6 +517,12 @@ public:
                 iRow[4] = 1; jCol[4]= 2;
                 iRow[5] = 2; jCol[5]= 1;
                 iRow[6] = 2; jCol[6]= 2;
+                iRow[7] = 3; jCol[7]= 1;
+                iRow[8] = 3; jCol[8]= 2;
+                iRow[9] = 4; jCol[9]= 3;
+                iRow[10] = 4; jCol[10]= 4;
+                iRow[11] = 5; jCol[11]= 3;
+                iRow[12] = 5; jCol[12]= 4;
             }
             else{  //return the values of the Jacobian of the constraints
                 values[0]= kp*dT;
@@ -474,6 +532,12 @@ public:
                 values[4]= -kp*dT;
                 values[5]= kp*dT;
                 values[6]= kp*dT;   
+                values[7]= kp*dT;
+                values[8]= -shou_m*kp*dT;
+                values[9]= -elb_m*kp*dT;
+                values[10]= kp*dT;
+                values[11]= elb_m*kp*dT;
+                values[12]= kp*dT;
             }
             return true;
         }
