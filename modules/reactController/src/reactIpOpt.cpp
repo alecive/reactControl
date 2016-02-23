@@ -30,7 +30,7 @@
 
 #define CAST_IPOPTAPP(x)             (static_cast<IpoptApplication*>(x))
 #define EXTRA_MARGIN_SHOULDER_INEQ_RAD 0.05 //each of the ineq. constraints for shoulder joints will have an extra safety marging of 0.05 rad on each side - i.e. the actual allowed range will be smaller
-#define EXTRA_MARGIN_GENERAL_INEQ_RAD 0.05
+#define EXTRA_MARGIN_GENERAL_INEQ_RAD 0.0
 
 using namespace std;
 using namespace yarp::os;
