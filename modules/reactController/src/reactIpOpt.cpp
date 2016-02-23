@@ -320,7 +320,7 @@ public:
     {
         n=dim; // number of vars in the problem (dim(x)) ~ n DOF in chain in our case 
         m=6; // nr constraints - dim(g(x))
-        nnz_jac_g=13; // the jacobian of g has dim non zero entries
+        nnz_jac_g= 13; // the jacobian of g has dim non zero entries
         nnz_h_lag=0; //number of nonzero entries in the Hessian
         index_style=TNLP::C_STYLE;
         printMessage(7,"[get_nlp_info]\tn: %i m: %i nnz_jac_g: %i\n",n,m,nnz_jac_g);
@@ -402,7 +402,7 @@ public:
         g_u[1]= (112.42 / 1.71) * CTRL_DEG2RAD - EXTRA_MARGIN_SHOULDER_INEQ_RAD;
         g_l[2]= -66.6*CTRL_DEG2RAD + EXTRA_MARGIN_SHOULDER_INEQ_RAD;
         g_u[2]= 213.3*CTRL_DEG2RAD - EXTRA_MARGIN_SHOULDER_INEQ_RAD;
-        //  constraints to prevent arm from touching torso
+         //  constraints to prevent arm from touching torso
         g_l[3]= shou_n + EXTRA_MARGIN_GENERAL_INEQ_RAD;
         g_u[3] = upperBoundInf - EXTRA_MARGIN_GENERAL_INEQ_RAD;
        // constraints to prevent the forearm from hitting the arm

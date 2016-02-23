@@ -139,7 +139,7 @@ public:
         vMax         =  30.0;
         
         referenceGen = "uniformParticle";
-        bool ipOptMemoryOn = false;
+        ipOptMemoryOn = false;
         
         tactileCollisionPointsOn = false;
         visualCollisionPointsOn = false;
