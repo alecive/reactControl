@@ -582,7 +582,12 @@ public:
 
             }
 
-        //************* THREAD *************
+        //************* THREAD ******************************
+        if((controlMode == "positionDirect") && (ipOptMemoryOn)){
+            ipOptMemoryOn = false;
+            yWarning("You're using controlMode positionDirect. Switching ipOptMemoryOn to false, as it is compatible with velocity controlMode only. ");
+        }
+        
         if(referenceGen == "uniformParticle"){
             prtclThrd = new particleThread(prtclRate, name, verbosity);
             if (!prtclThrd->start())

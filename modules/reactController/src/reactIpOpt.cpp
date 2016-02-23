@@ -55,7 +55,7 @@ protected:
     string name;
     // The verbosity level (fixed for now to 0)
     int verbosity;
-    // The chain that will undergo the task
+    // The chain that will undergo the task - N.B. if the controller is using a model, the chain received has been already st to the configuration (modeled joint positions)
     iKinChain &chain;
     // The dimensionality of the task ~ nr DOF in the chain ~ nr. primal variables (for now 7 for arm joints, 10 if torso is enabled)
     unsigned int dim;
@@ -76,8 +76,6 @@ protected:
     yarp::sig::Vector q_dot_0;
     // The current joint velocities - for internal steps of ipopt, not carrying a particular meaning
     yarp::sig::Vector q_dot;
-    // The current joint configuration
-    yarp::sig::Vector q_t;
     // The maximum allowed speed at the joints; joints in rows; first col minima, second col maxima
     //They may be set adaptively by avoidanceHandler from the outside - currently through constructor
     yarp::sig::Matrix v_lim;
@@ -104,6 +102,7 @@ protected:
     // The torso reduction rate at for the max velocities sent to the torso(default 3.0)
     double torsoReduction;  
     //for smooth changes in joint velocities
+    double kp; //for modeling the motor behavior
     bool boundSmoothnessFlag; 
     double boundSmoothnessValue; //new joint vel can differ by max boundSmoothness from the previous one (rad)
     
@@ -131,9 +130,8 @@ protected:
             yarp::sig::Matrix J1=chain.GeoJacobian();
             submatrix(J1,J_cst,0,2,0,dim-1);
 
-            q_t = chain.getAng();
-            cost_func=xd -(x0+dT*J_cst*q_dot);
-            grad_cost_func=2.0*cost_func*(-dT*J_cst);
+            cost_func=xd -(x0+(kp*dT)*J_cst*q_dot);    
+            grad_cost_func=2.0*cost_func*(-kp*dT*J_cst); 
         }
         printMessage(9,"[computeQuantities] OK x: %s\n",IPOPT_Number_toString(x,CTRL_RAD2DEG).c_str());
     }
@@ -228,19 +226,17 @@ protected:
 public:
     /***** 8 pure virtual functions from TNLP class need to be implemented here **********/
     /************************************************************************/
-    react_NLP(iKinChain &c, const yarp::sig::Vector &_xd, const yarp::sig::Vector &_q_dot_0,
-             double _dT, const yarp::sig::Matrix &_v_lim, bool _boundSmoothnessFlag, double _boundSmoothnessValue,int _verbosity) : chain(c),
-             xd(_xd), q_dot_0(_q_dot_0), dT(_dT), v_lim(_v_lim), boundSmoothnessFlag(_boundSmoothnessFlag),boundSmoothnessValue(_boundSmoothnessValue),
+    react_NLP(iKinChain &c, const yarp::sig::Vector &_xd, const yarp::sig::Vector &_q_dot_0, 
+             double _dT, const yarp::sig::Matrix &_v_lim, const double _kp, bool _boundSmoothnessFlag, double _boundSmoothnessValue,int _verbosity) : chain(c), xd(_xd), q_dot_0(_q_dot_0),dT(_dT), v_lim(_v_lim), kp(_kp), boundSmoothnessFlag(_boundSmoothnessFlag),boundSmoothnessValue(_boundSmoothnessValue),
              verbosity(_verbosity) 
     {
         name="react_NLP";
 
-        // A time should always be positive
+        // Time should always be positive
         if (dT<0.0)
-        {
-            dT=0.05;
-        }
-
+           dT=0.05;
+        if (kp < 0.0)
+            kp = 1.0;
         x0.resize(3,0.0);
         yarp::sig::Matrix H=chain.getH();
         x0=H.subcol(0,3,3);
@@ -402,17 +398,17 @@ public:
     bool eval_g(Index n, const Number* x, bool new_x, Index m, Number* g)
     {
         if(n==10){ //we have 3 torso joints and 7 arm joints
-            g[0] =  chain(3).getAng()+dT*x[3] - (chain(4).getAng()+dT*x[4]);   //1st ineq constraint -347deg/1.71 < q_0 - q_1
+            g[0] =  chain(3).getAng()+kp*dT*x[3] - (chain(4).getAng()+kp*dT*x[4]);   //1st ineq constraint -347deg/1.71 < q_0 - q_1
             //2nd ineq constr., -366.57deg /1.71 < q_0 - q_1 - q_2 < 112.42deg / 1.71 
-            g[1] = chain(3).getAng()+dT*x[3] - (chain(4).getAng()+dT*x[4]) - (chain(5).getAng()+dT*x[5]);
-            g[2] = chain(4).getAng()+dT*x[4] + (chain(5).getAng()+dT*x[5]); //-66.6 deg < q_1 + q_2 < 213.3 deg
+            g[1] = chain(3).getAng()+kp*dT*x[3] - (chain(4).getAng()+kp*dT*x[4]) - (chain(5).getAng()+kp*dT*x[5]);
+            g[2] = chain(4).getAng()+kp*dT*x[4] + (chain(5).getAng()+kp*dT*x[5]); //-66.6 deg < q_1 + q_2 < 213.3 deg
             return true;
           
         }
         else if (n==7){ //only arm joints
-            g[0] =  chain(0).getAng()+dT*x[0] - (chain(1).getAng()+dT*x[1]);   //1st ineq constraint -347deg/1.71 < q_0 - q_1
-            g[1] = chain(0).getAng()+dT*x[0] - (chain(1).getAng()+dT*x[1]) - (chain(2).getAng()+dT*x[2]);
-            g[2] = chain(1).getAng()+dT*x[1] + (chain(2).getAng()+dT*x[2]); //-66.6 deg < q_1 + q_2 < 213.3 deg
+            g[0] =  chain(0).getAng()+kp*dT*x[0] - (chain(1).getAng()+kp*dT*x[1]);   //1st ineq constraint -347deg/1.71 < q_0 - q_1
+            g[1] = chain(0).getAng()+kp*dT*x[0] - (chain(1).getAng()+kp*dT*x[1]) - (chain(2).getAng()+kp*dT*x[2]);
+            g[2] = chain(1).getAng()+kp*dT*x[1] + (chain(2).getAng()+kp*dT*x[2]); //-66.6 deg < q_1 + q_2 < 213.3 deg
             return true;
         }
        
@@ -435,13 +431,13 @@ public:
                 iRow[6] = 2; jCol[6]= 5;
             }
             else{  //return the values of the Jacobian of the constraints
-                values[0]= dT;
-                values[1]= -dT;
-                values[2]= dT;
-                values[3]= -dT;
-                values[4]= -dT;
-                values[5]= dT;
-                values[6]= dT;   
+                values[0]= kp*dT;
+                values[1]= -kp*dT;
+                values[2]= kp*dT;
+                values[3]= -kp*dT;
+                values[4]= -kp*dT;
+                values[5]= kp*dT;
+                values[6]= kp*dT;   
             }
             return true;
         
@@ -457,13 +453,13 @@ public:
                 iRow[6] = 2; jCol[6]= 2;
             }
             else{  //return the values of the Jacobian of the constraints
-                values[0]= dT;
-                values[1]= -dT;
-                values[2]= dT;
-                values[3]= -dT;
-                values[4]= -dT;
-                values[5]= dT;
-                values[6]= dT;   
+                values[0]= kp*dT;
+                values[1]= -kp*dT;
+                values[2]= kp*dT;
+                values[3]= -kp*dT;
+                values[4]= -kp*dT;
+                values[5]= kp*dT;
+                values[6]= kp*dT;   
             }
             return true;
         }
@@ -510,9 +506,9 @@ public:
 
 
 /************************************************************************/
-reactIpOpt::reactIpOpt(const iKinChain &c, const double tol,
+reactIpOpt::reactIpOpt(const iKinChain &c, const double _tol, const double _kp, 
                        const unsigned int verbose) :
-                       chain(c), verbosity(verbose)
+                       chain(c), kp(_kp), verbosity(verbose)
 {
     //reactIpOpt makes a copy of the original chain; then it will be passed as reference to react_NLP in reactIpOpt::solve
     chain.setAllConstraints(false); // this is required since IpOpt initially relaxes constraints
@@ -520,8 +516,8 @@ reactIpOpt::reactIpOpt(const iKinChain &c, const double tol,
 
     App=new IpoptApplication();
 
-    CAST_IPOPTAPP(App)->Options()->SetNumericValue("tol",tol);
-    CAST_IPOPTAPP(App)->Options()->SetNumericValue("acceptable_tol",tol);
+    CAST_IPOPTAPP(App)->Options()->SetNumericValue("tol",_tol);
+    CAST_IPOPTAPP(App)->Options()->SetNumericValue("acceptable_tol",_tol);
     CAST_IPOPTAPP(App)->Options()->SetIntegerValue("acceptable_iter",10);
     CAST_IPOPTAPP(App)->Options()->SetStringValue("mu_strategy","adaptive");
     CAST_IPOPTAPP(App)->Options()->SetIntegerValue("print_level",verbose);
@@ -562,11 +558,13 @@ void reactIpOpt::setVerbosity(const unsigned int verbose)
 
 
 /************************************************************************/
-yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_dot_0,
+yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_0, const yarp::sig::Vector &q_dot_0,
                                     double dt, const yarp::sig::Matrix &v_lim, bool boundSmoothnessFlag, double boundSmoothnessValue, int *exit_code)
 {
-    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,v_lim,boundSmoothnessFlag,boundSmoothnessValue, verbosity);
-        
+    chain.setAng(q_0); //this is a local copy of the chain - if ipOptMemory is on, we need to set it to the predicted position values passed in q_0 here
+    
+    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,dt,v_lim,kp,boundSmoothnessFlag,boundSmoothnessValue, verbosity);
+       
     CAST_IPOPTAPP(App)->Options()->SetNumericValue("max_cpu_time",dt);
     ApplicationReturnStatus status=CAST_IPOPTAPP(App)->OptimizeTNLP(GetRawPtr(nlp));
 

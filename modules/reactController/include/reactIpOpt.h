@@ -51,6 +51,7 @@ protected:
     void *App;
 
     iCub::iKin::iKinChain chain;
+    double kp;
 
     int verbosity;
 
@@ -59,14 +60,15 @@ public:
     * Constructor. 
     * @param c is the Chain object on which the control operates. Do 
     *          not change Chain DOF from this point onwards!!
-    * @param tol exits if 0.5*norm(xd-x)^2<tol.
+    * @param _tol exits if 0.5*norm(xd-x)^2<tol.
+    * @param _kp - constant for motor model
     * @param verbose is a integer number which progressively enables 
     *                different levels of warning messages or status
     *                dump. The larger this value the more detailed
     *                is the output (0=>off by default).
     */
     reactIpOpt(const iCub::iKin::iKinChain &c,
-               const double tol, const unsigned int verbose=0);
+               const double _tol, const double _kp, const unsigned int verbose=0);
 
     /**
     * Sets Tolerance.
@@ -114,7 +116,7 @@ public:
     *                   INTERNAL_ERROR
     * @return estimated joint velocities.
     */
-    virtual yarp::sig::Vector solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_dot_0,
+    virtual yarp::sig::Vector solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_0, const yarp::sig::Vector &q_dot_0,
                                     double dt, const yarp::sig::Matrix &v_lim, bool boundSmoothnessFlag, double boundSmoothnessValue, int *exit_code);
 
     /**

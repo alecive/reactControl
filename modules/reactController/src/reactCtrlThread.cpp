@@ -107,6 +107,7 @@ bool reactCtrlThread::threadInit()
         qT.resize(NR_TORSO_JOINTS,0.0); //current values of torso joints (3, in the order expected for iKin: yaw, roll, pitch)
     q.resize(chainActiveDOF,0.0); //current joint angle values (10 if torso is on, 7 if off)
     qIntegrated.resize(chainActiveDOF,0.0); //joint angle pos predictions from integrator
+    qIntegratedWithModel.resize(chainActiveDOF,0.0); //joint angle pos predictions from integrator with model and memory
     lim.resize(chainActiveDOF,2); //joint pos limits
     
     vLimNominal.resize(chainActiveDOF,2);
@@ -235,11 +236,13 @@ bool reactCtrlThread::threadInit()
                       zeros(chainActiveDOF)); //for say lag td 0.08s and dT 0.01, we will have 8 velocity vectors in the memory 
    
         I_ipOptWithMemory = new Integrator(dT,q,lim);
+       
     }
     else{
         motorModel_kp = 1.0;
         motorModel_td = 0.0;
         I_ipOptWithMemory = NULL;
+       
     }
         
   
@@ -259,9 +262,9 @@ bool reactCtrlThread::threadInit()
     aggregPPSeventsInPort.open("/"+name+"/pps_events_aggreg:i");
     aggregSkinEventsInPort.open("/"+name+"/skin_events_aggreg:i");
     
+    outPort.open("/"+name +"/data:o"); //for dumping
     if (visualizeIniCubGui)
-        outPort.open("/"+name +"/data:o"); //for dumping
-    outPortiCubGui.open(("/"+name+"/gui:o").c_str());
+         outPortiCubGui.open(("/"+name+"/gui:o").c_str());
     
     fout_param.open("param.log");
     
@@ -337,6 +340,7 @@ void reactCtrlThread::run()
     if (ipOptMemoryOn){
         for (size_t i=0; i<memory.size(); i++)
             I_ipOptWithMemory->integrate((motorModel_kp)*memory[i]);
+        qIntegratedWithModel = I_ipOptWithMemory->get();
     }
         
     collisionPoints.clear();
@@ -449,6 +453,7 @@ void reactCtrlThread::threadRelease()
     delete encsA; encsA = NULL;
     delete encsT; encsT = NULL;
     delete   arm;   arm = NULL;
+    
 
     collisionPoints.clear();    
     
@@ -692,7 +697,7 @@ bool reactCtrlThread::stopControl()
 
 Vector reactCtrlThread::solveIK(int &_exit_code)
 {
-    slv=new reactIpOpt(*arm->asChain(),tol,verbosity);
+    slv=new reactIpOpt(*arm->asChain(),tol,motorModel_kp, verbosity);
     // Next step will be provided iteratively.
     // The equation is x(t_next) = x_t + (x_d - x_t) * (t_next - t_now/T-t_now)
     //                              s.t. t_next = t_now + dT
@@ -756,8 +761,11 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
     // So, q_dot_0 is in degrees, but I have to convert it in radians before sending it to ipopt
     
-   
-    Vector res=slv->solve(x_n,q_dot*CTRL_DEG2RAD,dT,vLimAdapted*CTRL_DEG2RAD,boundSmoothnessFlag,boundSmoothnessValue*CTRL_DEG2RAD,&exit_code)*CTRL_RAD2DEG;
+   Vector res(chainActiveDOF,0.0); 
+   if (ipOptMemoryOn)
+       res=slv->solve(x_n,qIntegratedWithModel*CTRL_DEG2RAD, q_dot*CTRL_DEG2RAD,dT,vLimAdapted*CTRL_DEG2RAD,boundSmoothnessFlag,boundSmoothnessValue*CTRL_DEG2RAD,&exit_code)*CTRL_RAD2DEG;
+   else
+    res=slv->solve(x_n,q,q_dot*CTRL_DEG2RAD,dT,vLimAdapted*CTRL_DEG2RAD,boundSmoothnessFlag,boundSmoothnessValue*CTRL_DEG2RAD,&exit_code)*CTRL_RAD2DEG;
 
     
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
@@ -1185,8 +1193,8 @@ void reactCtrlThread::sendData()
             b.addDouble(timeToSolveProblem_s);
             if (controlMode == "positionDirect")
                 vectorIntoBottle(qIntegrated,b);
-            if (ipOptMemoryOn)
-                vectorIntoBottle(I_ipOptWithMemory->get(),b); //these will be positions integrated with the joint model 
+            else if (ipOptMemoryOn)
+                vectorIntoBottle(qIntegratedWithModel,b); //these will be positions integrated with the joint model 
             
             // the delta_x, that is the 3D vector that ipopt commands to 
             //    the robot in order for x_t to reach x_n

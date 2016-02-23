@@ -204,6 +204,7 @@ protected:
     yarp::sig::Vector qT; //current values of torso joints (3, in the order expected for iKin: yaw, roll, pitch)
     yarp::sig::Vector q; //current joint angle values (10 if torso is on, 7 if off)
     yarp::sig::Vector qIntegrated; //joint angle values integrated from velocity commands by Integrator - controlMode positionDirect only
+    yarp::sig::Vector qIntegratedWithModel; // ipOptMemoryOn mode only - using motorModel_kp and motorModel_td and Memory
    
     yarp::sig::Vector q_dot;  // Computed joint velocities to reach the target
     
