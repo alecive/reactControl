@@ -451,20 +451,20 @@ public:
             else yInfo("[reactController] Could not find referenceGen option in the config file; using %s as default",referenceGen.c_str());
         
             //********************** ipopt using memory - motor model ***********************
-            if (rf.check("ipOptMemoryOn"))
+            if (rf.check("ipOptMemory"))
             {
-                if(rf.find("ipOptMemoryOn").asString()=="on"){
+                if(rf.find("ipOptMemory").asString()=="on"){
                     ipOptMemoryOn = true;
-                    yInfo("[reactController] ipOptMemoryOn flag set to on.");
+                    yInfo("[reactController] ipOptMemory flag set to on.");
                 }
                 else{
                     ipOptMemoryOn = false;
-                    yInfo("[reactController] ipOptMemoryOn flag set to off.");
+                    yInfo("[reactController] ipOptMemory flag set to off.");
                 }
             }
             else
             {
-                 yInfo("[reactController] Could not find ipOptMemoryOn flag (on/off) in the config file; using %d as default",ipOptMemoryOn);
+                 yInfo("[reactController] Could not find ipOptMemory flag (on/off) in the config file; using %d as default",ipOptMemoryOn);
             }  
         
          //************** getting collision points either from aggregated skin events or from pps (predictions from vision)

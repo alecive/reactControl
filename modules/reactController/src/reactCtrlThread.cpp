@@ -235,8 +235,8 @@ bool reactCtrlThread::threadInit()
             motorModel_td = 0.08;
         }
         else if (robot == "icubSim"){
-            motorModel_kp = 1.1;
-            motorModel_td = 0.08;
+            motorModel_kp = 1.0;
+            motorModel_td = 0.0;
         }
         memoryVelCommands_RAD.insert(memoryVelCommands_RAD.begin(),(int)floor(motorModel_td/dT),
                       zeros(chainActiveDOF)); //for say lag td 0.08s and dT 0.01, we will have 8 velocity vectors in the memory 
