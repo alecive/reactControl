@@ -13,7 +13,7 @@ chosen_time_column = 6; % 4 for sender, 6 for receiver
 
 %path_prefix = 'input/';
 %path_prefix = 'icubTests/test_20160212a/';
-path_prefix = 'icubTests/test_20160222a/';
+path_prefix = 'icubTests/test_20160223a/';
 path_prefix_dumper = 'data/';
 
 if save_figs
@@ -25,7 +25,7 @@ end
 %  fout_param<<trajTime<<" "<<trajSpeed<<" "<<tol<<" "<<globalTol<<" "<<getRate()/1000.0<<" "<<boundSmoothnessFlag<<" "<<boundSmoothnessValue;
 %if(controlMode == "velocity") fout_param<<"1 "; else if(controlMode == "positionDirect")    fout_param<<"2 ";
 % for 10 DOF case: 1:nDOF, 2-21 joint pos min/max, 22-41 joint vel limits, 42 traj time, 43 traj speed (deg/s), 44: tol, 45: globalTol, 46: rate is s, 47: bound_smoothness flag,
-% 48: bound smoothness value, 49: controlMode 
+% 48: bound smoothness value, 49: controlMode, 50: ipOptMemory 0~off, 1~on
 d_params=importdata([path_prefix 'param.log']);
 
 NR_EXTRA_TIME_COLUMNS = 4; % these will be created so that there is time starting from 0, plus time increment column - this 2 times (sender and receiver time stamp) - for diagnostics
@@ -100,7 +100,7 @@ if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 
         else
             boundSmoothnessFlag = false
         end
-    elseif  (length(d_params) == 49) % logging controlMode as of 19.2.
+    elseif  (length(d_params) >= 49) % logging controlMode as of 19.2., ipOptMemory as off 22.2.
         dT = d_params(46)
         if (d_params(47) ==1)
             boundSmoothnessFlag = true
@@ -113,8 +113,7 @@ if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 
         elseif(d_params(49) == 2)
             controlMode = 'positionDirect'    
         end
-    end
-    
+     end    
      if(size(d_orig,2) >= 55)
        ipoptExitCode_col = 58; % setting the cols already for the new d, after adding extra time xols
        timeToSolve_s_col = 59;
