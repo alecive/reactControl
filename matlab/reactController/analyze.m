@@ -6,7 +6,7 @@ visualize_target = true;
 visualize_all_joint_pos = true;
 visualize_all_joint_vel = true;
 visualize_single_joint_in_detail = true;
-visualize_shoulder_ineq_constr = true;
+visualize_ineq_constr = true;
 visualize_ipopt_stats = true;
 save_figs = true;
 chosen_time_column = 6; % 4 for sender, 6 for receiver 
@@ -482,44 +482,88 @@ end
 
 %% inequality constraints - shoulder assembly
 
-if visualize_shoulder_ineq_constr
+if visualize_ineq_constr
 
     EXTRA_MARGIN_SHOULDER_INEQ_DEG = (0.05 / (2 * pi) ) * 360; 
     %each of the ineq. constraints for shoulder joints will have an extra safety marging of 0.05 rad on each side - i.e. the actual allowed range will be smaller
+    EXTRA_MARGIN_GENERAL_INEQ_DEG =  (0.05 / (2 * pi) ) * 360;
+    
+    f14 = figure(14); clf(f14); set(f14,'Color','white','Name','Inequality constraints');  
 
-    f14 = figure(14); clf(f14); set(f14,'Color','white','Name','Inequality constraints - shoulder assembly');  
-
-        subplot(3,1,1);
+        subplot(6,1,1);
         hold on;
             plot(t, data(:,joint_info(4).pos_column) - data(:,joint_info(5).pos_column));
             plot([t(1) t(end)], [-347/1.71+EXTRA_MARGIN_SHOULDER_INEQ_DEG -347/1.71+EXTRA_MARGIN_SHOULDER_INEQ_DEG],'--r');
             legend([joint_info(4).name ' - ' joint_info(5).name],'lower limit');
-            title('1st inequality constraint');
+            title('1st inequality constraint - shoulder');
             ylabel('angle (deg)'); 
         hold off;
 
-        subplot(3,1,2);
+        subplot(6,1,2);
         hold on;
             plot(t, data(:,joint_info(4).pos_column) - data(:,joint_info(5).pos_column) - data(:,joint_info(6).pos_column));
             plot([t(1) t(end)], [-366.57/1.71+EXTRA_MARGIN_SHOULDER_INEQ_DEG -366.57/1.71+EXTRA_MARGIN_SHOULDER_INEQ_DEG],'--r');
             plot([t(1) t(end)], [112.42/1.71-EXTRA_MARGIN_SHOULDER_INEQ_DEG 112.42/1.71-EXTRA_MARGIN_SHOULDER_INEQ_DEG],'-.r');
             legend([joint_info(4).name ' - ' joint_info(5).name ' - ' joint_info(6).name],'lower limit','upper limit');
-            title('2nd inequality constraint');
+            title('2nd inequality constraint -  shoulder');
             ylabel('angle (deg)'); 
         hold off;
 
-        subplot(3,1,3);
+        subplot(6,1,3);
         hold on;
             plot(t, data(:,joint_info(5).pos_column) + data(:,joint_info(6).pos_column));
             plot([t(1) t(end)], [-66.6+EXTRA_MARGIN_SHOULDER_INEQ_DEG -66.6+EXTRA_MARGIN_SHOULDER_INEQ_DEG],'--r');
             plot([t(1) t(end)], [213.3-EXTRA_MARGIN_SHOULDER_INEQ_DEG 213.3-EXTRA_MARGIN_SHOULDER_INEQ_DEG],'-.r');
-            legend([joint_info(4).name ' - ' joint_info(5).name],'lower limit','upper limit');
-            title('3rd inequality constraint');
+            legend([joint_info(5).name ' - ' joint_info(6).name],'lower limit','upper limit');
+            title('3rd inequality constraint - shoulder');
+            ylabel('angle (deg)'); 
+        hold off;
+        
+        joint1_0= 28.0;
+        joint1_1= 23.0;
+        joint2_0=-37.0;
+        joint2_1= 80.0;
+        shou_m=(joint1_1-joint1_0)/(joint2_1-joint2_0);
+        shou_n=joint1_0-shou_m*joint2_0;
+
+        joint3_0= 85.0;
+        joint3_1=105.0;
+        joint4_0= 90.0;
+        joint4_1= 40.0;
+        elb_m=(joint4_1-joint4_0)/(joint3_1-joint3_0);
+        elb_n=joint4_0-elb_m*joint3_0;
+        
+                
+        subplot(6,1,4);
+        hold on;
+            plot(t, data(:,joint_info(5).pos_column) + -shou_m*data(:,joint_info(6).pos_column));
+            plot([t(1) t(end)], [shou_n+EXTRA_MARGIN_GENERAL_INEQ_DEG shou_n+EXTRA_MARGIN_GENERAL_INEQ_DEG],'--r');
+            legend([joint_info(5).name ' - ' joint_info(6).name],'lower limit');
+            title('upper arm vs. torso inequality constraint');
             ylabel('angle (deg)'); 
         hold off;
 
+        subplot(6,1,5);
+        hold on;
+            plot(t, -elb_m*data(:,joint_info(7).pos_column) + data(:,joint_info(8).pos_column));
+            plot([t(1) t(end)], [elb_n-EXTRA_MARGIN_GENERAL_INEQ_DEG elb_n-EXTRA_MARGIN_GENERAL_INEQ_DEG],'--r');
+            legend([joint_info(7).name ' - ' joint_info(8).name],'upper limit');
+            title('1st upper arm vs. elbow inequality constraint');
+            ylabel('angle (deg)'); 
+        hold off;
+        
+        subplot(6,1,6);
+        hold on;
+            plot(t, elb_m*data(:,joint_info(7).pos_column) + data(:,joint_info(8).pos_column));
+            plot([t(1) t(end)], [-elb_n+EXTRA_MARGIN_GENERAL_INEQ_DEG -elb_n+EXTRA_MARGIN_GENERAL_INEQ_DEG],'--r');
+            legend([joint_info(7).name ' - ' joint_info(8).name],'lower limit');
+            title('2nd upper arm vs. elbow');
+            ylabel('angle (deg)'); 
+        hold off;
+ 
+        
    if save_figs
-       saveas(f14,'output/ShoulderAssemblyIneqConstraints.fig');
+       saveas(f14,'output/IneqConstraints.fig');
    end
         
 end
