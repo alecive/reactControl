@@ -13,7 +13,7 @@ chosen_time_column = 6; % 4 for sender, 6 for receiver
 
 %path_prefix = 'input/';
 %path_prefix = 'icubTests/test_20160212a/';
-path_prefix = 'icubSimTests/test_20160223a/';
+path_prefix = 'icubTests/test_20160234a_newPosDirect/';
 path_prefix_dumper = 'data/';
 
 if save_figs
@@ -26,6 +26,9 @@ end
 %if(controlMode == "velocity") fout_param<<"1 "; else if(controlMode == "positionDirect")    fout_param<<"2 ";
 % for 10 DOF case: 1:nDOF, 2-21 joint pos min/max, 22-41 joint vel limits, 42 traj time, 43 traj speed (deg/s), 44: tol, 45: globalTol, 46: rate is s, 47: bound_smoothness flag,
 % 48: bound smoothness value, 49: controlMode, 50: ipOptMemory 0~off, 1~on
+% 7 DOF case: 1:nDOF, 2-15 joint pos min/max, 16-29 joint vel limits, 30 traj time, 31 traj speed (deg/s), 32: tol, 33: globalTol, 34: rate is s, 35: bound_smoothness flag,
+% 36: bound smoothness value, 37: controlMode, 38: ipOptMemory 0~off, 1~on
+
 d_params=importdata([path_prefix 'param.log']);
 
 NR_EXTRA_TIME_COLUMNS = 4; % these will be created so that there is time starting from 0, plus time increment column - this 2 times (sender and receiver time stamp) - for diagnostics
@@ -36,12 +39,12 @@ NR_EXTRA_TIME_COLUMNS = 4; % these will be created so that there is time startin
 %8: nActiveDOF in chain
 % 9:11 desired final target (for end-effector), 12:14 current end effector position 
 % 15-17 current desired target given by particle (for end-effector)
-%variable - if torso on: 18:27: joint velocities as solution from ipopt and sent to robot 
-%variable - if torso on: 28:37: joint positions as solution to control and sent to robot 
-%variable - if torso on: 38:57; joint vel limits as input to ipopt, after avoidanceHandler
+%variable - if torso on: 18:27: if torso off: 18:24 ; joint velocities as solution from ipopt and sent to robot 
+%variable - if torso on: 28:37: if torso off: 25:31 ; joint positions as solution to control and sent to robot 
+%variable - if torso on: 38:57; if torso off: 32:38;  joint vel limits as input to ipopt, after avoidanceHandler
 %assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
-% variable - if torso on: 58: ipopt exit code (Solve_Succeeded=0)
-% variable - if torso on: 59: time taken to solve problem (s) ~ ipopt + avoidance handler
+% variable - if torso on: 58: if torso off: 46; ipopt exit code (Solve_Succeeded=0)
+% variable - if torso on: 59: if torso off: 47; time taken to solve problem (s) ~ ipopt + avoidance handler
 d_orig=importdata([path_prefix path_prefix_dumper 'reactCtrl/data.log']);
 
 
@@ -65,12 +68,8 @@ EE_x.column = 12;
 EE_y.column = 13;
 EE_z.column = 14;
     
-joint_info(1).name = '1st torso - pitch'; joint_info(2).name = '2nd torso - roll'; joint_info(3).name = '3rd torso - yaw'; 
-joint_info(4).name = '1st shoulder'; joint_info(5).name = '2nd shoulder'; joint_info(6).name = '3rd shoulder'; 
-joint_info(7).name = '1st elbow'; joint_info(8).name = '2nd elbow'; 
-joint_info(9).name = '1st wrist'; joint_info(10).name = '2nd wrist'; 
 
-controlMode = 'velocity';
+%controlMode = 'velocity';
 %controlMode = 'positionDirect'; % should be picked up automatically from
 %the param file
 
@@ -78,6 +77,11 @@ controlMode = 'velocity';
 if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 arm
     chainActiveDOF = 10;
         
+    joint_info(1).name = '1st torso - pitch'; joint_info(2).name = '2nd torso - roll'; joint_info(3).name = '3rd torso - yaw'; 
+    joint_info(4).name = '1st shoulder'; joint_info(5).name = '2nd shoulder'; joint_info(6).name = '3rd shoulder'; 
+    joint_info(7).name = '1st elbow'; joint_info(8).name = '2nd elbow';  joint_info(9).name = '1st wrist'; joint_info(10).name = '2nd wrist'; 
+
+    
     for i=1:chainActiveDOF
         joint_info(i).pos_limit_min = d_params(2*i); joint_info(i).pos_limit_max = d_params(2*i+1);
         joint_info(i).vel_limit_min = d_params(20+2*i); joint_info(i).vel_limit_max = d_params(20+2*i+1);
@@ -117,15 +121,61 @@ if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 
      if(size(d_orig,2) >= 55)
        ipoptExitCode_col = 58; % setting the cols already for the new d, after adding extra time xols
        timeToSolve_s_col = 59;
+     end
+     
+     
+    if ( (strcmp(controlMode,'positionDirect')) && (size(d_orig,2) <  65) )
+        error('It seems that intergrated positions were not logged.'); 
     end
         
+elseif((d_params(1) == 7) && (d_orig(1,4) == 7) ) % 7 DOF situation - arm
+    chainActiveDOF = 7;
+    
+    joint_info(1).name = '1st shoulder'; joint_info(2).name = '2nd shoulder'; joint_info(3).name = '3rd shoulder'; 
+    joint_info(4).name = '1st elbow'; joint_info(5).name = '2nd elbow'; 
+    joint_info(6).name = '1st wrist'; joint_info(7).name = '2nd wrist'; 
+
+        
+    for i=1:chainActiveDOF
+        joint_info(i).pos_limit_min = d_params(2*i); joint_info(i).pos_limit_max = d_params(2*i+1);
+        joint_info(i).vel_limit_min = d_params(14+2*i); joint_info(i).vel_limit_max = d_params(14+2*i+1);
+        joint_info(i).vel_column = 13+i+NR_EXTRA_TIME_COLUMNS; joint_info(i).pos_column = 20+i+NR_EXTRA_TIME_COLUMNS; 
+        joint_info(i).vel_limit_min_avoid_column = 26+2*i+NR_EXTRA_TIME_COLUMNS; joint_info(i).vel_limit_max_avoid_column = 26+2*i+1+NR_EXTRA_TIME_COLUMNS;
+        joint_info(i).integrated_pos_column = 43+i+NR_EXTRA_TIME_COLUMNS; 
+    end
+    
+    % 7 DOF case: 1:nDOF, 2-15 joint pos min/max, 16-29 joint vel limits, 30 traj time, 31 traj speed (deg/s), 32: tol, 33: globalTol, 34: rate is s, 35: bound_smoothness flag,
+    % 36: bound smoothness value, 37: controlMode, 38: ipOptMemory 0~off, 1~on
+
+    if (length(d_params) == 38) 
+        dT = d_params(34)
+        if (d_params(35) ==1)
+            boundSmoothnessFlag = true
+            boundSmoothnessValue = d_params(36)
+        else
+            boundSmoothnessFlag = false
+        end
+        if(d_params(37) == 1)
+            controlMode = 'velocity'
+        elseif(d_params(37) == 2)
+            controlMode = 'positionDirect'    
+        end
+    else
+        error('Unexpected param.log length for 7 DOF chain');
+    end
+   
+    ipoptExitCode_col = 46; % setting the cols already for the new d, after adding extra time xols
+    timeToSolve_s_col = 47;
+    
+    if ( (strcmp(controlMode,'positionDirect')) && (size(d_orig,2) <  50) )
+        error('It seems that intergrated positions were not logged.'); 
+    end
+    
+     
 else
-   error('This script is currently not supporting other than 10 DOF chains'); 
+   error('This script is currently not supporting other than 10 DOF and 7 DOF chains'); 
 end
 
-if ( (strcmp(controlMode,'positionDirect')) && (size(d_orig,2) <  65) )
-    error('It seems that intergrated positions were not logged.'); 
-end
 
 
 %% create extra time columns
@@ -311,7 +361,6 @@ end
 
 %% joint values vs. joint limits
 if visualize_all_joint_pos
-    if(chainActiveDOF == 10) % 10 DOF situation - 3 torso, 7 arm
         data = [];
         f3 = figure(3); clf(f3); set(f3,'Color','white','Name','Joint positions - No avoidance');  
        % f4 = figure(4); clf(f4); set(f4,'Color','white','Name','Joint positions - Visual avoidance');  
@@ -345,7 +394,6 @@ if visualize_all_joint_pos
             end    
                 
         end   
-    end
     if save_figs
         saveas(f3,'output/JointPositionsNoAvoidance.fig');
         %saveas(f4,'output/JointPositionsVisualAvoidance.fig');
@@ -358,7 +406,6 @@ end
 
 %% joint velocities vs. joint vel limits
 if visualize_all_joint_vel
-    if(chainActiveDOF == 10) % 10 DOF situation - 3 torso, 7 arm
        
         data = [];
         f6 = figure(6); clf(f6); set(f6,'Color','white','Name','Joint vel - control commands');  
@@ -412,8 +459,7 @@ if visualize_all_joint_vel
             hold off;
         end    
          
-        
-    end
+    
     if save_figs
         saveas(f6,'output/JointVelocitiesNoAvoidance.fig');
         %saveas(f7,'output/JointVelocitiesVisualAvoidance.fig');
@@ -430,7 +476,6 @@ if visualize_single_joint_in_detail
 
     j = 4; % joint index to visualize
 
-    if(chainActiveDOF == 10) % 10 DOF situation - 3 torso, 7 arm
         data = [];
         f10 = figure(10); clf(f10); set(f10,'Color','white','Name',['No avoidance - ' joint_info(j).name]);  
         %f11 = figure(11); clf(f11); set(f11,'Color','white','Name',['Visual avoidance - ' joint_info(j).name]);  
@@ -470,7 +515,6 @@ if visualize_single_joint_in_detail
          hold off;
 
         end
-    end
     
     if save_figs
         saveas(f10,'output/SelectedJointDetailNoAvoidance.fig');
@@ -484,6 +528,10 @@ end
 
 if visualize_ineq_constr
 
+    if (chainActiveDOF == 7) 
+       jointIndexCorrection = -3; 
+    end
+    
     EXTRA_MARGIN_SHOULDER_INEQ_DEG = (0.05 / (2 * pi) ) * 360; 
     %each of the ineq. constraints for shoulder joints will have an extra safety marging of 0.05 rad on each side - i.e. the actual allowed range will be smaller
     EXTRA_MARGIN_GENERAL_INEQ_DEG =  (0.05 / (2 * pi) ) * 360;
@@ -492,29 +540,29 @@ if visualize_ineq_constr
 
         subplot(6,1,1);
         hold on;
-            plot(t, data(:,joint_info(4).pos_column) - data(:,joint_info(5).pos_column));
+            plot(t, data(:,joint_info(4+jointIndexCorrection).pos_column) - data(:,joint_info(5+jointIndexCorrection).pos_column));
             plot([t(1) t(end)], [-347/1.71+EXTRA_MARGIN_SHOULDER_INEQ_DEG -347/1.71+EXTRA_MARGIN_SHOULDER_INEQ_DEG],'--r');
-            legend([joint_info(4).name ' - ' joint_info(5).name],'lower limit');
+            legend([joint_info(4+jointIndexCorrection).name ' - ' joint_info(5+jointIndexCorrection).name],'lower limit');
             title('1st inequality constraint - shoulder');
             ylabel('angle (deg)'); 
         hold off;
 
         subplot(6,1,2);
         hold on;
-            plot(t, data(:,joint_info(4).pos_column) - data(:,joint_info(5).pos_column) - data(:,joint_info(6).pos_column));
+            plot(t, data(:,joint_info(4+jointIndexCorrection).pos_column) - data(:,joint_info(5+jointIndexCorrection).pos_column) - data(:,joint_info(6+jointIndexCorrection).pos_column));
             plot([t(1) t(end)], [-366.57/1.71+EXTRA_MARGIN_SHOULDER_INEQ_DEG -366.57/1.71+EXTRA_MARGIN_SHOULDER_INEQ_DEG],'--r');
             plot([t(1) t(end)], [112.42/1.71-EXTRA_MARGIN_SHOULDER_INEQ_DEG 112.42/1.71-EXTRA_MARGIN_SHOULDER_INEQ_DEG],'-.r');
-            legend([joint_info(4).name ' - ' joint_info(5).name ' - ' joint_info(6).name],'lower limit','upper limit');
+            legend([joint_info(4+jointIndexCorrection).name ' - ' joint_info(5+jointIndexCorrection).name ' - ' joint_info(6+jointIndexCorrection).name],'lower limit','upper limit');
             title('2nd inequality constraint -  shoulder');
             ylabel('angle (deg)'); 
         hold off;
 
         subplot(6,1,3);
         hold on;
-            plot(t, data(:,joint_info(5).pos_column) + data(:,joint_info(6).pos_column));
+            plot(t, data(:,joint_info(5+jointIndexCorrection).pos_column) + data(:,joint_info(6+jointIndexCorrection).pos_column));
             plot([t(1) t(end)], [-66.6+EXTRA_MARGIN_SHOULDER_INEQ_DEG -66.6+EXTRA_MARGIN_SHOULDER_INEQ_DEG],'--r');
             plot([t(1) t(end)], [213.3-EXTRA_MARGIN_SHOULDER_INEQ_DEG 213.3-EXTRA_MARGIN_SHOULDER_INEQ_DEG],'-.r');
-            legend([joint_info(5).name ' - ' joint_info(6).name],'lower limit','upper limit');
+            legend([joint_info(5+jointIndexCorrection).name ' - ' joint_info(6+jointIndexCorrection).name],'lower limit','upper limit');
             title('3rd inequality constraint - shoulder');
             ylabel('angle (deg)'); 
         hold off;
@@ -536,27 +584,27 @@ if visualize_ineq_constr
                 
         subplot(6,1,4);
         hold on;
-            plot(t, data(:,joint_info(5).pos_column) + -shou_m*data(:,joint_info(6).pos_column));
+            plot(t, data(:,joint_info(5+jointIndexCorrection).pos_column) + -shou_m*data(:,joint_info(6+jointIndexCorrection).pos_column));
             plot([t(1) t(end)], [shou_n+EXTRA_MARGIN_GENERAL_INEQ_DEG shou_n+EXTRA_MARGIN_GENERAL_INEQ_DEG],'--r');
-            legend([joint_info(5).name ' - ' joint_info(6).name],'lower limit');
+            legend([joint_info(5+jointIndexCorrection).name ' - ' joint_info(6+jointIndexCorrection).name],'lower limit');
             title('upper arm vs. torso inequality constraint');
             ylabel('angle (deg)'); 
         hold off;
 
         subplot(6,1,5);
         hold on;
-            plot(t, -elb_m*data(:,joint_info(7).pos_column) + data(:,joint_info(8).pos_column));
+            plot(t, -elb_m*data(:,joint_info(7+jointIndexCorrection).pos_column) + data(:,joint_info(8+jointIndexCorrection).pos_column));
             plot([t(1) t(end)], [elb_n-EXTRA_MARGIN_GENERAL_INEQ_DEG elb_n-EXTRA_MARGIN_GENERAL_INEQ_DEG],'--r');
-            legend([joint_info(7).name ' - ' joint_info(8).name],'upper limit');
+            legend([joint_info(7+jointIndexCorrection).name ' - ' joint_info(8+jointIndexCorrection).name],'upper limit');
             title('1st upper arm vs. elbow inequality constraint');
             ylabel('angle (deg)'); 
         hold off;
         
         subplot(6,1,6);
         hold on;
-            plot(t, elb_m*data(:,joint_info(7).pos_column) + data(:,joint_info(8).pos_column));
+            plot(t, elb_m*data(:,joint_info(7+jointIndexCorrection).pos_column) + data(:,joint_info(8+jointIndexCorrection).pos_column));
             plot([t(1) t(end)], [-elb_n+EXTRA_MARGIN_GENERAL_INEQ_DEG -elb_n+EXTRA_MARGIN_GENERAL_INEQ_DEG],'--r');
-            legend([joint_info(7).name ' - ' joint_info(8).name],'lower limit');
+            legend([joint_info(7+jointIndexCorrection).name ' - ' joint_info(8+jointIndexCorrection).name],'lower limit');
             title('2nd upper arm vs. elbow');
             ylabel('angle (deg)'); 
         hold off;
