@@ -35,7 +35,9 @@
 #include <iCub/ctrl/math.h>
 #include <iCub/ctrl/pids.h>
 #include <iCub/ctrl/minJerkCtrl.h>
+#include <iCub/ctrl/filters.h>
 #include <iCub/iKin/iKinFwd.h>
+
 
 using namespace std;
 using namespace yarp::os;
@@ -50,6 +52,7 @@ class ControllerNLP : public Ipopt::TNLP
 {
     iKinChain &chain;
     deque<Vector> memory;
+    Filter *filter;
 
     Vector xr;
     Vector x0;
@@ -63,6 +66,7 @@ class ControllerNLP : public Ipopt::TNLP
     double dt;
     double kp;
     double td;
+    double tc;
 
     Vector qGuard;
     Vector qGuardMinExt;
@@ -129,7 +133,7 @@ class ControllerNLP : public Ipopt::TNLP
 
 public:
     /****************************************************************/
-    ControllerNLP(iKinChain &chain_) : chain(chain_)
+    ControllerNLP(iKinChain &chain_) : chain(chain_), filter(NULL)
     {
         xr.resize(3,0.0);
         v0.resize(chain.getDOF(),0.0);
@@ -152,6 +156,13 @@ public:
         dt=0.0;
         kp=1.0;
         td=0.0;
+        tc=0.0;
+    }
+
+    /****************************************************************/
+    ~ControllerNLP()
+    {
+        delete filter;
     }
 
     /****************************************************************/
@@ -199,6 +210,20 @@ public:
     }
 
     /****************************************************************/
+    void set_tc(const double tc)
+    {
+        yAssert(tc>=0.0);
+        yAssert(dt>0.0);
+        this->tc=tc;
+
+        delete filter;
+        double c=(2.0*tc)/dt;
+        Vector den(2,0.0);
+        den[0]=1.0+c; den[1]=1.0-c;
+        filter=new Filter(Vector(2,1.0),den,zeros(v.length()));
+    }
+
+    /****************************************************************/
     void set_v0(const Vector &v0)
     {
         yAssert(this->v0.length()==v0.length());
@@ -230,6 +255,7 @@ public:
         parameters.put("dt",dt);
         parameters.put("kp",kp);
         parameters.put("td",td);
+        parameters.put("tc",tc);
         parameters.put("memory-buffer",(int)memory.size());
         return parameters;
     }
@@ -322,6 +348,7 @@ public:
         for (Ipopt::Index i=0; i<n; i++)
             v[i]=CTRL_RAD2DEG*x[i];
 
+        v=filter->filt(v);
         memory.push_back(v);
         memory.pop_front();
     }
@@ -713,8 +740,9 @@ int main(int argc, char *argv[])
     double dt=rf.check("dt",Value(0.01)).asDouble();    
     double motor_kp=rf.check("motor-kp",Value(1.0)).asDouble();
     double motor_td=rf.check("motor-td",Value(0.0)).asDouble();
-    double model_kp=rf.check("model-kp",Value(1.0)).asDouble();
-    double model_td=rf.check("model-td",Value(0.0)).asDouble();
+    double nlp_kp=rf.check("nlp-kp",Value(1.0)).asDouble();
+    double nlp_td=rf.check("nlp-td",Value(0.0)).asDouble();
+    double nlp_tc=rf.check("nlp-tc",Value(0.0)).asDouble();
     double T=rf.check("T",Value(1.0)).asDouble();
     double sim_time=rf.check("sim-time",Value(10.0)).asDouble();
 
@@ -770,8 +798,9 @@ int main(int argc, char *argv[])
     }
 
     nlp->set_dt(dt);
-    nlp->set_kp(model_kp);
-    nlp->set_td(model_td);
+    nlp->set_kp(nlp_kp);
+    nlp->set_td(nlp_td);
+    nlp->set_tc(nlp_tc);
     Motor motor(q0,lim,motor_kp,motor_td,dt);
     Vector v(chain.getDOF(),0.0);
 
@@ -792,7 +821,7 @@ int main(int argc, char *argv[])
     Obstacle obstacle(xo,0.07,vo,dt);
 
     yInfo()<<"Motor Parameters="<<motor.getParameters().toString();
-    yInfo()<<"Model Parameters="<<nlp->getParameters().toString();
+    yInfo()<<"NLP Parameters="<<nlp->getParameters().toString();
     yInfo()<<"Avoidance-Handler="<<avhdl->getType();
     yInfo()<<"Avoidance Parameters="<<avhdl->getParameters().toString();    
 
