@@ -235,7 +235,7 @@ bool reactCtrlThread::threadInit()
             motorModel_td = 0.08;
         }
         else if (robot == "icubSim"){
-            motorModel_kp = 0.45;
+            motorModel_kp =  0.45;
             motorModel_td = 0.023;
         }
         memoryVelCommands_RAD.insert(memoryVelCommands_RAD.begin(),(int)floor(motorModel_td/dT),
@@ -750,9 +750,13 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
     // So, q_dot_0 is in degrees, but I have to convert it in radians before sending it to ipopt
-    
+   
    Vector res(chainActiveDOF,0.0); 
-   res=slv->solve(x_n, q_dot*CTRL_DEG2RAD,memoryVelCommands_RAD,dT,vLimAdapted*CTRL_DEG2RAD,boundSmoothnessFlag,boundSmoothnessValue*CTRL_DEG2RAD,&exit_code)*CTRL_RAD2DEG;
+  
+   if (controlMode == "positionDirect") //in this mode, ipopt will use the qIntegrated values to update its copy of chain
+        res=slv->solve(x_n,qIntegrated*CTRL_DEG2RAD,q_dot*CTRL_DEG2RAD,memoryVelCommands_RAD,dT,vLimAdapted*CTRL_DEG2RAD, boundSmoothnessFlag,boundSmoothnessValue*CTRL_DEG2RAD,&exit_code)*CTRL_RAD2DEG;
+   else if (controlMode == "velocity")
+        res=slv->solve(x_n,q*CTRL_DEG2RAD, q_dot*CTRL_DEG2RAD,memoryVelCommands_RAD,dT,vLimAdapted*CTRL_DEG2RAD, boundSmoothnessFlag,boundSmoothnessValue*CTRL_DEG2RAD,&exit_code)*CTRL_RAD2DEG;
    
     
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);

@@ -606,10 +606,10 @@ public:
 /************************************************************************/
 reactIpOpt::reactIpOpt(const iKinChain &c, const double _tol, const bool _useMemory, const double _kp, 
                        const unsigned int verbose) :
-                       chain(c), useMemory(_useMemory), kp(_kp), verbosity(verbose)
+                       chainCopy(c), useMemory(_useMemory), kp(_kp), verbosity(verbose)
 {
-    //reactIpOpt makes a copy of the original chain; then it will be passed as reference to react_NLP in reactIpOpt::solve
-    chain.setAllConstraints(false); // this is required since IpOpt initially relaxes constraints
+    //reactIpOpt makes a copy of the original chain, which may me modified here; then it will be passed as reference to react_NLP in reactIpOpt::solve
+    chainCopy.setAllConstraints(false); // this is required since IpOpt initially relaxes constraints
     //note that this is about limits not about joints being blocked (which is preserved)
 
     App=new IpoptApplication();
@@ -656,11 +656,11 @@ void reactIpOpt::setVerbosity(const unsigned int verbose)
 
 
 /************************************************************************/
-yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_dot_0,std::deque<yarp::sig::Vector> &q_dot_memory,
-                                    double dt, const yarp::sig::Matrix &v_lim, bool boundSmoothnessFlag, double boundSmoothnessValue, int *exit_code)
+yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q, const yarp::sig::Vector &q_dot_0,std::deque<yarp::sig::Vector> &q_dot_memory, double dt, const yarp::sig::Matrix &v_lim, bool boundSmoothnessFlag, double boundSmoothnessValue, int *exit_code)
 {
     
-    SmartPtr<react_NLP> nlp=new react_NLP(chain,xd,q_dot_0,q_dot_memory,dt,v_lim,useMemory,kp,boundSmoothnessFlag,boundSmoothnessValue, verbosity);
+    chainCopy.setAng(q); //these differ from the real positions in the case of positionDirect mode
+    SmartPtr<react_NLP> nlp=new react_NLP(chainCopy,xd,q_dot_0,q_dot_memory,dt,v_lim,useMemory,kp,boundSmoothnessFlag,boundSmoothnessValue, verbosity);
        
     CAST_IPOPTAPP(App)->Options()->SetNumericValue("max_cpu_time",dt);
     ApplicationReturnStatus status=CAST_IPOPTAPP(App)->OptimizeTNLP(GetRawPtr(nlp));

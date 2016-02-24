@@ -52,7 +52,7 @@ protected:
     // The IpOpt application that supposedly will solve the task
     void *App;
 
-    iCub::iKin::iKinChain chain;
+    iCub::iKin::iKinChain chainCopy; //this is a copy of the orig chain, which can be modified here - e.g. in posDirect mode
     double useMemory;
     double kp;
 
@@ -97,7 +97,8 @@ public:
 
     /**
     * Executes the IpOpt algorithm trying to converge on target. 
-    * @param xd        is the End-Effector target Pose to be attained. 
+    * @param xd  is the End-Effector target Pose to be attained.
+    * @param q    are the joint positions (real in velocityMode, integrated in positionDirect mode). 
     * @param q_dot_0   are the initial joint velocities of the chain.
     * @param q_dot_memory buffer of past velocity commands - depending on td in motor model
     * @param dt        is the time step to use in order to solve the task. 
@@ -121,7 +122,7 @@ public:
     *                   INTERNAL_ERROR
     * @return estimated joint velocities.
     */
-    virtual yarp::sig::Vector solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q_dot_0, std::deque<yarp::sig::Vector> &q_dot_memory,
+    virtual yarp::sig::Vector solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q, const yarp::sig::Vector &q_dot_0, std::deque<yarp::sig::Vector> &q_dot_memory,
                                     double dt, const yarp::sig::Matrix &v_lim, bool boundSmoothnessFlag, double boundSmoothnessValue, int *exit_code);
 
     /**
