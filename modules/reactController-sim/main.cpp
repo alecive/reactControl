@@ -52,7 +52,12 @@ class ControllerNLP : public Ipopt::TNLP
 {
     iKinChain &chain;
     deque<Vector> memory;
+
     Filter *filter;
+    Vector filt_num;
+    Vector filt_den;
+    deque<Vector> filt_u;
+    deque<Vector> filt_y;
 
     Vector xr;
     Vector x0;
@@ -133,7 +138,7 @@ class ControllerNLP : public Ipopt::TNLP
 
 public:
     /****************************************************************/
-    ControllerNLP(iKinChain &chain_) : chain(chain_), filter(NULL)
+    ControllerNLP(iKinChain &chain_) : chain(chain_)
     {
         xr.resize(3,0.0);
         v0.resize(chain.getDOF(),0.0);
@@ -157,6 +162,10 @@ public:
         kp=1.0;
         td=0.0;
         tc=0.0;
+
+        filter=new Filter(ones(1),ones(1),zeros(v.length()));
+        filter->getCoeffs(filt_num,filt_den);
+        filter->getStates(filt_u,filt_y);
     }
 
     /****************************************************************/
@@ -215,12 +224,15 @@ public:
         yAssert(tc>=0.0);
         yAssert(dt>0.0);
         this->tc=tc;
+        
+        Vector den(2,1.0);
+        double c=(2.0*tc)/dt;
+        den[0]+=c; den[1]-=c;
 
         delete filter;
-        double c=(2.0*tc)/dt;
-        Vector den(2,0.0);
-        den[0]=1.0+c; den[1]=1.0-c;
-        filter=new Filter(Vector(2,1.0),den,zeros(v.length()));
+        filter=new Filter(ones(2),den,zeros(v.length()));
+        filter->getCoeffs(filt_num,filt_den);
+        filter->getStates(filt_u,filt_y);
     }
 
     /****************************************************************/
@@ -235,17 +247,19 @@ public:
     {
         Integrator I(dt,chain.getAng(),q_lim);
         for (size_t i=0; i<memory.size(); i++)
-            I.integrate((kp*CTRL_DEG2RAD)*memory[i]);
+            I.integrate(kp*memory[i]);
 
         x0=chain.EndEffPosition(I.get());
         J0=chain.GeoJacobian().submatrix(0,2,0,chain.getDOF()-1);
         computeBounds();
+        
+        filter->getStates(filt_u,filt_y);
     }
 
     /****************************************************************/
     Vector get_result() const
     {
-        return v;
+        return CTRL_RAD2DEG*v;
     }
 
     /****************************************************************/
@@ -299,7 +313,16 @@ public:
         {
             for (size_t i=0; i<v.length(); i++)
                 v[i]=x[i];
-            delta_x=xr-(x0+(kp*dt)*(J0*v));
+
+            Vector filt_v=filt_num[0]*v;
+            for (size_t i=1; i<filt_num.size(); i++)
+                filt_v+=filt_num[i]*filt_u[i-1];
+
+            for (size_t i=1; i<filt_den.size(); i++)
+                filt_v-=filt_den[i]*filt_y[i-1];
+            filt_v/=filt_den[0];
+
+            delta_x=xr-(x0+(kp*dt)*(J0*filt_v));
         }
     }
 
@@ -318,7 +341,7 @@ public:
     {
         computeQuantities(x,new_x);
         for (Ipopt::Index i=0; i<n; i++)
-            grad_f[i]=-2.0*(kp*dt)*dot(delta_x,J0.getCol(i));
+            grad_f[i]=-2.0*(kp*dt)*dot(delta_x,J0.getCol(i)*(filt_num[0]/filt_den[0]));
         return true; 
     }
 
@@ -346,7 +369,7 @@ public:
                            Ipopt::IpoptCalculatedQuantities *ip_cq)
     {
         for (Ipopt::Index i=0; i<n; i++)
-            v[i]=CTRL_RAD2DEG*x[i];
+            v[i]=x[i];
 
         v=filter->filt(v);
         memory.push_back(v);
@@ -795,7 +818,7 @@ int main(int argc, char *argv[])
     {
         yError()<<"unrecognized avoidance type! exiting ...";
         return 1;
-    }
+    }    
 
     nlp->set_dt(dt);
     nlp->set_kp(nlp_kp);
