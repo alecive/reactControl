@@ -50,7 +50,7 @@ using namespace iCub::skinDynLib;
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,  const string &_part,
                                  int _verbosity, bool _disableTorso,  string _controlMode, 
                                  double _trajSpeed, double _globalTol, double _vMax, double _tol,
-                                 string _referenceGen, bool _ipOptMemoryOn, 
+                                 string _referenceGen, bool _ipOptMemoryOn, bool _ipOptFilterOn,
                                  bool _tactileCollisionPointsOn, bool _visualCollisionPointsOn,
                                  bool _boundSmoothnessFlag, double _boundSmoothnessValue, 
                                  bool _visualizeTargetInSim, bool _visualizeParticleInSim, bool _visualizeCollisionPointsInSim,
@@ -58,7 +58,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
                                  verbosity(_verbosity), useTorso(!_disableTorso), controlMode(_controlMode),
                                  trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol),
-                                 referenceGen(_referenceGen), ipOptMemoryOn(_ipOptMemoryOn),
+                                 referenceGen(_referenceGen), ipOptMemoryOn(_ipOptMemoryOn), ipOptFilterOn(_ipOptFilterOn),
                                  tactileCollisionPointsOn(_tactileCollisionPointsOn), visualCollisionPointsOn(_visualCollisionPointsOn),
                                  boundSmoothnessFlag(_boundSmoothnessFlag), boundSmoothnessValue(_boundSmoothnessValue),                                 visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
                                  visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim)
@@ -221,7 +221,6 @@ bool reactCtrlThread::threadInit()
   
     updateArmChain(); 
         
-    
     x_0.resize(3,0.0);
     x_t.resize(3,0.0);
     x_n.resize(3,0.0);
@@ -246,8 +245,19 @@ bool reactCtrlThread::threadInit()
         motorModel_td = 0.0;
        
     }
-        
+    if (ipOptFilterOn)
+    {
+        double tc=0.25; //related to filter cut-off frequency
+        Vector den(2,1.0);
+        double c=(2.0*tc)/dT;
+        den[0]+=c; den[1]-=c;
+        filter=new Filter(ones(2),den,zeros(chainActiveDOF));
+    }
+    else
+        filter = new Filter(ones(1),ones(1),zeros(chainActiveDOF)); //~ identity
   
+        
+        
     if(controlMode == "positionDirect")
          I = new Integrator(dT,q,lim);        
     else
@@ -292,7 +302,11 @@ bool reactCtrlThread::threadInit()
         fout_param<<"1 ";
     else 
         fout_param<<"0 ";
-    
+    if(ipOptFilterOn)
+        fout_param<<"1 ";
+    else 
+        fout_param<<"0 ";   
+         
     yInfo("Written to param file and closing..");    
     fout_param.close();
      
@@ -330,6 +344,7 @@ bool reactCtrlThread::threadInit()
 
 void reactCtrlThread::run()
 {
+    bool controlSuccess =false;
     printMessage(2,"[reactCtrlThread::run()] started, state: %d.\n",state);
     yarp::os::LockGuard lg(mutex);
     updateArmChain();
@@ -340,7 +355,8 @@ void reactCtrlThread::run()
     //yDebug("GeoJacobian: \n %s \n",J1_temp.toString(3,3).c_str());    
                
     collisionPoints.clear();
-        
+    
+      
     /* For now, let's experiment with some fixed points on the forearm skin, emulating the vectors coming from margin of safety, 
      to test the performance of the algorithm
     Let's try 3 triangle midpoints on the upper patch on the forearm, taking positions from CAD, 
@@ -407,12 +423,28 @@ void reactCtrlThread::run()
                 
                 if(controlMode == "positionDirect"){
                     qIntegrated = I->integrate(q_dot);    
-                    if (!controlArm(controlMode,qIntegrated))
+                    if (!controlArm(controlMode,qIntegrated)){
                             yError("I am not able to properly control the arm in positionDirect!");
+                            controlSuccess = false;
+                    }
+                    else
+                        controlSuccess = true; 
                 }
                 else if (controlMode == "velocity"){
-                    if (!controlArm(controlMode,q_dot))
+                    if (!controlArm(controlMode,q_dot)){
                         yError("I am not able to properly control the arm in velocity!");
+                        controlSuccess = false;   
+                    }
+                    else
+                        controlSuccess = true;
+                }
+                
+                if(controlSuccess){
+                    q_dot=filter->filt(q_dot);
+                    if(ipOptMemoryOn){
+                        memoryVelCommands_RAD.push_back(q_dot*CTRL_DEG2RAD);
+                        memoryVelCommands_RAD.pop_front();
+                    }
                 }
             }
             else
@@ -430,10 +462,6 @@ void reactCtrlThread::run()
             yFatal("[reactCtrlThread] reactCtrlThread should never be here!!! Step: %d",state);
     }
     
-    if(ipOptMemoryOn){
-        memoryVelCommands_RAD.push_back(q_dot*CTRL_DEG2RAD);
-        memoryVelCommands_RAD.pop_front();
-    }
     
     sendData();
     if (tactileCollisionPointsOn || visualCollisionPointsOn)
@@ -462,6 +490,13 @@ void reactCtrlThread::threadRelease()
         delete I;
         I = NULL;    
     }
+    
+    if(filter != NULL){
+       yDebug("deleting filter");
+       delete filter;
+       filter = NULL;
+    }
+    
     memoryVelCommands_RAD.clear(); 
         
     if (visualizeIniCubGui)
@@ -687,7 +722,7 @@ bool reactCtrlThread::stopControl()
 
 Vector reactCtrlThread::solveIK(int &_exit_code)
 {
-    slv=new reactIpOpt(*arm->asChain(),tol,ipOptMemoryOn, motorModel_kp, verbosity);
+    slv=new reactIpOpt(*arm->asChain(),tol,ipOptMemoryOn, motorModel_kp, filter, verbosity);
     // Next step will be provided iteratively.
     // The equation is x(t_next) = x_t + (x_d - x_t) * (t_next - t_now/T-t_now)
     //                              s.t. t_next = t_now + dT

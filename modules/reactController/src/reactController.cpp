@@ -107,6 +107,7 @@ private:
     
     string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk" 
     bool ipOptMemoryOn; // whether ipopt should account for the real motor model
+    bool ipOptFilterOn; 
     
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
@@ -140,6 +141,7 @@ public:
         
         referenceGen = "uniformParticle";
         ipOptMemoryOn = false;
+        ipOptFilterOn = false;
         
         tactileCollisionPointsOn = false;
         visualCollisionPointsOn = false;
@@ -467,6 +469,23 @@ public:
                  yInfo("[reactController] Could not find ipOptMemory flag (on/off) in the config file; using %d as default",ipOptMemoryOn);
             }  
         
+            //********************** ipopt using filter ***********************
+            if (rf.check("ipOptFilter"))
+            {
+                if(rf.find("ipOptFilter").asString()=="on"){
+                    ipOptFilterOn = true;
+                    yInfo("[reactController] ipOpFilter flag set to on.");
+                }
+                else{
+                    ipOptFilterOn = false;
+                    yInfo("[reactController] ipOptFilter flag set to off.");
+                }
+            }
+            else
+            {
+                 yInfo("[reactController] Could not find ipOptFilter flag (on/off) in the config file; using %d as default",ipOptFilterOn);
+            }  
+        
          //************** getting collision points either from aggregated skin events or from pps (predictions from vision)
         if (rf.check("tactileCollisionPoints"))
         {
@@ -604,7 +623,8 @@ public:
             
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
                                           disableTorso, controlMode, trajSpeed, 
-                                          globalTol, vMax, tol, referenceGen, ipOptMemoryOn,
+                                          globalTol, vMax, tol, referenceGen, 
+                                          ipOptMemoryOn, ipOptFilterOn,
                                           tactileCollisionPointsOn,visualCollisionPointsOn,
                                           boundSmoothnessFlag,boundSmoothnessValue,
                                           visualizeTargetInSim, visualizeParticleInSim,

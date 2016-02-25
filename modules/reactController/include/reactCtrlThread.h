@@ -38,6 +38,7 @@
 #include <iCub/skinDynLib/common.h>
 #include <iCub/ctrl/minJerkCtrl.h>
 #include <iCub/ctrl/pids.h>
+#include <iCub/ctrl/filters.h>
 
 #include <iostream>
 #include <fstream>
@@ -61,7 +62,7 @@ class reactCtrlThread: public yarp::os::RateThread
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & , const string &_ ,
-                    int , bool , string , double , double , double , double , string , bool , bool , bool , bool , double , bool , bool , bool , particleThread * );
+                    int , bool , string , double , double , double , double , string , bool , bool , bool , bool , bool , double , bool , bool , bool , particleThread * );
     // INIT
     virtual bool threadInit();
     // RUN
@@ -143,6 +144,7 @@ protected:
     double vMax;
     string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk"
     bool ipOptMemoryOn; // whether ipopt should account for the real motor model
+    bool ipOptFilterOn; // whether ipopt should account for the real motor model
     bool boundSmoothnessFlag; //for ipopt - whether changes in velocity commands need to be smooth
     double boundSmoothnessValue; //actual allowed change in every joint velocity commands in deg/s from one time step to the next. Note: this is not adapted to the thread rate set by the rctCtrlRate param
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
@@ -231,6 +233,7 @@ protected:
     std::deque<yarp::sig::Vector> memoryVelCommands_RAD; //buffer to store past velocities- this one is expceptionally in RAD - will be passed to ipopt
     double motorModel_kp;
     double motorModel_td;
+    iCub::ctrl::Filter *filter;
 
     // Mutex for handling things correctly
     yarp::os::Mutex mutex;

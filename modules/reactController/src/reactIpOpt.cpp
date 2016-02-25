@@ -105,6 +105,12 @@ protected:
     double torsoReduction;  
     //for smooth changes in joint velocities
     double kp; //for modeling the motor behavior
+    iCub::ctrl::Filter *fi;
+    yarp::sig::Vector filt_num;
+    yarp::sig::Vector filt_den;
+    std::deque<yarp::sig::Vector> filt_u;
+    std::deque<yarp::sig::Vector> filt_y;
+    
     bool boundSmoothnessFlag; 
     double boundSmoothnessValue; //new joint vel can differ by max boundSmoothness from the previous one (rad)
     
@@ -135,8 +141,17 @@ protected:
             yarp::sig::Matrix J1=chain.GeoJacobian();
             submatrix(J1,J_cst,0,2,0,dim-1);
 
-            cost_func=xd -(x0+(kp*dT)*J_cst*q_dot);    
-            grad_cost_func=2.0*cost_func*(-kp*dT*J_cst); 
+            yarp::sig::Vector filt_q_dot=filt_num[0]*q_dot;
+            for (size_t j=1; j<filt_num.size(); j++)
+                filt_q_dot+=filt_num[j]*filt_u[j-1];
+
+            for (size_t k=1; k<filt_den.size(); k++)
+                filt_q_dot-=filt_den[k]*filt_y[k-1];
+            filt_q_dot/=filt_den[0];
+            
+            cost_func=xd -(x0+(kp*dT)*J_cst*filt_q_dot);    
+            grad_cost_func=2.0*cost_func*(-kp*dT*J_cst)*(filt_num[0]/filt_den[0]); 
+            
         }
         printMessage(9,"[computeQuantities] OK x: %s\n",IPOPT_Number_toString(x,CTRL_RAD2DEG).c_str());
     }
@@ -232,11 +247,10 @@ public:
     /***** 8 pure virtual functions from TNLP class need to be implemented here **********/
     /************************************************************************/
     react_NLP(iKinChain &c, const yarp::sig::Vector &_xd, const yarp::sig::Vector &_q_dot_0,std::deque<yarp::sig::Vector> &_q_dot_memory, 
-             double _dT, const yarp::sig::Matrix &_v_lim, const double _useMemory, const double _kp, bool _boundSmoothnessFlag, double _boundSmoothnessValue,int _verbosity) : chain(c), xd(_xd), q_dot_0(_q_dot_0),dT(_dT), v_lim(_v_lim), kp(_kp), boundSmoothnessFlag(_boundSmoothnessFlag),boundSmoothnessValue(_boundSmoothnessValue),
+             double _dT, const yarp::sig::Matrix &_v_lim, const double _useMemory, const double _kp, iCub::ctrl::Filter *_fi, bool _boundSmoothnessFlag, double _boundSmoothnessValue,int _verbosity) : chain(c), xd(_xd), q_dot_0(_q_dot_0),dT(_dT), v_lim(_v_lim), kp(_kp), fi(_fi),boundSmoothnessFlag(_boundSmoothnessFlag),boundSmoothnessValue(_boundSmoothnessValue),
              verbosity(_verbosity) 
     {
         name="react_NLP";
-
              
         // Time should always be positive
         if (dT<0.0)
@@ -263,6 +277,9 @@ public:
             chain.setAng(I.get()); //! Now we set the chain to the predicted configuration after n time steps corresponding to the buffer size as per the lag td of the motor model - ipOpt will be asked to solve the problem there
             x0=chain.EndEffPosition();
         }
+        
+        fi->getCoeffs(filt_num,filt_den);
+        fi->getStates(filt_u,filt_y);
         
         q_dot.resize(dim,0.0);
         q_dot_d.resize(dim,0.0);
@@ -604,9 +621,9 @@ public:
 
 
 /************************************************************************/
-reactIpOpt::reactIpOpt(const iKinChain &c, const double _tol, const bool _useMemory, const double _kp, 
+reactIpOpt::reactIpOpt(const iKinChain &c, const double _tol, const bool _useMemory, const double _kp, iCub::ctrl::Filter *_fil,
                        const unsigned int verbose) :
-                       chainCopy(c), useMemory(_useMemory), kp(_kp), verbosity(verbose)
+                       chainCopy(c), useMemory(_useMemory), kp(_kp), fil(_fil),verbosity(verbose)
 {
     //reactIpOpt makes a copy of the original chain, which may me modified here; then it will be passed as reference to react_NLP in reactIpOpt::solve
     chainCopy.setAllConstraints(false); // this is required since IpOpt initially relaxes constraints
@@ -660,7 +677,7 @@ yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig
 {
     
     chainCopy.setAng(q); //these differ from the real positions in the case of positionDirect mode
-    SmartPtr<react_NLP> nlp=new react_NLP(chainCopy,xd,q_dot_0,q_dot_memory,dt,v_lim,useMemory,kp,boundSmoothnessFlag,boundSmoothnessValue, verbosity);
+    SmartPtr<react_NLP> nlp=new react_NLP(chainCopy,xd,q_dot_0,q_dot_memory,dt,v_lim,useMemory,kp,fil,boundSmoothnessFlag,boundSmoothnessValue, verbosity);
        
     CAST_IPOPTAPP(App)->Options()->SetNumericValue("max_cpu_time",dt);
     ApplicationReturnStatus status=CAST_IPOPTAPP(App)->OptimizeTNLP(GetRawPtr(nlp));

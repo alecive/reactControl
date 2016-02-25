@@ -55,6 +55,7 @@ protected:
     iCub::iKin::iKinChain chainCopy; //this is a copy of the orig chain, which can be modified here - e.g. in posDirect mode
     double useMemory;
     double kp;
+    iCub::ctrl::Filter *fil;
 
     int verbosity;
 
@@ -66,13 +67,14 @@ public:
     * @param _tol exits if 0.5*norm(xd-x)^2<tol.
     * @param _useMemory - whether buffer of past velocities should be used
     * @param _kp - constant for motor model
+    * @param _fil - pointer to filter
     * @param verbose is a integer number which progressively enables 
     *                different levels of warning messages or status
     *                dump. The larger this value the more detailed
     *                is the output (0=>off by default).
     */
     reactIpOpt(const iCub::iKin::iKinChain &c,
-               const double _tol, const bool _useMemory, const double _kp, const unsigned int verbose=0);
+               const double _tol, const bool _useMemory, const double _kp, iCub::ctrl::Filter *_fil, const unsigned int verbose=0);
 
     /**
     * Sets Tolerance.
