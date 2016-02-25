@@ -795,7 +795,7 @@ int main(int argc, char *argv[])
     Ipopt::SmartPtr<Ipopt::IpoptApplication> app=new Ipopt::IpoptApplication;
     app->Options()->SetNumericValue("tol",1e-6);
     app->Options()->SetStringValue("mu_strategy","adaptive");
-    app->Options()->SetIntegerValue("max_iter",10000);
+    app->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
     app->Options()->SetNumericValue("max_cpu_time",0.05);
     app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
     app->Options()->SetStringValue("hessian_approximation","limited-memory");
