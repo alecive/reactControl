@@ -158,7 +158,7 @@ public:
 
         computeGuard();
 
-        dt=0.0;
+        dt=0.01;
         kp=1.0;
         td=0.0;
         tc=0.0;
@@ -384,21 +384,23 @@ class Motor
     deque<Vector> memory;
     Property parameters;
     Integrator I;
-    double kp;    
+    double dt;
+    double kp;
+    double td;    
 
 public:
     /****************************************************************/
     Motor(const Vector &q0, const Matrix &lim,
-          const double kp_, const double td_,
-          const double dt) :
-          I(dt,q0,lim), kp(kp_)
+          const double dt_, const double kp_,
+          const double td_) :
+          I(dt_,q0,lim), dt(dt_), kp(kp_), td(td_)
     {
-        memory.insert(memory.begin(),(int)floor(td_/dt),
+        memory.insert(memory.begin(),(int)floor(td/dt),
                       zeros(q0.length()));
 
         parameters.put("dt",dt);
         parameters.put("kp",kp);
-        parameters.put("td",td_);
+        parameters.put("td",td);
         parameters.put("memory-buffer",(int)memory.size());
     }
 
@@ -824,7 +826,7 @@ int main(int argc, char *argv[])
     nlp->set_kp(nlp_kp);
     nlp->set_td(nlp_td);
     nlp->set_tc(nlp_tc);
-    Motor motor(q0,lim,motor_kp,motor_td,dt);
+    Motor motor(q0,lim,dt,motor_kp,motor_td);
     Vector v(chain.getDOF(),0.0);
 
     Vector xee=chain.EndEffPosition();
