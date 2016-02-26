@@ -123,21 +123,7 @@
         <stdio></stdio>
         <tag>dataDumperRightArmJoints</tag>
     </module>
-    <!--module>
-        <name>yarpdatadumper</name>
-        <parameters>--name /data/joints_leftLeg --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperLeftLegJoints</tag>
-    </module>
-    <module>
-        <name>yarpdatadumper</name>
-        <parameters>--name /data/joints_rightLeg --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperRightLegJoints</tag>
-    </module-->
-    
+   
     <!--module>
         <name>yarpdatadumper</name>
         <parameters>--name /data/inertial --txTime --rxTime</parameters>
@@ -174,35 +160,9 @@
         <node>localhost</node>
         <stdio></stdio>
         <tag>dataDumperRightArmForces</tag>
-    </module>
-    <module>
-        <name>yarpdatadumper</name>
-	<parameters>--name /data/forces_leftLeg --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperLeftLegForces</tag>
-    </module>
-    <module>
-        <name>yarpdatadumper</name>
-	<parameters>--name /data/forces_rightLeg --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperRightLegForces</tag>
-    </module>
-    <module>
-        <name>yarpdatadumper</name>
-	<parameters>--name /data/forces_leftFoot --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperLeftFootForces</tag>
-    </module>
-    <module>
-        <name>yarpdatadumper</name>
-	<parameters>--name /data/forces_rightFoot --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperRightFootForces</tag>
     </module-->
+  
+ 
 
     <connection>
         <from>/reactController/data:o</from>
@@ -233,7 +193,7 @@
 	<to>/data/skin_events</to>
         <protocol>udp</protocol>
     </connection>
-    <!--connection>
+    <connection>
         <from>/icub/skin/left_hand_comp</from>
 	<to>/data/skin_tactile_comp_left_hand</to>
         <protocol>udp</protocol>
@@ -263,7 +223,7 @@
 	<to>/data/skin_tactile_comp_right_arm</to>
         <protocol>udp</protocol>
     </connection>
-    <connection>
+    <!--connection>
         <from>/icub/skin/torso_comp</from>
 	<to>/data/skin_tactile_comp_torso</to>
         <protocol>udp</protocol>
@@ -289,16 +249,7 @@
         <to>/data/joints_rightArm</to>
         <protocol>udp</protocol>
     </connection>
-    <!--connection>
-        <from>/icub/left_leg/state:o</from>
-        <to>/data/joints_leftLeg</to>
-        <protocol>udp</protocol>
-    </connection>
-    <connection>
-        <from>/icub/right_leg/state:o</from>
-        <to>/data/joints_rightLeg</to>
-        <protocol>udp</protocol>
-    </connection-->
+   
 
     <!--connection>
         <from>/icub/inertial</from>
@@ -327,25 +278,6 @@
 	    <to>/data/forces_rightArm</to>
         <protocol>udp</protocol>
     </connection>
-    <connection>
-        <from>/icub/left_leg/analog:o</from>
-	    <to>/data/forces_leftLeg</to>
-        <protocol>udp</protocol>
-    </connection>
-    <connection>
-        <from>/icub/right_leg/analog:o</from>
-	    <to>/data/forces_rightLeg</to>
-        <protocol>udp</protocol>
-    </connection>
-    <connection>
-        <from>/icub/left_foot/analog:o</from>
-	    <to>/data/forces_leftFoot</to>
-        <protocol>udp</protocol>
-    </connection>
-    <connection>
-        <from>/icub/right_foot/analog:o</from>
-	    <to>/data/forces_rightFoot</to>
-        <protocol>udp</protocol>
-    </connection-->
+    
     
 </application>
