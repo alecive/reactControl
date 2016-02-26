@@ -145,6 +145,13 @@ service reactController_IDL
   * @return true/false on success/failure.
   **/
   bool stop();
+  
+  
+  /**
+  * Disables the controller and switches to position mode
+  * @return true/false on success/failure.
+  **/
+  bool stp();
 
   /**
   * Gets the state of the reactCtrlThread. 

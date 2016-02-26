@@ -115,7 +115,9 @@ public:
     /**
     * Stops the control of the robot
     */
-    bool stopControl();    
+    bool stopControl();
+
+    bool stopControlAndSwitchToPositionMode();
     
 protected:
     /***************************************************************************/
@@ -300,6 +302,8 @@ protected:
 
 
     bool stopControlHelper();
+
+    bool stopControlAndSwitchToPositionModeHelper();
 
     /***************** auxiliary computations  *******************************/
 

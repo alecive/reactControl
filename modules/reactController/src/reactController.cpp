@@ -309,6 +309,12 @@ public:
         yInfo("[reactController] Stopping control..");
         return rctCtrlThrd->stopControl();
     }
+    
+    bool stp()
+    {
+        yInfo("[reactController] Stopping control by going to position mode..");
+        return rctCtrlThrd->stopControlAndSwitchToPositionMode();
+    }
 
     bool configure(ResourceFinder &rf)
     {

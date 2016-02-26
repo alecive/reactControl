@@ -503,7 +503,7 @@ void reactCtrlThread::threadRelease()
     delete encsT; encsT = NULL;
     delete   arm;   arm = NULL;
    
-    bool stoppedOk = stopControl();
+    bool stoppedOk = stopControlAndSwitchToPositionMode();
     if (stoppedOk)
         yInfo("Sucessfully stopped controllers");
     else
@@ -752,6 +752,18 @@ bool reactCtrlThread::stopControl()
         yWarning("reactCtrlThread::stopControl(): Controllers not stopped sucessfully"); 
     return stoppedOk;
 }
+
+bool reactCtrlThread::stopControlAndSwitchToPositionMode()
+{
+    yarp::os::LockGuard lg(mutex);
+    bool stoppedOk = stopControlAndSwitchToPositionModeHelper();
+    if (stoppedOk)
+        yInfo("reactCtrlThread::stopControlAndSwitchToPositionMode(): Sucessfully stopped controllers");
+    else
+        yWarning("reactCtrlThread::stopControlAndSwitchToPositionMode(): Controllers not stopped sucessfully"); 
+    return stoppedOk;
+}
+
 
 
 //************** protected methods *******************************/
@@ -1111,6 +1123,31 @@ bool reactCtrlThread::stopControlHelper()
 
     return ivelA->stop();
 }
+
+
+bool reactCtrlThread::stopControlAndSwitchToPositionModeHelper()
+{
+    state=STATE_IDLE;
+    
+    VectorOf<int> jointsToSetA;
+    jointsToSetA.push_back(0);jointsToSetA.push_back(1);jointsToSetA.push_back(2);jointsToSetA.push_back(3);jointsToSetA.push_back(4);
+    jointsToSetA.push_back(5);jointsToSetA.push_back(6);
+    if (useTorso)
+    {
+        ivelA->stop();
+        ivelT->stop();
+        VectorOf<int> jointsToSetT;
+        jointsToSetT.push_back(0);jointsToSetT.push_back(1);jointsToSetT.push_back(2);
+        return  setCtrlModes(jointsToSetA,"arm","position") && setCtrlModes(jointsToSetT,"torso","position");
+    }
+    else{
+        ivelA->stop();
+        return  setCtrlModes(jointsToSetA,"arm","position"); 
+        
+    }
+   
+}
+
 
 
 /***************** auxiliary computations  *******************************/
