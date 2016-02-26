@@ -234,6 +234,7 @@ protected:
     double motorModel_kp;
     double motorModel_td;
     iCub::ctrl::Filter *filter;
+    double filterTc;
 
     // Mutex for handling things correctly
     yarp::os::Mutex mutex;

@@ -247,9 +247,9 @@ bool reactCtrlThread::threadInit()
     }
     if (ipOptFilterOn)
     {
-        double tc=0.25; //related to filter cut-off frequency
+        filterTc=0.25; //related to filter cut-off frequency
         Vector den(2,1.0);
-        double c=(2.0*tc)/dT;
+        double c=(2.0*filterTc)/dT;
         den[0]+=c; den[1]-=c;
         filter=new Filter(ones(2),den,zeros(chainActiveDOF));
     }
@@ -305,7 +305,8 @@ bool reactCtrlThread::threadInit()
     if(ipOptFilterOn)
         fout_param<<"1 ";
     else 
-        fout_param<<"0 ";   
+        fout_param<<"0 ";
+    fout_param<<filterTc<<" ";
          
     yInfo("Written to param file and closing..");    
     fout_param.close();
@@ -440,7 +441,11 @@ void reactCtrlThread::run()
                 }
                 
                 if(controlSuccess){
-                    q_dot=filter->filt(q_dot);
+                    if(ipOptFilterOn){
+                        //printf("[reactCtrlThread::run()]: ipOptFilterOn: q_dot from ipopt: %s \n",q_dot.toString(3,3).c_str());
+                        q_dot=filter->filt(q_dot);
+                       // printf("[reactCtrlThread::run()]: ipOptFilterOn: q_dot filtered: %s \n",q_dot.toString(3,3).c_str());
+                    }
                     if(ipOptMemoryOn){
                         memoryVelCommands_RAD.push_back(q_dot*CTRL_DEG2RAD);
                         memoryVelCommands_RAD.pop_front();

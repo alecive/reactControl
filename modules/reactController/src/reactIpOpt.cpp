@@ -148,7 +148,9 @@ protected:
             for (size_t k=1; k<filt_den.size(); k++)
                 filt_q_dot-=filt_den[k]*filt_y[k-1];
             filt_q_dot/=filt_den[0];
-            
+            //printf("[react_NLP:computeQuantities]: q_dot: %s\n",q_dot.toString().c_str());
+            //printf("[react_NLP:computeQuantities]: filt_q_dot: %s\n",filt_q_dot.toString().c_str());
+            //printf("[react_NLP:computeQuantities]: filt_num[0]/filt_den[0]: %f \n",filt_num[0]/filt_den[0]); 
             cost_func=xd -(x0+(kp*dT)*J_cst*filt_q_dot);    
             grad_cost_func=2.0*cost_func*(-kp*dT*J_cst)*(filt_num[0]/filt_den[0]); 
             
@@ -280,7 +282,23 @@ public:
         
         fi->getCoeffs(filt_num,filt_den);
         fi->getStates(filt_u,filt_y);
-        
+        /*printf("[react_NLP()] filter states: \n");
+         printf("numerator: %s: \n",filt_num.toString(3,3).c_str());
+        printf("denominator: %s: \n",filt_den.toString(3,3).c_str());
+        printf("filt_u input states: ");
+        std::deque<yarp::sig::Vector>::iterator it = filt_u.begin();
+        while (it != filt_u.end()){
+            printf("%s \n",(*it).toString(3,3).c_str());
+            it++;
+        }
+        printf("filt_y output states: ");
+        std::deque<yarp::sig::Vector>::iterator it2 = filt_y.begin();
+        while (it2 != filt_y.end()){
+            printf("%s \n",(*it2).toString(3,3).c_str());
+            it2++;
+        }
+        */
+                
         q_dot.resize(dim,0.0);
         q_dot_d.resize(dim,0.0);
 
