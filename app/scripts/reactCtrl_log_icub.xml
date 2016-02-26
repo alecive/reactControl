@@ -45,7 +45,7 @@
         <tag>dataDumperSkinContact</tag>
     </module>
    
-    <!--module>
+    <module>
         <name>yarpdatadumper</name>
 	<parameters>--name /data/skin_tactile_comp_left_hand --txTime --rxTime</parameters>
         <node>icub19</node>
@@ -87,7 +87,7 @@
         <stdio></stdio>
         <tag>dataDumperSkinRightArmComp</tag>
     </module>
-    <module>
+    <!--module>
         <name>yarpdatadumper</name>
 	<parameters>--name /data/skin_tactile_comp_torso --txTime --rxTime</parameters>
         <node>localhost</node>
