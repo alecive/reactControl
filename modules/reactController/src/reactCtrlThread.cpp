@@ -228,22 +228,43 @@ bool reactCtrlThread::threadInit()
        
     slv=NULL; //ipOpt solver - our wrapper class
     memoryVelCommands_RAD.clear();
+    motorModels_kp.resize(chainActiveDOF,1.0);
     if (ipOptMemoryOn){
         if (robot == "icub"){
-            motorModel_kp = 1.1;
-            motorModel_td = 0.08;
+            motorModel_td = 0.05; //same lag for all - in seconds
+            if(useTorso){
+                motorModels_kp(0) = 1.0; //torso not identified currently
+                motorModels_kp(1) = 1.0;
+                motorModels_kp(2) = 1.0;
+                motorModels_kp(3) = 1.12;
+                motorModels_kp(4) = 1.05;
+                motorModels_kp(5) = 1.93;
+                motorModels_kp(6) = 1.06;
+                motorModels_kp(7) = 1.01;
+                motorModels_kp(8) = 1.01; //wrist not identified, assume it is like elbow pronosupination 
+                motorModels_kp(9) = 1.01;
+            }
+            else{
+                yAssert(chainActiveDOF == 7);   
+                motorModels_kp(0) = 1.12;
+                motorModels_kp(1) = 1.05;
+                motorModels_kp(2) = 1.93;
+                motorModels_kp(3) = 1.06;
+                motorModels_kp(4) = 1.01;
+                motorModels_kp(5) = 1.01; //wrist not identified, assume it is like elbow pronosupination 
+                motorModels_kp(6) = 1.01;
+           }
         }
         else if (robot == "icubSim"){
-            motorModel_kp =  0.45;
+            motorModels_kp =  0.45;
             motorModel_td = 0.023;
         }
         memoryVelCommands_RAD.insert(memoryVelCommands_RAD.begin(),(int)floor(motorModel_td/dT),
                       zeros(chainActiveDOF)); //for say lag td 0.08s and dT 0.01, we will have 8 velocity vectors in the memory 
     }
     else{
-        motorModel_kp = 1.0;
+        //kp_s were already initialized correctly to 1.0 during resize
         motorModel_td = 0.0;
-       
     }
     if (ipOptFilterOn)
     {
@@ -255,8 +276,7 @@ bool reactCtrlThread::threadInit()
     }
     else
         filter = new Filter(ones(1),ones(1),zeros(chainActiveDOF)); //~ identity
-  
-        
+      
         
     if(controlMode == "positionDirect")
          I = new Integrator(dT,q,lim);        
@@ -727,7 +747,7 @@ bool reactCtrlThread::stopControl()
 
 Vector reactCtrlThread::solveIK(int &_exit_code)
 {
-    slv=new reactIpOpt(*arm->asChain(),tol,ipOptMemoryOn, motorModel_kp, filter, verbosity);
+    slv=new reactIpOpt(*arm->asChain(),tol,ipOptMemoryOn, motorModels_kp, ipOptFilterOn, filter, verbosity);
     // Next step will be provided iteratively.
     // The equation is x(t_next) = x_t + (x_d - x_t) * (t_next - t_now/T-t_now)
     //                              s.t. t_next = t_now + dT

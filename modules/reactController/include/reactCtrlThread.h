@@ -231,8 +231,8 @@ protected:
     int ipoptExitCode;
     double timeToSolveProblem_s; //time taken by q_dot = solveIK(ipoptExitCode) ~ ipopt + avoidance handler
     std::deque<yarp::sig::Vector> memoryVelCommands_RAD; //buffer to store past velocities- this one is expceptionally in RAD - will be passed to ipopt
-    double motorModel_kp;
     double motorModel_td;
+    yarp::sig::Vector motorModels_kp;
     iCub::ctrl::Filter *filter;
     double filterTc;
 

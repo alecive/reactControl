@@ -25,6 +25,7 @@
 #include <yarp/sig/Vector.h>
 #include <yarp/sig/Matrix.h>
 
+#include <yarp/os/all.h>
 #include <yarp/os/Log.h>
 
 #include <yarp/math/SVD.h>
@@ -53,8 +54,9 @@ protected:
     void *App;
 
     iCub::iKin::iKinChain chainCopy; //this is a copy of the orig chain, which can be modified here - e.g. in posDirect mode
-    double useMemory;
-    double kp;
+    bool useMemory;
+    yarp::sig::Vector kps;
+    bool useFilter;
     iCub::ctrl::Filter *fil;
 
     int verbosity;
@@ -66,7 +68,8 @@ public:
     *          not change Chain DOF from this point onwards!!
     * @param _tol exits if 0.5*norm(xd-x)^2<tol.
     * @param _useMemory - whether buffer of past velocities should be used
-    * @param _kp - constant for motor model
+    * @param _kps - constants for motor model - for each joint
+    * @param _useFilter 
     * @param _fil - pointer to filter
     * @param verbose is a integer number which progressively enables 
     *                different levels of warning messages or status
@@ -74,7 +77,7 @@ public:
     *                is the output (0=>off by default).
     */
     reactIpOpt(const iCub::iKin::iKinChain &c,
-               const double _tol, const bool _useMemory, const double _kp, iCub::ctrl::Filter *_fil, const unsigned int verbose=0);
+               const double _tol, const bool _useMemory, const yarp::sig::Vector _kps, const bool _useFilter, iCub::ctrl::Filter *_fil, const unsigned int verbose=0);
 
     /**
     * Sets Tolerance.

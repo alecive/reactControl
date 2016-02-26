@@ -53,10 +53,12 @@ private:
 
 protected:
     // The name of the class instance (fixed for now to react_NLP)
-    string name;
+    string name;    
+    bool useMemory;
+    bool useFilter;
     // The verbosity level (fixed for now to 0)
     int verbosity;
-    // The chain that will undergo the task - N.B. if the controller is using a model, the chain received has been already st to the configuration (modeled joint positions)
+    // The chain that will undergo the task - N.B. if the controller is using a model, the chain received has been already set to the configuration (modeled joint positions)
     iKinChain &chain;
     // The dimensionality of the task ~ nr DOF in the chain ~ nr. primal variables (for now 7 for arm joints, 10 if torso is enabled)
     unsigned int dim;
@@ -87,8 +89,10 @@ protected:
     yarp::sig::Vector cost_func;
     // The gradient of the cost function
     yarp::sig::Vector grad_cost_func;
+    
+    yarp::sig::Matrix J0;
     // The jacobian associated with the cost function
-    yarp::sig::Matrix J_cst;
+    //yarp::sig::Matrix J_cst;
 
     // Weights set to the joint limits
     yarp::sig::Vector W;
@@ -104,7 +108,7 @@ protected:
     // The torso reduction rate at for the max velocities sent to the torso(default 3.0)
     double torsoReduction;  
     //for smooth changes in joint velocities
-    double kp; //for modeling the motor behavior
+    yarp::sig::Vector kps; //for modeling the motor behavior
     iCub::ctrl::Filter *fi;
     yarp::sig::Vector filt_num;
     yarp::sig::Vector filt_den;
@@ -138,22 +142,52 @@ protected:
         {
             firstGo=false;
             q_dot=new_q_dot;
-            yarp::sig::Matrix J1=chain.GeoJacobian();
-            submatrix(J1,J_cst,0,2,0,dim-1);
-
-            yarp::sig::Vector filt_q_dot=filt_num[0]*q_dot;
-            for (size_t j=1; j<filt_num.size(); j++)
-                filt_q_dot+=filt_num[j]*filt_u[j-1];
-
-            for (size_t k=1; k<filt_den.size(); k++)
-                filt_q_dot-=filt_den[k]*filt_y[k-1];
-            filt_q_dot/=filt_den[0];
+            //yarp::sig::Matrix J1=chain.GeoJacobian();
+            //submatrix(J1,J_cst,0,2,0,dim-1);
+            
+            yarp::sig::Vector filt_q_dot(dim,0.0);
+            if (useFilter){
+                filt_q_dot=filt_num[0]*q_dot;
+                for (size_t j=1; j<filt_num.size(); j++)
+                    filt_q_dot+=filt_num[j]*filt_u[j-1];
+                for (size_t k=1; k<filt_den.size(); k++)
+                    filt_q_dot-=filt_den[k]*filt_y[k-1];
+                filt_q_dot/=filt_den[0];
+                //printf("[react_NLP:computeQuantities]: q_dot: %s\n",q_dot.toString().c_str());
+                //printf("[react_NLP:computeQuantities]: filt_q_dot: %s\n",filt_q_dot.toString().c_str());
+                //printf("[react_NLP:computeQuantities]: filt_num[0]/filt_den[0]: %f \n",filt_num[0]/filt_den[0]);
+            }
+            else{
+                    filt_q_dot = q_dot;
+            }
             //printf("[react_NLP:computeQuantities]: q_dot: %s\n",q_dot.toString().c_str());
             //printf("[react_NLP:computeQuantities]: filt_q_dot: %s\n",filt_q_dot.toString().c_str());
-            //printf("[react_NLP:computeQuantities]: filt_num[0]/filt_den[0]: %f \n",filt_num[0]/filt_den[0]); 
-            cost_func=xd -(x0+(kp*dT)*J_cst*filt_q_dot);    
-            grad_cost_func=2.0*cost_func*(-kp*dT*J_cst)*(filt_num[0]/filt_den[0]); 
-            
+            //printf("[react_NLP:computeQuantities]: filt_num[0]/filt_den[0]: %f \n",filt_num[0]/filt_den[0]);
+            if (useMemory){
+                yarp::sig::Vector filt_q_dot_after_kp = filt_q_dot;
+                for (size_t l=0; l<dim; l++)
+                    filt_q_dot_after_kp[l] =filt_q_dot_after_kp[l] * kps[l];
+                    
+                 cost_func=xd-(x0 + dT*(J0*filt_q_dot_after_kp)); 
+                 // Ugo's: delta_x=xr-(x0+(kp*dt)*(J0*filt_v));
+                for (Ipopt::Index i=0; i<dim; i++)
+                   grad_cost_func[i]=-2.0*(kps[i]*dT)*dot(cost_func,J0.getCol(i)*(filt_num[0]/filt_den[0]));
+                     //Ugo's: grad_cost_func=2.0*cost_func*(-kp*dT*J_cst)*(filt_num[0]/filt_den[0]); 
+                //cost_func=xd -(x0 + kp*dT*J_cst*filt_q_dot);    
+                //grad_cost_func=2.0*cost_func*(-kp*dT*J_cst)*(filt_num[0]/filt_den[0]);
+            }
+            else{   
+                printMessage(9,"[react_NLP:computeQuantities]: ipopt running with no memory flag.\n");
+                cost_func=xd-(x0 + (J0*filt_q_dot));    
+                // Ugo's with memory: delta_x=xr-(x0+(kp*dt)*(J0*filt_v));
+                for (Ipopt::Index i=0; i<dim; i++)
+                    grad_cost_func[i]=-2.0*(dT)*dot(cost_func,J0.getCol(i)*(filt_num[0]/filt_den[0]));
+                     //Ugo's, with memory:   grad_f[i]=-2.0*(kp*dt)*dot(delta_x,J0.getCol(i)*(filt_num[0]/filt_den[0]));
+            }
+            printMessage(10,"[react_NLP:computeQuantities]: cost func: %s\n",cost_func.toString().c_str());
+            printMessage(10,"[react_NLP:computeQuantities]: grad cost func: %s\n",grad_cost_func.toString().c_str());
+           
+           
         }
         printMessage(9,"[computeQuantities] OK x: %s\n",IPOPT_Number_toString(x,CTRL_RAD2DEG).c_str());
     }
@@ -217,13 +251,13 @@ protected:
             }
         }
         
-        for (size_t i=0; i<chain.getDOF(); i++)
+        for (size_t i=0; i<dim; i++)
         {
-            v_bounds(i,0)*=v_lim(i,0);
+            v_bounds(i,0)*=v_lim(i,0); //we scale the limits imposed from outside by these extra bounds and set it to v_bounds
             v_bounds(i,1)*=v_lim(i,1);
         }
         
-        printMessage(4,"computeBounds \n      %s\n",(CTRL_RAD2DEG*v_bounds).toString(3,3).c_str());
+        printMessage(4,"computeBounds (deg) \n      %s\n",(CTRL_RAD2DEG*v_bounds).toString(3,3).c_str());
       
     }
     
@@ -249,24 +283,32 @@ public:
     /***** 8 pure virtual functions from TNLP class need to be implemented here **********/
     /************************************************************************/
     react_NLP(iKinChain &c, const yarp::sig::Vector &_xd, const yarp::sig::Vector &_q_dot_0,std::deque<yarp::sig::Vector> &_q_dot_memory, 
-             double _dT, const yarp::sig::Matrix &_v_lim, const double _useMemory, const double _kp, iCub::ctrl::Filter *_fi, bool _boundSmoothnessFlag, double _boundSmoothnessValue,int _verbosity) : chain(c), xd(_xd), q_dot_0(_q_dot_0),dT(_dT), v_lim(_v_lim), kp(_kp), fi(_fi),boundSmoothnessFlag(_boundSmoothnessFlag),boundSmoothnessValue(_boundSmoothnessValue),
+             double _dT, const yarp::sig::Matrix &_v_lim, const bool _useMemory, const yarp::sig::Vector _kps, const bool _useFilter, iCub::ctrl::Filter *_fi, bool _boundSmoothnessFlag, double _boundSmoothnessValue,int _verbosity) : chain(c), xd(_xd), q_dot_0(_q_dot_0),dT(_dT), v_lim(_v_lim), useMemory(_useMemory), kps(_kps),useFilter(_useFilter), fi(_fi),boundSmoothnessFlag(_boundSmoothnessFlag),boundSmoothnessValue(_boundSmoothnessValue),
              verbosity(_verbosity) 
     {
         name="react_NLP";
-             
+        
+        printMessage(10,"react_NLP()");
         // Time should always be positive
         if (dT<0.0)
            dT=0.05;
-        if (kp < 0.0)
-            kp = 1.0;
         x0.resize(3,0.0);
         
         dim=chain.getDOF(); //only active (not blocked) joints - e.g. 7 for the arm joints, 10 if torso is included
+        //printf("[react_NLP()]: dim ~ nrDOF of chain: %d \n",dim);
+     
         if (!((dim == 7) || (dim == 10)) ){ 
             yError("react_NLP(): unexpected nr DOF on the chain : %d\n",dim);
         }
         
-        if (_useMemory){
+        yAssert(kps.length() == dim);
+        for (int i=0;i<dim;i++){
+            if (kps[i] < 0.0)
+                kps[i] = 1.0;
+        }
+        
+        if (useMemory){
+            yAssert(dim == _q_dot_memory[0].length());
             q_lim.resize(dim,2);
             for (size_t r=0; r<dim; r++)
             {
@@ -275,35 +317,48 @@ public:
             }
             Integrator I(dT,chain.getAng(),q_lim); // we initialize the integrator to the current joint pos 
             for (size_t i=0; i<_q_dot_memory.size(); i++)
-                I.integrate(kp*_q_dot_memory[i]);
+                I.integrate(kps[i]*_q_dot_memory[i]);
             chain.setAng(I.get()); //! Now we set the chain to the predicted configuration after n time steps corresponding to the buffer size as per the lag td of the motor model - ipOpt will be asked to solve the problem there
             x0=chain.EndEffPosition();
         }
         
-        fi->getCoeffs(filt_num,filt_den);
-        fi->getStates(filt_u,filt_y);
-        /*printf("[react_NLP()] filter states: \n");
-         printf("numerator: %s: \n",filt_num.toString(3,3).c_str());
-        printf("denominator: %s: \n",filt_den.toString(3,3).c_str());
-        printf("filt_u input states: ");
-        std::deque<yarp::sig::Vector>::iterator it = filt_u.begin();
-        while (it != filt_u.end()){
-            printf("%s \n",(*it).toString(3,3).c_str());
-            it++;
+        J0=chain.GeoJacobian().submatrix(0,2,0,dim-1);
+        
+        if(useFilter){
+            fi->getCoeffs(filt_num,filt_den);
+            fi->getStates(filt_u,filt_y);
+      
+            /*printf("[react_NLP()] filter states: \n");
+            printf("numerator: %s: \n",filt_num.toString(3,3).c_str());
+            printf("denominator: %s: \n",filt_den.toString(3,3).c_str());
+            printf("filt_u input states: ");
+            std::deque<yarp::sig::Vector>::iterator it = filt_u.begin();
+            while (it != filt_u.end()){
+                printf("%s \n",(*it).toString(3,3).c_str());
+                it++;
+            }
+            printf("filt_y output states: ");
+            std::deque<yarp::sig::Vector>::iterator it2 = filt_y.begin();
+            while (it2 != filt_y.end()){
+                printf("%s \n",(*it2).toString(3,3).c_str());
+                it2++;
+            }*/
         }
-        printf("filt_y output states: ");
-        std::deque<yarp::sig::Vector>::iterator it2 = filt_y.begin();
-        while (it2 != filt_y.end()){
-            printf("%s \n",(*it2).toString(3,3).c_str());
-            it2++;
+        else{
+           filt_num.resize(1,1.0);
+           filt_den.resize(1,1.0);
         }
-        */
-                
+        printMessage(10,"react_NLP(): filters initialized\n");
+        
         q_dot.resize(dim,0.0);
         q_dot_d.resize(dim,0.0);
-
+        
+        v_bounds = v_lim; //will be initialized like that, but then inside computeBounds actually computed
+        
         cost_func.resize(3,0.0); //cost function is defined in cartesian space - position of end-effector
-        J_cst.resize(3,dim); J_cst.zero(); // The jacobian associated with the cost function
+        grad_cost_func.resize(dim,0.0); //these are derivatives with respect to the number of joints
+        
+        //J_cst.resize(3,dim); J_cst.zero(); // The jacobian associated with the cost function
 
         W.resize(dim,0.0);
         W_dot.resize(dim,0.0);
@@ -320,9 +375,8 @@ public:
         qGuardMaxExt.resize(dim,0.0);
         qGuardMinCOG.resize(dim,0.0);
         qGuardMaxCOG.resize(dim,0.0);
-
-        v_bounds = v_lim;
         
+                
         APPLY_INEQ_CONSTRAINTS = true;
         if (APPLY_INEQ_CONSTRAINTS){
             double joint1_0, joint1_1;
@@ -347,7 +401,9 @@ public:
                 shou_m = 0.0; shou_n=0.0; elb_m = 0.0; elb_n=0.0;
         }
             
+        printMessage(10,"react_NLP(): will call computeGuard\n");
         computeGuard();
+        printMessage(10,"react_NLP(): will call computeBounds\n");
         computeBounds();
         
         firstGo=true;
@@ -499,23 +555,23 @@ public:
     {
         if(APPLY_INEQ_CONSTRAINTS){
             if(n==10){ //we have 3 torso joints and 7 arm joints
-                g[0] =  chain(3).getAng()+kp*dT*x[3] - (chain(4).getAng()+kp*dT*x[4]);   //1st ineq constraint -347deg/1.71 < q_0 - q_1
+                g[0] =  chain(3).getAng()+kps[3]*dT*x[3] - (chain(4).getAng()+kps[4]*dT*x[4]);   //1st ineq constraint -347deg/1.71 < q_0 - q_1
                 //2nd ineq constr., -366.57deg /1.71 < q_0 - q_1 - q_2 < 112.42deg / 1.71 
-                g[1] = chain(3).getAng()+kp*dT*x[3] - (chain(4).getAng()+kp*dT*x[4]) - (chain(5).getAng()+kp*dT*x[5]);
-                g[2] = chain(4).getAng()+kp*dT*x[4] + (chain(5).getAng()+kp*dT*x[5]); //-66.6 deg < q_1 + q_2 < 213.3 deg
-                g[3] = chain(4).getAng()+kp*dT*x[4] - shou_m*(chain(5).getAng()+kp*dT*x[5]); // shou_n < q1 - shou_m * q2
-                g[4] = -elb_m*(chain(6).getAng()+kp*dT*x[6]) + chain(7).getAng()+kp*dT*x[7];
-                g[5] = elb_m*(chain(6).getAng()+kp*dT*x[6]) + chain(7).getAng()+kp*dT*x[7];
+                g[1] = chain(3).getAng()+kps[3]*dT*x[3] - (chain(4).getAng()+kps[4]*dT*x[4]) - (chain(5).getAng()+kps[5]*dT*x[5]);
+                g[2] = chain(4).getAng()+kps[4]*dT*x[4] + (chain(5).getAng()+kps[5]*dT*x[5]); //-66.6 deg < q_1 + q_2 < 213.3 deg
+                g[3] = chain(4).getAng()+kps[4]*dT*x[4] - shou_m*(chain(5).getAng()+kps[5]*dT*x[5]); // shou_n < q1 - shou_m * q2
+                g[4] = -elb_m*(chain(6).getAng()+kps[6]*dT*x[6]) + chain(7).getAng()+kps[7]*dT*x[7];
+                g[5] = elb_m*(chain(6).getAng()+kps[6]*dT*x[6]) + chain(7).getAng()+kps[7]*dT*x[7];
                 return true;
             
             }
             else if (n==7){ //only arm joints
-                g[0] =  chain(0).getAng()+kp*dT*x[0] - (chain(1).getAng()+kp*dT*x[1]);   //1st ineq constraint -347deg/1.71 < q_0 - q_1
-                g[1] = chain(0).getAng()+kp*dT*x[0] - (chain(1).getAng()+kp*dT*x[1]) - (chain(2).getAng()+kp*dT*x[2]);
-                g[2] = chain(1).getAng()+kp*dT*x[1] + (chain(2).getAng()+kp*dT*x[2]); //-66.6 deg < q_1 + q_2 < 213.3 deg
-                g[3] = chain(1).getAng()+kp*dT*x[1] - shou_m*(chain(2).getAng()+kp*dT*x[2]); // shou_n < q1 - shou_m * q2
-                g[4] = -elb_m*(chain(3).getAng()+kp*dT*x[3]) + chain(4).getAng()+kp*dT*x[4];
-                g[5] = elb_m*(chain(3).getAng()+kp*dT*x[3]) + chain(4).getAng()+kp*dT*x[4];
+                g[0] =  chain(0).getAng()+kps[0]*dT*x[0] - (chain(1).getAng()+kps[1]*dT*x[1]);   //1st ineq constraint -347deg/1.71 < q_0 - q_1
+                g[1] = chain(0).getAng()+kps[0]*dT*x[0] - (chain(1).getAng()+kps[1]*dT*x[1]) - (chain(2).getAng()+kps[2]*dT*x[2]);
+                g[2] = chain(1).getAng()+kps[1]*dT*x[1] + (chain(2).getAng()+kps[2]*dT*x[2]); //-66.6 deg < q_1 + q_2 < 213.3 deg
+                g[3] = chain(1).getAng()+kps[1]*dT*x[1] - shou_m*(chain(2).getAng()+kps[2]*dT*x[2]); // shou_n < q1 - shou_m * q2
+                g[4] = -elb_m*(chain(3).getAng()+kps[3]*dT*x[3]) + chain(4).getAng()+kps[4]*dT*x[4];
+                g[5] = elb_m*(chain(3).getAng()+kps[3]*dT*x[3]) + chain(4).getAng()+kps[4]*dT*x[4];
                 return true;
             }
         }
@@ -545,19 +601,19 @@ public:
                     iRow[12] = 5; jCol[12]= 7;
                 }
                 else{  //return the values of the Jacobian of the constraints
-                    values[0]= kp*dT;
-                    values[1]= -kp*dT;
-                    values[2]= kp*dT;
-                    values[3]= -kp*dT;
-                    values[4]= -kp*dT;
-                    values[5]= kp*dT;
-                    values[6]= kp*dT;   
-                    values[7]= kp*dT;
-                    values[8]= -shou_m*kp*dT;
-                    values[9]= -elb_m*kp*dT;
-                    values[10]= kp*dT;
-                    values[11]= elb_m*kp*dT;
-                    values[12]= kp*dT;
+                    values[0]= kps[3]*dT;
+                    values[1]= -kps[4]*dT;
+                    values[2]= kps[3]*dT;
+                    values[3]= -kps[4]*dT;
+                    values[4]= -kps[5]*dT;
+                    values[5]= kps[4]*dT;
+                    values[6]= kps[5]*dT;   
+                    values[7]= kps[4]*dT;
+                    values[8]= -shou_m*kps[5]*dT;
+                    values[9]= -elb_m*kps[6]*dT;
+                    values[10]= kps[6]*dT;
+                    values[11]= elb_m*kps[7]*dT;
+                    values[12]= kps[7]*dT;
                 }
                 return true;
             
@@ -579,19 +635,19 @@ public:
                     iRow[12] = 5; jCol[12]= 4;
                 }
                 else{  //return the values of the Jacobian of the constraints
-                    values[0]= kp*dT;
-                    values[1]= -kp*dT;
-                    values[2]= kp*dT;
-                    values[3]= -kp*dT;
-                    values[4]= -kp*dT;
-                    values[5]= kp*dT;
-                    values[6]= kp*dT;   
-                    values[7]= kp*dT;
-                    values[8]= -shou_m*kp*dT;
-                    values[9]= -elb_m*kp*dT;
-                    values[10]= kp*dT;
-                    values[11]= elb_m*kp*dT;
-                    values[12]= kp*dT;
+                    values[0]= kps[0]*dT;
+                    values[1]= -kps[1]*dT;
+                    values[2]= kps[0]*dT;
+                    values[3]= -kps[1]*dT;
+                    values[4]= -kps[2]*dT;
+                    values[5]= kps[1]*dT;
+                    values[6]= kps[2]*dT;   
+                    values[7]= kps[1]*dT;
+                    values[8]= -shou_m*kps[2]*dT;
+                    values[9]= -elb_m*kps[3]*dT;
+                    values[10]= kps[4]*dT;
+                    values[11]= elb_m*kps[3]*dT;
+                    values[12]= kps[4]*dT;
                 }
                 return true;
             }
@@ -639,9 +695,9 @@ public:
 
 
 /************************************************************************/
-reactIpOpt::reactIpOpt(const iKinChain &c, const double _tol, const bool _useMemory, const double _kp, iCub::ctrl::Filter *_fil,
+reactIpOpt::reactIpOpt(const iKinChain &c, const double _tol, const bool _useMemory, const yarp::sig::Vector _kps, const bool _useFilter, iCub::ctrl::Filter *_fil,
                        const unsigned int verbose) :
-                       chainCopy(c), useMemory(_useMemory), kp(_kp), fil(_fil),verbosity(verbose)
+                       chainCopy(c), useMemory(_useMemory), kps(_kps), useFilter(_useFilter), fil(_fil),verbosity(verbose)
 {
     //reactIpOpt makes a copy of the original chain, which may me modified here; then it will be passed as reference to react_NLP in reactIpOpt::solve
     chainCopy.setAllConstraints(false); // this is required since IpOpt initially relaxes constraints
@@ -695,7 +751,7 @@ yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig
 {
     
     chainCopy.setAng(q); //these differ from the real positions in the case of positionDirect mode
-    SmartPtr<react_NLP> nlp=new react_NLP(chainCopy,xd,q_dot_0,q_dot_memory,dt,v_lim,useMemory,kp,fil,boundSmoothnessFlag,boundSmoothnessValue, verbosity);
+    SmartPtr<react_NLP> nlp=new react_NLP(chainCopy,xd,q_dot_0,q_dot_memory,dt,v_lim,useMemory,kps,useFilter, fil,boundSmoothnessFlag,boundSmoothnessValue, verbosity);
        
     CAST_IPOPTAPP(App)->Options()->SetNumericValue("max_cpu_time",dt);
     ApplicationReturnStatus status=CAST_IPOPTAPP(App)->OptimizeTNLP(GetRawPtr(nlp));
