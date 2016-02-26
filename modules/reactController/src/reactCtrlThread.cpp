@@ -497,12 +497,22 @@ void reactCtrlThread::run()
 
 void reactCtrlThread::threadRelease()
 {
+    
     yInfo("threadRelease(): deleting encoder arrays and arm object.");
     delete encsA; encsA = NULL;
     delete encsT; encsT = NULL;
     delete   arm;   arm = NULL;
+   
+    bool stoppedOk = stopControl();
+    if (stoppedOk)
+        yInfo("Sucessfully stopped controllers");
+    else
+        yWarning("Controllers not stopped sucessfully");
+    yInfo("Closing controllers..");
+    ddA.close();
+    ddT.close();
+   
     
-
     collisionPoints.clear();    
     
     if(refGenMinJerk != NULL){
@@ -559,10 +569,7 @@ void reactCtrlThread::threadRelease()
         }
    // yInfo("Closing files..");    
      //   fout_param.close();
-    yInfo("Closing controllers..");
-        stopControl();
-        ddA.close();
-        ddT.close();
+
 }
 
 
@@ -738,7 +745,12 @@ bool reactCtrlThread::setNewCircularTarget(const double _radius,const double _fr
 bool reactCtrlThread::stopControl()
 {
     yarp::os::LockGuard lg(mutex);
-    return stopControlHelper();
+    bool stoppedOk = stopControlHelper();
+    if (stoppedOk)
+        yInfo("reactCtrlThread::stopControl(): Sucessfully stopped controllers");
+    else
+        yWarning("reactCtrlThread::stopControl(): Controllers not stopped sucessfully"); 
+    return stoppedOk;
 }
 
 
