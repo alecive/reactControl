@@ -424,7 +424,7 @@ void reactCtrlThread::run()
             break;
         case STATE_REACH:
         {
-            if ((norm(x_t-x_d) < globalTol) && (!movingTargetCircle)) //we keep solving until we reach the desired target
+            if ((norm(x_t-x_d) < globalTol)) //we keep solving until we reach the desired target
             {
                 yDebug(0,"[reactCtrlThread] norm(x_t-x_d) %g\tglobalTol %g\n",norm(x_t-x_d),globalTol);
                 if (!stopControlHelper())
@@ -693,8 +693,9 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
         else if(referenceGen == "minJerk"){
             refGenMinJerk->init(x_0); //initial pos
             refGenMinJerk->setTs(dT); //time step
-            //calculate the time to reach from the distance to target and desired velocity
-            double T = sqrt( (x_d(0)-x_0(0))*(x_d(0)-x_0(0)) + (x_d(1)-x_0(1))*(x_d(1)-x_0(1)) + (x_d(2)-x_0(2))*(x_d(2)-x_0(2)) )  / trajSpeed; 
+            double T = 1.0; // 1 s 
+            //calculate the time to reach from the distance to target and desired velocity - this was wrong somehow
+            //double T = sqrt( (x_d(0)-x_0(0))*(x_d(0)-x_0(0)) + (x_d(1)-x_0(1))*(x_d(1)-x_0(1)) + (x_d(2)-x_0(2))*(x_d(2)-x_0(2)) )  / trajSpeed; 
             refGenMinJerk->setT(T);
        }
         
