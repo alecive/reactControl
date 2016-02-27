@@ -319,9 +319,9 @@ public:
             for (size_t i=0; i<_q_dot_memory.size(); i++)
                 I.integrate(kps[i]*_q_dot_memory[i]);
             chain.setAng(I.get()); //! Now we set the chain to the predicted configuration after n time steps corresponding to the buffer size as per the lag td of the motor model - ipOpt will be asked to solve the problem there
-            x0=chain.EndEffPosition();
         }
         
+        x0=chain.EndEffPosition();
         J0=chain.GeoJacobian().submatrix(0,2,0,dim-1);
         
         if(useFilter){
