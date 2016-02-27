@@ -277,7 +277,7 @@
         <from>/icub/right_arm/analog:o</from>
 	    <to>/data/forces_rightArm</to>
         <protocol>udp</protocol>
-    </connection>
+    </connection-->
     
     
 </application>
