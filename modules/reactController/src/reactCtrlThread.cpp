@@ -1252,7 +1252,7 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
                 collPoint.n(0) = collPointBottle->get(4).asDouble();
                 collPoint.n(1) = collPointBottle->get(5).asDouble();
                 collPoint.n(2) = collPointBottle->get(6).asDouble();
-                collPoint.magnitude = collPointBottle->get(7).asDouble() * gain;
+                collPoint.magnitude = collPointBottle->get(13).asDouble() * gain;
                 collPoints.push_back(collPoint);
              }
          }
