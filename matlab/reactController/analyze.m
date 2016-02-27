@@ -13,7 +13,7 @@ chosen_time_column = 6; % 4 for sender, 6 for receiver
 
 %path_prefix = 'input/';
 %path_prefix = 'icubTests/test_20160212a/';
-path_prefix = 'icubTests/test_20160234a_newPosDirect/';
+path_prefix = 'icubExperiments/tactileAvoidance_staticTarget_0/';
 path_prefix_dumper = 'data/';
 
 if save_figs
@@ -75,7 +75,7 @@ EE_z.column = 14;
 
 
 if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 arm
-    chainActiveDOF = 10;
+    chainActiveDOF = 10
         
     joint_info(1).name = '1st torso - pitch'; joint_info(2).name = '2nd torso - roll'; joint_info(3).name = '3rd torso - yaw'; 
     joint_info(4).name = '1st shoulder'; joint_info(5).name = '2nd shoulder'; joint_info(6).name = '3rd shoulder'; 
@@ -129,7 +129,7 @@ if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 
     end
         
 elseif((d_params(1) == 7) && (d_orig(1,4) == 7) ) % 7 DOF situation - arm
-    chainActiveDOF = 7;
+    chainActiveDOF = 7
     
     joint_info(1).name = '1st shoulder'; joint_info(2).name = '2nd shoulder'; joint_info(3).name = '3rd shoulder'; 
     joint_info(4).name = '1st elbow'; joint_info(5).name = '2nd elbow'; 
@@ -147,7 +147,7 @@ elseif((d_params(1) == 7) && (d_orig(1,4) == 7) ) % 7 DOF situation - arm
     % 7 DOF case: 1:nDOF, 2-15 joint pos min/max, 16-29 joint vel limits, 30 traj time, 31 traj speed (deg/s), 32: tol, 33: globalTol, 34: rate is s, 35: bound_smoothness flag,
     % 36: bound smoothness value, 37: controlMode, 38: ipOptMemory 0~off, 1~on
 
-    if (length(d_params) == 38) 
+    if (length(d_params) >= 38) 
         dT = d_params(34)
         if (d_params(35) ==1)
             boundSmoothnessFlag = true
@@ -160,6 +160,21 @@ elseif((d_params(1) == 7) && (d_orig(1,4) == 7) ) % 7 DOF situation - arm
         elseif(d_params(37) == 2)
             controlMode = 'positionDirect'    
         end
+        if(d_params(38) == 1)
+            ipOptMemory = true
+        elseif(d_params(38) == 0)
+            ipOptMemory = false    
+        end
+        if (length(d_params) >= 40)
+           if (d_params(39) ==1)
+            ipOptFilter = true
+            ipOptFilterValue = d_params(40)
+           else
+            ipOptFilter = false
+           end
+        end
+         
+       
     else
         error('Unexpected param.log length for 7 DOF chain');
     end
@@ -362,7 +377,7 @@ end
 %% joint values vs. joint limits
 if visualize_all_joint_pos
         data = [];
-        f3 = figure(3); clf(f3); set(f3,'Color','white','Name','Joint positions - No avoidance');  
+        f3 = figure(3); clf(f3); set(f3,'Color','white','Name','Joint positions');  
        % f4 = figure(4); clf(f4); set(f4,'Color','white','Name','Joint positions - Visual avoidance');  
        % f5 = figure(5); clf(f5); set(f5,'Color','white','Name','Joint positions - Tactile avoidance');  
 
@@ -395,7 +410,7 @@ if visualize_all_joint_pos
                 
         end   
     if save_figs
-        saveas(f3,'output/JointPositionsNoAvoidance.fig');
+        saveas(f3,'output/JointPositions.fig');
         %saveas(f4,'output/JointPositionsVisualAvoidance.fig');
         %saveas(f5,'output/JointPositionsTactileAvoidance.fig');
     end    
@@ -440,6 +455,25 @@ if visualize_all_joint_vel
             end    
         end
 
+        f60 = figure(60); clf(f60); set(f60,'Color','white','Name','Joint vel limits');  
+            data = d;
+            
+            for j=1:chainActiveDOF
+                subplot(4,3,j); hold on;
+                plot(t,data(:,joint_info(j).vel_limit_min_avoid_column),'--c','Marker','v','MarkerSize',2); % current min joint vel limit set by avoidance handler
+                plot(t,data(:,joint_info(j).vel_limit_max_avoid_column),'--m','Marker','^','MarkerSize',2); % current max joint vel limit set by avoidance handler
+                plot([t(1) t(end)],[joint_info(j).vel_limit_min joint_info(j).vel_limit_min],'-.r'); % min joint vel limit
+                plot([t(1) t(end)],[joint_info(j).vel_limit_max joint_info(j).vel_limit_max],'-.r'); % max joint vel limit   
+                %plot(t,data(:,joint_info(j).vel_column),'-k'); % current joint velocity
+                ylim([(joint_info(j).vel_limit_min - 1) (joint_info(j).vel_limit_max + 1) ]);
+                xlabel('t [s]');
+                ylabel('joint velocity [deg/s]');
+                title(joint_info(j).name);
+                hold off;
+            end    
+        
+        
+        
         f61 = figure(61); clf(f61); set(f61,'Color','white','Name','Joint vel increments (control commands)');  
         for j=1:chainActiveDOF
             subplot(4,3,j); hold on;
@@ -461,7 +495,8 @@ if visualize_all_joint_vel
          
     
     if save_figs
-        saveas(f6,'output/JointVelocitiesNoAvoidance.fig');
+        saveas(f6,'output/JointVelocities.fig');
+        saveas(f6,'output/JointVelocityLimits.fig');
         %saveas(f7,'output/JointVelocitiesVisualAvoidance.fig');
         %saveas(f8,'output/JointVelocitiesTactileAvoidance.fig');
         saveas(f61,'output/JointVelocitiesIncrements.fig');
