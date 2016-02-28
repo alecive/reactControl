@@ -21,9 +21,6 @@
 #include <sstream>
 #include <cmath>
 
-#include <IpTNLP.hpp>
-#include <IpIpoptApplication.hpp>
-
 #include "assert.h"
 
 #include "reactIpOpt.h"
@@ -703,8 +700,7 @@ reactIpOpt::reactIpOpt(const iKinChain &c, const double _tol, const bool _useMem
     chainCopy.setAllConstraints(false); // this is required since IpOpt initially relaxes constraints
     //note that this is about limits not about joints being blocked (which is preserved)
 
-    App=new IpoptApplication();
-
+    App=new Ipopt::IpoptApplication();
     //options from Ugo's reactController-sim
     App->Options()->SetNumericValue("tol",_tol);
     App->Options()->SetStringValue("mu_strategy","adaptive");
@@ -733,7 +729,7 @@ reactIpOpt::reactIpOpt(const iKinChain &c, const double _tol, const bool _useMem
     CAST_IPOPTAPP(App)->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
     CAST_IPOPTAPP(App)->Options()->SetStringValue("hessian_approximation","limited-memory"); */
 
-    Ipopt::ApplicationReturnStatus status = CAST_IPOPTAPP(App)->Initialize();
+    Ipopt::ApplicationReturnStatus status = App->Initialize();
     if (status != Ipopt::Solve_Succeeded)
         yError("Error during initialization!");
 }
@@ -743,7 +739,7 @@ reactIpOpt::reactIpOpt(const iKinChain &c, const double _tol, const bool _useMem
 double reactIpOpt::getTol() const
 {
     double tol;
-    CAST_IPOPTAPP(App)->Options()->GetNumericValue("tol",tol,"");
+    App->Options()->GetNumericValue("tol",tol,"");
     return tol;
 }
 
@@ -751,8 +747,8 @@ double reactIpOpt::getTol() const
 /************************************************************************/
 void reactIpOpt::setVerbosity(const unsigned int verbose)
 {
-    CAST_IPOPTAPP(App)->Options()->SetIntegerValue("print_level",verbose);
-    CAST_IPOPTAPP(App)->Initialize();
+    App->Options()->SetIntegerValue("print_level",verbose);
+    App->Initialize();
 }
 
 
@@ -763,8 +759,8 @@ yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig
     chainCopy.setAng(q); //these differ from the real positions in the case of positionDirect mode
     SmartPtr<react_NLP> nlp=new react_NLP(chainCopy,xd,q_dot_0,q_dot_memory,dt,v_lim,useMemory,kps,useFilter, fil,boundSmoothnessFlag,boundSmoothnessValue, verbosity);
        
-    CAST_IPOPTAPP(App)->Options()->SetNumericValue("max_cpu_time",dt);
-    ApplicationReturnStatus status=CAST_IPOPTAPP(App)->OptimizeTNLP(GetRawPtr(nlp));
+    App->Options()->SetNumericValue("max_cpu_time",dt);
+    ApplicationReturnStatus status=App->OptimizeTNLP(GetRawPtr(nlp));
 
     if (exit_code!=NULL)
         *exit_code=status;
@@ -775,7 +771,8 @@ yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig
 /************************************************************************/
 reactIpOpt::~reactIpOpt()
 {
-    delete CAST_IPOPTAPP(App);
+    //App changed to Ipopt::SmartPtr<Ipopt::IpoptApplication> - according to ipopt documentation, object will be automatically deleted as the smart ptr goes out of scope - so no delete
+    //delete App;
 }
 
 

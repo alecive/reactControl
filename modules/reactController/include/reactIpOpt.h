@@ -20,6 +20,9 @@
 #ifndef __REACTIPOPT_H__
 #define __REACTIPOPT_H__
 
+#include <IpTNLP.hpp>
+#include <IpIpoptApplication.hpp>
+
 #include <deque>
 
 #include <yarp/sig/Vector.h>
@@ -50,8 +53,8 @@ private:
     reactIpOpt &operator=(const reactIpOpt&);    
 
 protected:
-    // The IpOpt application that supposedly will solve the task
-    void *App;
+    // The IpOpt application that will solve the task
+    Ipopt::SmartPtr<Ipopt::IpoptApplication> App;
 
     iCub::iKin::iKinChain chainCopy; //this is a copy of the orig chain, which can be modified here - e.g. in posDirect mode
     bool useMemory;
