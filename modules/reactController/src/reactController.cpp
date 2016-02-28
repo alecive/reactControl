@@ -390,61 +390,49 @@ public:
                  yInfo("[reactController] Could not find disableTorso flag (on/off) in the config file; using %d as default",disableTorso);
             }
         
-        //*** we will command the robot in velocity or in positionDirect
-           if (rf.check("controlMode"))
-            {
-                controlMode = rf.find("controlMode").asString();
-                if(controlMode!="velocity" && controlMode!="positionDirect")
-                {
-                    controlMode="velocity";
-                    yWarning("[reactController] controlMode was not in the admissible values (velocity / positionDirect). Using %s as default.",controlMode.c_str());
-                }
-                else 
-                    yInfo("[reactController] controlMode to use is: %s", controlMode.c_str());
+        //************** getting collision points either from aggregated skin events or from pps (predictions from vision)
+        if (rf.check("tactileCollisionPoints"))
+        {
+            if(rf.find("tactileCollisionPoints").asString()=="on"){
+                tactileCollisionPointsOn = true;
+                yInfo("[reactController] tactileCollisionPoints flag set to on.");
             }
-            else yInfo("[reactController] Could not find controlMode option in the config file; using %s as default",controlMode.c_str());
+            else{
+                tactileCollisionPointsOn = false;
+                yInfo("[reactController] tactileCollisionPoints flag set to off.");
+            }
+        }
+        else
+        {
+            yInfo("[reactController] Could not find tactileCollisionPoints flag (on/off) in the config file; using %d as default",tactileCollisionPointsOn);
+        }
         
-        //****************** prtclRate ******************
-            if (rf.check("prtclRate"))
-            {
-                prtclRate = rf.find("prtclRate").asInt();
-                yInfo("[reactController] particleThread working at %i ms.",prtclRate);
+        if (rf.check("visualCollisionPoints"))
+        {
+            if(rf.find("visualCollisionPoints").asString()=="on"){
+                visualCollisionPointsOn = true;
+                yInfo("[reactController] visualCollisionPoints flag set to on.");
             }
-            else yInfo("[reactController] Could not find prtclRate in the config file; using %i as default",prtclRate);
-
-        //****************** trajSpeed ******************
-            if (rf.check("trajSpeed"))
-            {
-                trajSpeed = rf.find("trajSpeed").asDouble();
-                yInfo("[reactController] trajSpeed set to %g s.",trajSpeed);
+            else{
+                visualCollisionPointsOn = false;
+                yInfo("[reactController] visualCollisionPoints flag set to off.");
             }
-            else yInfo("[reactController] Could not find trajSpeed in the config file; using %g as default",trajSpeed);
-
-        //****************** vMax ******************
-            if (rf.check("vMax"))
-            {
-                vMax = rf.find("vMax").asDouble();
-                yInfo("[reactController] vMax (max joint vel) set to %g [deg/s].",vMax);
-            }
-            else yInfo("[reactController] Could not find vMax (max joint vel) in the config file; using %g [deg/s] as default",vMax);
-
-        //****************** tol ******************
-            if (rf.check("tol"))
-            {
-                tol = rf.find("tol").asDouble();
-                yInfo("[reactController] tol set to %g m.",tol);
-            }
-            else yInfo("[reactController] Could not find tol in the config file; using %g as default",tol);
-
-        //****************** globalTol ******************
+        }
+        else
+        {
+            yInfo("[reactController] Could not find visualCollisionPoints flag (on/off) in the config file; using %d as default",visualCollisionPointsOn);
+        }  
+            
+          //****************** globalTol ******************
             if (rf.check("globalTol"))
             {
                 globalTol = rf.find("globalTol").asDouble();
-                yInfo("[reactController] globalTol set to %g m.",globalTol);
+                yInfo("[reactController] globalTol to reach target set to %g m.",globalTol);
             }
             else yInfo("[reactController] Could not find globalTol in the config file; using %g as default",globalTol);
             
-         //*** generating positions for end-effector - trajectory between current pos and final target
+       
+          //*** generating positions for end-effector - trajectory between current pos and final target
            if (rf.check("referenceGen"))
             {
                 referenceGen = rf.find("referenceGen").asString();
@@ -457,7 +445,57 @@ public:
                     yInfo("[reactController] referenceGen to use is: %s", referenceGen.c_str());
             }
             else yInfo("[reactController] Could not find referenceGen option in the config file; using %s as default",referenceGen.c_str());
+            
+             //****************** prtclRate ******************
+            if (rf.check("prtclRate"))
+            {
+                prtclRate = rf.find("prtclRate").asInt();
+                yInfo("[reactController] particleThread period (if referenceGen == uniformParticle)  %i ms.",prtclRate);
+            }
+            else yInfo("[reactController] Could not find prtclRate in the config file; using %i as default",prtclRate);
+
+        //****************** trajSpeed ******************
+            if (rf.check("trajSpeed"))
+            {
+                trajSpeed = rf.find("trajSpeed").asDouble();
+                yInfo("[reactController] trajSpeed (if referenceGen == uniformParticle) set to %g s.",trajSpeed);
+            }
+            else yInfo("[reactController] Could not find trajSpeed in the config file; using %g as default",trajSpeed);
+
+                    
+          //****************** vMax ******************
+            if (rf.check("vMax"))
+            {
+                vMax = rf.find("vMax").asDouble();
+                yInfo("[reactController] vMax (max joint vel) set to %g [deg/s].",vMax);
+            }
+            else yInfo("[reactController] Could not find vMax (max joint vel) in the config file; using %g [deg/s] as default",vMax);
+
+     
+          //*** we will command the robot in velocity or in positionDirect
+           if (rf.check("controlMode"))
+            {
+                controlMode = rf.find("controlMode").asString();
+                if(controlMode!="velocity" && controlMode!="positionDirect")
+                {
+                    controlMode="velocity";
+                    yWarning("[reactController] controlMode was not in the admissible values (velocity / positionDirect). Using %s as default.",controlMode.c_str());
+                }
+                else 
+                    yInfo("[reactController] controlMode to use is: %s", controlMode.c_str());
+            }
+            else yInfo("[reactController] Could not find controlMode option in the config file; using %s as default",controlMode.c_str());
+            
+            //****************** tol ******************
+            if (rf.check("tol"))
+            {
+                tol = rf.find("tol").asDouble();
+                yInfo("[reactController] ipopt: tol set to %g m.",tol);
+            }
+            else yInfo("[reactController] Could not find tol in the config file; using %g as default",tol);
+   
         
+            
             //********************** ipopt using memory - motor model ***********************
             if (rf.check("ipOptMemory"))
             {
@@ -492,49 +530,18 @@ public:
                  yInfo("[reactController] Could not find ipOptFilter flag (on/off) in the config file; using %d as default",ipOptFilterOn);
             }  
         
-         //************** getting collision points either from aggregated skin events or from pps (predictions from vision)
-        if (rf.check("tactileCollisionPoints"))
-        {
-            if(rf.find("tactileCollisionPoints").asString()=="on"){
-                tactileCollisionPointsOn = true;
-                yInfo("[reactController] tactileCollisionPoints flag set to on.");
-            }
-            else{
-                tactileCollisionPointsOn = false;
-                yInfo("[reactController] tactileCollisionPoints flag set to off.");
-            }
-        }
-        else
-        {
-            yInfo("[reactController] Could not find tactileCollisionPoints flag (on/off) in the config file; using %d as default",tactileCollisionPointsOn);
-        }
-        
-        if (rf.check("visualCollisionPoints"))
-        {
-            if(rf.find("visualCollisionPoints").asString()=="on"){
-                visualCollisionPointsOn = true;
-                yInfo("[reactController] visualCollisionPoints flag set to on.");
-            }
-            else{
-                visualCollisionPointsOn = false;
-                yInfo("[reactController] visualCollisionPoints flag set to off.");
-            }
-        }
-        else
-        {
-            yInfo("[reactController] Could not find visualCollisionPoints flag (on/off) in the config file; using %d as default",visualCollisionPointsOn);
-        }
+       
         
         if (rf.check("boundSmoothnessFlag"))
         {
             if(rf.find("boundSmoothnessFlag").asString()=="on"){
                 boundSmoothnessFlag = true;
-                yInfo("[reactController] boundSmoothnessFlag flag set to on.");
+                yInfo("[reactController] ipopt: boundSmoothnessFlag flag set to on.");
                 
             }
             else{
                 boundSmoothnessFlag = false;
-                yInfo("[reactController] boundSmoothnessFlag flag set to off.");
+                yInfo("[reactController] ipopt: boundSmoothnessFlag flag set to off.");
             }
         }
         else
@@ -544,7 +551,7 @@ public:
         if (rf.check("boundSmoothnessValue"))
         {
               boundSmoothnessValue = rf.find("boundSmoothnessValue").asDouble();
-               yInfo("[reactController] boundSmoothnessValue set to %g deg/s (allowed change in joint vel in a time step).",boundSmoothnessValue);
+               yInfo("[reactController] ipopt: boundSmoothnessValue set to %g deg/s (allowed change in joint vel in a time step).",boundSmoothnessValue);
         }
         else yInfo("[reactController] Could not find boundSmoothnessValue in the config file; using %g as default",boundSmoothnessValue);
            
