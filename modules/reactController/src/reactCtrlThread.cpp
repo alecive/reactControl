@@ -50,7 +50,8 @@ using namespace iCub::skinDynLib;
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,  const string &_part,
                                  int _verbosity, bool _disableTorso,  string _controlMode, 
                                  double _trajSpeed, double _globalTol, double _vMax, double _tol,
-                                 string _referenceGen, bool _ipOptMemoryOn, bool _ipOptFilterOn,
+                                 string _referenceGen, bool _ipOptMemoryOn, 
+                                 bool _ipOptFilterOn, double _ipOptFilter_tc,
                                  bool _tactileCollisionPointsOn, bool _visualCollisionPointsOn,
                                  bool _boundSmoothnessFlag, double _boundSmoothnessValue, 
                                  bool _visualizeTargetInSim, bool _visualizeParticleInSim, bool _visualizeCollisionPointsInSim,
@@ -58,7 +59,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
                                  verbosity(_verbosity), useTorso(!_disableTorso), controlMode(_controlMode),
                                  trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol),
-                                 referenceGen(_referenceGen), ipOptMemoryOn(_ipOptMemoryOn), ipOptFilterOn(_ipOptFilterOn),
+                                 referenceGen(_referenceGen), ipOptMemoryOn(_ipOptMemoryOn), ipOptFilterOn(_ipOptFilterOn), ipOptFilter_tc(_ipOptFilter_tc),
                                  tactileCollisionPointsOn(_tactileCollisionPointsOn), visualCollisionPointsOn(_visualCollisionPointsOn),
                                  boundSmoothnessFlag(_boundSmoothnessFlag), boundSmoothnessValue(_boundSmoothnessValue),                                 visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
                                  visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim)
@@ -268,9 +269,9 @@ bool reactCtrlThread::threadInit()
     }
     if (ipOptFilterOn)
     {
-        filterTc=0.25; //related to filter cut-off frequency
+       
         Vector den(2,1.0);
-        double c=(2.0*filterTc)/dT;
+        double c=(2.0*ipOptFilter_tc)/dT;
         den[0]+=c; den[1]-=c;
         filter=new Filter(ones(2),den,zeros(chainActiveDOF));
     }

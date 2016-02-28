@@ -62,7 +62,7 @@ class reactCtrlThread: public yarp::os::RateThread
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & , const string &_ ,
-                    int , bool , string , double , double , double , double , string , bool , bool , bool , bool , bool , double , bool , bool , bool , particleThread * );
+                    int , bool , string , double , double , double , double , string , bool , bool , double , bool , bool , bool , double , bool , bool , bool , particleThread * );
     // INIT
     virtual bool threadInit();
     // RUN
@@ -147,6 +147,7 @@ protected:
     string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk"
     bool ipOptMemoryOn; // whether ipopt should account for the real motor model
     bool ipOptFilterOn; // whether ipopt should account for the real motor model
+    double ipOptFilter_tc; //related to filter cut-off frequency
     bool boundSmoothnessFlag; //for ipopt - whether changes in velocity commands need to be smooth
     double boundSmoothnessValue; //actual allowed change in every joint velocity commands in deg/s from one time step to the next. Note: this is not adapted to the thread rate set by the rctCtrlRate param
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o

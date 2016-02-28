@@ -108,6 +108,7 @@ private:
     string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk" 
     bool ipOptMemoryOn; // whether ipopt should account for the real motor model
     bool ipOptFilterOn; 
+    double ipOptFilter_tc;
     
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
@@ -142,6 +143,7 @@ public:
         referenceGen = "uniformParticle";
         ipOptMemoryOn = false;
         ipOptFilterOn = false;
+        ipOptFilter_tc = 0.25;
         
         tactileCollisionPointsOn = false;
         visualCollisionPointsOn = false;
@@ -529,7 +531,12 @@ public:
             {
                  yInfo("[reactController] Could not find ipOptFilter flag (on/off) in the config file; using %d as default",ipOptFilterOn);
             }  
-        
+            if (rf.check("ipOptFilter_tc"))
+                {
+                ipOptFilter_tc = rf.find("ipOptFilter_tc").asDouble();
+                yInfo("[reactController] ipopt: ipOptFilter_tc set to %g.",ipOptFilter_tc);
+            }
+            else yInfo("[reactController] Could not find ipOptFilter_tc in the config file; using %g as default",ipOptFilter_tc);
        
         
         if (rf.check("boundSmoothnessFlag"))
@@ -637,7 +644,7 @@ public:
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
                                           disableTorso, controlMode, trajSpeed, 
                                           globalTol, vMax, tol, referenceGen, 
-                                          ipOptMemoryOn, ipOptFilterOn,
+                                          ipOptMemoryOn, ipOptFilterOn,ipOptFilter_tc,
                                           tactileCollisionPointsOn,visualCollisionPointsOn,
                                           boundSmoothnessFlag,boundSmoothnessValue,
                                           visualizeTargetInSim, visualizeParticleInSim,
