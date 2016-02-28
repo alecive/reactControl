@@ -480,7 +480,7 @@ public:
             {
                 if(rf.find("ipOptFilter").asString()=="on"){
                     ipOptFilterOn = true;
-                    yInfo("[reactController] ipOpFilter flag set to on.");
+                    yInfo("[reactController] ipOptFilter flag set to on.");
                 }
                 else{
                     ipOptFilterOn = false;

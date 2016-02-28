@@ -705,12 +705,23 @@ reactIpOpt::reactIpOpt(const iKinChain &c, const double _tol, const bool _useMem
 
     App=new IpoptApplication();
 
+    //options from Ugo's reactController-sim
+    App->Options()->SetNumericValue("tol",_tol);
+    App->Options()->SetStringValue("mu_strategy","adaptive");
+    App->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
+    //this will be set from the outside equal to thread period - typically 0.01
+    //app->Options()->SetNumericValue("max_cpu_time",0.05);
+    App->Options()->SetStringValue("nlp_scaling_method","gradient-based");
+    App->Options()->SetStringValue("hessian_approximation","limited-memory");
+    App->Options()->SetStringValue("derivative_test","none");
+    App->Options()->SetIntegerValue("print_level",verbose);
+    
+    /* original options from Ale
     CAST_IPOPTAPP(App)->Options()->SetNumericValue("tol",_tol);
     CAST_IPOPTAPP(App)->Options()->SetNumericValue("acceptable_tol",_tol);
     CAST_IPOPTAPP(App)->Options()->SetIntegerValue("acceptable_iter",10);
     CAST_IPOPTAPP(App)->Options()->SetStringValue("mu_strategy","adaptive");
     CAST_IPOPTAPP(App)->Options()->SetIntegerValue("print_level",verbose);
-
     // CAST_IPOPTAPP(App)->Options()->SetStringValue("jacobian_approximation","finite-difference-values");
     CAST_IPOPTAPP(App)->Options()->SetStringValue("nlp_scaling_method","gradient-based");
     CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","none");
@@ -719,9 +730,8 @@ reactIpOpt::reactIpOpt(const iKinChain &c, const double _tol, const bool _useMem
     // CAST_IPOPTAPP(App)->Options()->SetStringValue("print_timing_statistics","yes");
     // CAST_IPOPTAPP(App)->Options()->SetStringValue("print_options_documentation","no");
     // CAST_IPOPTAPP(App)->Options()->SetStringValue("skip_finalize_solution_call","yes");
-
     CAST_IPOPTAPP(App)->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
-    CAST_IPOPTAPP(App)->Options()->SetStringValue("hessian_approximation","limited-memory");
+    CAST_IPOPTAPP(App)->Options()->SetStringValue("hessian_approximation","limited-memory"); */
 
     Ipopt::ApplicationReturnStatus status = CAST_IPOPTAPP(App)->Initialize();
     if (status != Ipopt::Solve_Succeeded)
