@@ -13,7 +13,7 @@ chosen_time_column = 6; % 4 for sender, 6 for receiver
 
 %path_prefix = 'input/';
 %path_prefix = 'icubTests/test_20160212a/';
-path_prefix = 'icubExperiments/tactileAvoidance_staticTarget_0/';
+path_prefix = 'icubExperiments/tactileAvoidance_moveThenCircularTarget_3_works/';
 path_prefix_dumper = 'data/';
 
 if save_figs
@@ -264,7 +264,7 @@ if visualize_target
     ylabel('y [m]');
     zlabel('z [m]');
 
-    plot3(d(:,target_x.column),d(:,target_y.column),d(:,target_z.column),'r*','LineWidth',6); % plots the desired target trajectory
+    plot3(d(:,target_x.column),d(:,target_y.column),d(:,target_z.column),'r*','LineWidth',4); % plots the desired target trajectory
     %plot3(d(end,5),d(end,6),d(end,7),'r*','LineWidth',10); % plots the desired target final pos
 
     plot3(d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column),'go','LineWidth',2); % plots the end-eff targets as given by particle
@@ -275,6 +275,38 @@ if visualize_target
 
     hold off;
 
+    f11 = figure(11); clf(f11); set(f11,'Color','white','Name','Target, reference, end-effector in time and space');  
+        subplot(3,1,1);
+            hold on;
+            title('x coordinate');
+                plot(t,100*d(:,target_x.column),'r*','MarkerSize',5);
+                plot(t,100*d(:,targetEE_x.column),'go','MarkerSize',3);
+                plot(t,100*d(:,EE_x.column),'k.','MarkerSize',4);
+                ylabel('position (cm)');
+            hold off;
+         
+        subplot(3,1,2);
+            hold on;
+            title('y coordinate');
+                plot(t,100*d(:,target_y.column),'r*','MarkerSize',5);
+                plot(t,100*d(:,targetEE_y.column),'go','MarkerSize',3);
+                plot(t,100*d(:,EE_y.column),'k.','MarkerSize',4);
+                ylabel('position (cm)');
+            hold off;
+ 
+       subplot(3,1,3);
+            hold on;
+            title('z coordinate');
+                plot(t,100*d(:,target_z.column),'r*','MarkerSize',5);
+                plot(t,100*d(:,targetEE_z.column),'go','MarkerSize',3);
+                plot(t,100*d(:,EE_z.column),'k.','MarkerSize',4);
+                ylabel('position (cm)');
+            hold off;
+     
+
+         
+    
+    
     f2 = figure(2); clf(f2); set(f2,'Color','white','Name','End-eff reference evolution');  
         subplot(4,1,1);
             hold on;
@@ -367,6 +399,7 @@ if visualize_target
 
     if save_figs
        saveas(f1,'output/TargetReferenceEndeffectorTrajectories.fig');
+       saveas(f11,'output/TargetReferenceEndeffectorTrajectoriesInTime.fig');
        saveas(f2,'output/End-effector reference detail.fig');
        saveas(f21,'output/End-effector position detail.fig');
        saveas(f22,'output/TargetReferenceEndeffectorDistances.fig');
@@ -464,7 +497,8 @@ if visualize_all_joint_vel
                 plot(t,data(:,joint_info(j).vel_limit_max_avoid_column),'--m','Marker','^','MarkerSize',2); % current max joint vel limit set by avoidance handler
                 plot([t(1) t(end)],[joint_info(j).vel_limit_min joint_info(j).vel_limit_min],'-.r'); % min joint vel limit
                 plot([t(1) t(end)],[joint_info(j).vel_limit_max joint_info(j).vel_limit_max],'-.r'); % max joint vel limit   
-                %plot(t,data(:,joint_info(j).vel_column),'-k'); % current joint velocity
+                plot([t(1) t(end)],[0 0],'--k'); % max joint vel limit   
+                                %plot(t,data(:,joint_info(j).vel_column),'-k'); % current joint velocity
                 ylim([(joint_info(j).vel_limit_min - 1) (joint_info(j).vel_limit_max + 1) ]);
                 xlabel('t [s]');
                 ylabel('joint velocity [deg/s]');
@@ -512,7 +546,7 @@ if visualize_single_joint_in_detail
     j = 4; % joint index to visualize
 
         data = [];
-        f10 = figure(10); clf(f10); set(f10,'Color','white','Name',['No avoidance - ' joint_info(j).name]);  
+        f10 = figure(10); clf(f10); set(f10,'Color','white','Name',[joint_info(j).name ' in detail']);  
         %f11 = figure(11); clf(f11); set(f11,'Color','white','Name',['Visual avoidance - ' joint_info(j).name]);  
         %f12 = figure(12); clf(f12); set(f12,'Color','white','Name',['Tactile avoidance - ' joint_info(j).name]);  
 
@@ -552,7 +586,7 @@ if visualize_single_joint_in_detail
         end
     
     if save_figs
-        saveas(f10,'output/SelectedJointDetailNoAvoidance.fig');
+        saveas(f10,'output/SelectedJointDetail.fig');
         %saveas(f11,'output/SelectedJointDetailVisualAvoidance.fig');
         %saveas(f12,'output/SelectedJointDetailTactileAvoidance.fig');
     end
@@ -577,7 +611,7 @@ if visualize_ineq_constr
         hold on;
             plot(t, data(:,joint_info(4+jointIndexCorrection).pos_column) - data(:,joint_info(5+jointIndexCorrection).pos_column));
             plot([t(1) t(end)], [-347/1.71+EXTRA_MARGIN_SHOULDER_INEQ_DEG -347/1.71+EXTRA_MARGIN_SHOULDER_INEQ_DEG],'--r');
-            legend([joint_info(4+jointIndexCorrection).name ' - ' joint_info(5+jointIndexCorrection).name],'lower limit');
+            %legend([joint_info(4+jointIndexCorrection).name ' - ' joint_info(5+jointIndexCorrection).name],'lower limit');
             title('1st inequality constraint - shoulder');
             ylabel('angle (deg)'); 
         hold off;
@@ -587,7 +621,7 @@ if visualize_ineq_constr
             plot(t, data(:,joint_info(4+jointIndexCorrection).pos_column) - data(:,joint_info(5+jointIndexCorrection).pos_column) - data(:,joint_info(6+jointIndexCorrection).pos_column));
             plot([t(1) t(end)], [-366.57/1.71+EXTRA_MARGIN_SHOULDER_INEQ_DEG -366.57/1.71+EXTRA_MARGIN_SHOULDER_INEQ_DEG],'--r');
             plot([t(1) t(end)], [112.42/1.71-EXTRA_MARGIN_SHOULDER_INEQ_DEG 112.42/1.71-EXTRA_MARGIN_SHOULDER_INEQ_DEG],'-.r');
-            legend([joint_info(4+jointIndexCorrection).name ' - ' joint_info(5+jointIndexCorrection).name ' - ' joint_info(6+jointIndexCorrection).name],'lower limit','upper limit');
+            %legend([joint_info(4+jointIndexCorrection).name ' - ' joint_info(5+jointIndexCorrection).name ' - ' joint_info(6+jointIndexCorrection).name],'lower limit','upper limit');
             title('2nd inequality constraint -  shoulder');
             ylabel('angle (deg)'); 
         hold off;
@@ -597,7 +631,7 @@ if visualize_ineq_constr
             plot(t, data(:,joint_info(5+jointIndexCorrection).pos_column) + data(:,joint_info(6+jointIndexCorrection).pos_column));
             plot([t(1) t(end)], [-66.6+EXTRA_MARGIN_SHOULDER_INEQ_DEG -66.6+EXTRA_MARGIN_SHOULDER_INEQ_DEG],'--r');
             plot([t(1) t(end)], [213.3-EXTRA_MARGIN_SHOULDER_INEQ_DEG 213.3-EXTRA_MARGIN_SHOULDER_INEQ_DEG],'-.r');
-            legend([joint_info(5+jointIndexCorrection).name ' - ' joint_info(6+jointIndexCorrection).name],'lower limit','upper limit');
+            %legend([joint_info(5+jointIndexCorrection).name ' - ' joint_info(6+jointIndexCorrection).name],'lower limit','upper limit');
             title('3rd inequality constraint - shoulder');
             ylabel('angle (deg)'); 
         hold off;
@@ -621,7 +655,7 @@ if visualize_ineq_constr
         hold on;
             plot(t, data(:,joint_info(5+jointIndexCorrection).pos_column) + -shou_m*data(:,joint_info(6+jointIndexCorrection).pos_column));
             plot([t(1) t(end)], [shou_n+EXTRA_MARGIN_GENERAL_INEQ_DEG shou_n+EXTRA_MARGIN_GENERAL_INEQ_DEG],'--r');
-            legend([joint_info(5+jointIndexCorrection).name ' - ' joint_info(6+jointIndexCorrection).name],'lower limit');
+            %legend([joint_info(5+jointIndexCorrection).name ' - ' joint_info(6+jointIndexCorrection).name],'lower limit');
             title('upper arm vs. torso inequality constraint');
             ylabel('angle (deg)'); 
         hold off;
@@ -630,7 +664,7 @@ if visualize_ineq_constr
         hold on;
             plot(t, -elb_m*data(:,joint_info(7+jointIndexCorrection).pos_column) + data(:,joint_info(8+jointIndexCorrection).pos_column));
             plot([t(1) t(end)], [elb_n-EXTRA_MARGIN_GENERAL_INEQ_DEG elb_n-EXTRA_MARGIN_GENERAL_INEQ_DEG],'--r');
-            legend([joint_info(7+jointIndexCorrection).name ' - ' joint_info(8+jointIndexCorrection).name],'upper limit');
+            %legend([joint_info(7+jointIndexCorrection).name ' - ' joint_info(8+jointIndexCorrection).name],'upper limit');
             title('1st upper arm vs. elbow inequality constraint');
             ylabel('angle (deg)'); 
         hold off;
@@ -639,7 +673,7 @@ if visualize_ineq_constr
         hold on;
             plot(t, elb_m*data(:,joint_info(7+jointIndexCorrection).pos_column) + data(:,joint_info(8+jointIndexCorrection).pos_column));
             plot([t(1) t(end)], [-elb_n+EXTRA_MARGIN_GENERAL_INEQ_DEG -elb_n+EXTRA_MARGIN_GENERAL_INEQ_DEG],'--r');
-            legend([joint_info(7+jointIndexCorrection).name ' - ' joint_info(8+jointIndexCorrection).name],'lower limit');
+            %legend([joint_info(7+jointIndexCorrection).name ' - ' joint_info(8+jointIndexCorrection).name],'lower limit');
             title('2nd upper arm vs. elbow');
             ylabel('angle (deg)'); 
         hold off;
