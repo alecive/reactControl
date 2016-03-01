@@ -13,7 +13,7 @@ chosen_time_column = 6; % 4 for sender, 6 for receiver
 
 %path_prefix = 'input/';
 %path_prefix = 'icubTests/test_20160212a/';
-path_prefix = 'icubExperiments/tactileAvoidance_moveThenCircularTarget_3_works/';
+path_prefix = 'icubExperiments/moveWithIpoptWithoutAcceptHeuristicsOldTolerance_works/';
 path_prefix_dumper = 'data/';
 
 if save_figs
@@ -224,8 +224,8 @@ if visualize_time_stats
     subplot(3,1,1);
         title('Absolute time');
         hold on;
-          plot(d(:,TIME_ABS_1_COLUMN),'b+');
-          plot(d(:,TIME_ABS_2_COLUMN),'k+');
+          plot(d(:,TIME_ABS_1_COLUMN),'b*');
+          plot(d(:,TIME_ABS_2_COLUMN),'k.');
         hold off;
         legend('time (sender)','time (receiver)');
         ylabel('Time (s)');
@@ -233,8 +233,8 @@ if visualize_time_stats
     subplot(3,1,2)
         title('Time starting from 0');
         hold on;
-          plot(d(:,TIME_FROM_ZERO_1_COLUMN),'b+');
-          plot(d(:,TIME_FROM_ZERO_2_COLUMN),'k+');
+          plot(d(:,TIME_FROM_ZERO_1_COLUMN),'b*');
+          plot(d(:,TIME_FROM_ZERO_2_COLUMN),'k.');
         hold off;
         legend('time (sender)','time (receiver)');
         ylabel('Time (s)');
@@ -242,12 +242,13 @@ if visualize_time_stats
      subplot(3,1,3);
            title(' Time increments');
            hold on;
-             plot(d(2:end,1),d(2:end,TIME_FROM_ZERO_DELTA_1_COLUMN),'b+');
-             plot(d(2:end,1),d(2:end,TIME_FROM_ZERO_DELTA_2_COLUMN),'k+');
-             plot([d(2,1) d(end,1)],[dT dT],'r-','LineWidth',2);   
+             plot(t(2:end),d(2:end,TIME_FROM_ZERO_DELTA_1_COLUMN),'b*');
+             plot(t(2:end),d(2:end,TIME_FROM_ZERO_DELTA_2_COLUMN),'k.');
+             plot([t(2) t(end)],[dT dT],'r-','LineWidth',2);   
            hold off;
-           legend('joints (sender)','joints (receiver)');
+           legend('sender','receiver');
            ylabel('Sampling - delta time (s)');
+           xlabel('Time (s)');
        
     if save_figs
        saveas(f13,'output/TimeStats.fig'); 
@@ -597,6 +598,7 @@ end
 
 if visualize_ineq_constr
 
+    jointIndexCorrection = 0;
     if (chainActiveDOF == 7) 
        jointIndexCorrection = -3; 
     end
