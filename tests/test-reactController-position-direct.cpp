@@ -712,49 +712,40 @@ public:
         ilim.push_back(ilim_arm);
         arm->alignJointsBounds(ilim);
 
-        IControlMode2 *imod;
+        VectorOf<int> modes;
+        for (size_t i=0; i<7; i++)
+        {
+            armJoints.push_back(i);
+            modes.push_back(VOCAB_CM_POSITION_DIRECT);
+        }
 
-        drvTorso.view(imod);
-        imod->setControlMode(0,VOCAB_CM_POSITION_DIRECT);
-        imod->setControlMode(1,VOCAB_CM_POSITION_DIRECT);
-        imod->setControlMode(2,VOCAB_CM_POSITION_DIRECT);
+        IControlMode2 *imod;        
+
+        drvTorso.view(imod);        
+        imod->setControlModes(modes.getFirst());
 
         drvArm.view(imod);
-        imod->setControlMode(0,VOCAB_CM_POSITION_DIRECT);
-        imod->setControlMode(1,VOCAB_CM_POSITION_DIRECT);
-        imod->setControlMode(2,VOCAB_CM_POSITION_DIRECT);
-        imod->setControlMode(3,VOCAB_CM_POSITION_DIRECT);
-        imod->setControlMode(4,VOCAB_CM_POSITION_DIRECT);
-        imod->setControlMode(5,VOCAB_CM_POSITION_DIRECT);
-        imod->setControlMode(6,VOCAB_CM_POSITION_DIRECT);
-
-        armJoints.push_back(0);
-        armJoints.push_back(1);
-        armJoints.push_back(2);
-        armJoints.push_back(3);
-        armJoints.push_back(4);
-        armJoints.push_back(5);
-        armJoints.push_back(6);
+        imod->setControlModes(armJoints.size(),armJoints.getFirst(),modes.getFirst());
 
         Vector q0(chain->getDOF());
         IEncoders *ienc;
-        Vector encs(16,0.0);
+        int numEncs;
+        Vector encs;
+        size_t cnt; 
 
-        drvTorso.view(ienc);        
+        drvTorso.view(ienc);
+        ienc->getAxes(&numEncs);
+        encs.resize(numEncs);
         ienc->getEncoders(encs.data());
-        q0[0]=encs[0];
-        q0[1]=encs[1];
-        q0[2]=encs[2];
+        for (cnt=0; cnt<encs.length(); cnt++)
+            q0[cnt]=encs[cnt];
         
-        drvArm.view(ienc);        
+        drvArm.view(ienc);
+        ienc->getAxes(&numEncs);
+        encs.resize(numEncs);
         ienc->getEncoders(encs.data());
-        q0[3]=encs[0];
-        q0[4]=encs[1];
-        q0[5]=encs[2];
-        q0[6]=encs[3];
-        q0[7]=encs[4];
-        q0[8]=encs[5];
-        q0[9]=encs[6];
+        for (size_t offs=cnt; cnt<q0.length(); cnt++)
+            q0[cnt]=encs[cnt-offs];
 
         chain->setAng(CTRL_DEG2RAD*q0);
 
@@ -858,7 +849,8 @@ public:
             idir->setPositions(refs.subVector(0,2).data());
 
             drvArm.view(idir);
-            idir->setPositions(armJoints.size(),armJoints.getFirst(),refs.subVector(3,9).data());
+            idir->setPositions(armJoints.size(),armJoints.getFirst(),
+                               refs.subVector(3,3+armJoints.size()).data());
 
             chain->setAng(CTRL_DEG2RAD*refs);
             Vector xee=chain->EndEffPosition();
