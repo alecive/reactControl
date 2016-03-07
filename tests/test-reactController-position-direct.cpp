@@ -662,7 +662,7 @@ class ControllerModule : public RFModule
     Obstacle *obstacle;
     Motor *motor;
 
-    double dt,T,t0,sim_time;
+    double dt,T,t0;
     Matrix lim,v_lim;
 
     Vector v;
@@ -674,7 +674,6 @@ public:
     {
         dt=rf.check("dt",Value(0.02)).asDouble();
         T=rf.check("T",Value(1.0)).asDouble();
-        sim_time=rf.check("sim-time",Value(10.0)).asDouble();
         string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();
         string robot=rf.check("robot",Value("icub")).asString();
 
@@ -755,8 +754,8 @@ public:
         {
             lim(r,0)=CTRL_RAD2DEG*(*chain)(r).getMin();
             lim(r,1)=CTRL_RAD2DEG*(*chain)(r).getMax();
-            v_lim(r,0)=-50.0;
-            v_lim(r,1)=+50.0;
+            v_lim(r,0)=-30.0;
+            v_lim(r,1)=+30.0;
         }
         v_lim(1,0)=v_lim(1,1)=0.0;  // disable torso roll
         
@@ -783,7 +782,7 @@ public:
         xo[1]=0.0;
         xo[2]=0.4;
         Vector vo(3,0.0);
-        vo[2]=-0.1;
+        vo[2]=-0.05;
         obstacle=new Obstacle(xo,0.07,vo,dt);
 
         v.resize(chain->getDOF(),0.0);
@@ -802,81 +801,77 @@ public:
     bool updateModule()
     {
         double t=Time::now()-t0;
-        if (t<sim_time)
-        {
-            Vector xd(3);
-            xd[0]=-0.35;
-            xd[1]=0.0;
-            xd[2]=0.1;
 
-            double rt=0.1;
-            xd[1]+=rt*cos(2.0*M_PI*0.3*t);
-            xd[2]+=rt*sin(2.0*M_PI*0.3*t);
+        Vector xd(3);
+        xd[0]=-0.35;
+        xd[1]=0.0;
+        xd[2]=0.1;
 
-            target->computeNextValues(xd);
-            Vector xr=target->getPos();
-            Vector xo=obstacle->move();
+        double rt=0.1;
+        xd[1]+=rt*cos(2.0*M_PI*0.1*t);
+        xd[2]+=rt*sin(2.0*M_PI*0.1*t);
 
-            avhdl->updateCtrlPoints();
-            Matrix VLIM=avhdl->getVLIM(*obstacle,v_lim);
+        target->computeNextValues(xd);
+        Vector xr=target->getPos();
+        Vector xo=obstacle->move();
 
-            Ipopt::SmartPtr<Ipopt::IpoptApplication> app=new Ipopt::IpoptApplication;
-            app->Options()->SetNumericValue("tol",1e-6);
-            app->Options()->SetStringValue("mu_strategy","adaptive");
-            app->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
-            app->Options()->SetNumericValue("max_cpu_time",0.5*dt);
-            app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
-            app->Options()->SetStringValue("hessian_approximation","limited-memory");
-            app->Options()->SetStringValue("derivative_test","none");
-            app->Options()->SetIntegerValue("print_level",0);
-            app->Initialize();
+        avhdl->updateCtrlPoints();
+        Matrix VLIM=avhdl->getVLIM(*obstacle,v_lim);
 
-            Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(*chain);
-            nlp->set_dt(dt);
-            nlp->set_xr(xr);
-            nlp->set_v_lim(VLIM);
-            nlp->set_v0(v);
-            nlp->init();
+        Ipopt::SmartPtr<Ipopt::IpoptApplication> app=new Ipopt::IpoptApplication;
+        app->Options()->SetNumericValue("tol",1e-6);
+        app->Options()->SetStringValue("mu_strategy","adaptive");
+        app->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
+        app->Options()->SetNumericValue("max_cpu_time",0.5*dt);
+        app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
+        app->Options()->SetStringValue("hessian_approximation","limited-memory");
+        app->Options()->SetStringValue("derivative_test","none");
+        app->Options()->SetIntegerValue("print_level",0);
+        app->Initialize();
 
-            Ipopt::ApplicationReturnStatus status=app->OptimizeTNLP(GetRawPtr(nlp));
+        Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(*chain);
+        nlp->set_dt(dt);
+        nlp->set_xr(xr);
+        nlp->set_v_lim(VLIM);
+        nlp->set_v0(v);
+        nlp->init();
 
-            v=nlp->get_result();
-            Vector refs=motor->move(v);
+        Ipopt::ApplicationReturnStatus status=app->OptimizeTNLP(GetRawPtr(nlp));
 
-            IPositionDirect *idir;
+        v=nlp->get_result();
+        Vector refs=motor->move(v);
 
-            drvTorso.view(idir);
-            idir->setPositions(refs.subVector(0,2).data());
+        IPositionDirect *idir;
 
-            drvArm.view(idir);
-            idir->setPositions(armJoints.size(),armJoints.getFirst(),
-                               refs.subVector(3,3+armJoints.size()).data());
+        drvTorso.view(idir);
+        idir->setPositions(refs.subVector(0,2).data());
 
-            chain->setAng(CTRL_DEG2RAD*refs);
-            Vector xee=chain->EndEffPosition();
+        drvArm.view(idir);
+        idir->setPositions(armJoints.size(),armJoints.getFirst(),
+                           refs.subVector(3,3+armJoints.size()-1).data());
 
-            yInfo()<<"        t [s] = "<<t;
-            yInfo()<<"    v [deg/s] = ("<<v.toString(3,3)<<")";
-            yInfo()<<" |xr-xee| [m] = "<<norm(xr-xee);
-            yInfo()<<"";
+        chain->setAng(CTRL_DEG2RAD*refs);
+        Vector xee=chain->EndEffPosition();
 
-            ostringstream strCtrlPoints;
-            deque<Vector> ctrlPoints=avhdl->getCtrlPointsPosition();
-            for (size_t i=0; i<ctrlPoints.size(); i++)
-                strCtrlPoints<<ctrlPoints[i].toString(3,3)<<" ";
+        yInfo()<<"        t [s] = "<<t;
+        yInfo()<<"    v [deg/s] = ("<<v.toString(3,3)<<")";
+        yInfo()<<" |xr-xee| [m] = "<<norm(xr-xee);
+        yInfo()<<"";
 
-            fout<<t<<" "<<
-                  xr.toString(3,3)<<" "<<
-                  obstacle->toString()<<" "<<
-                  v.toString(3,3)<<" "<<
-                  (CTRL_RAD2DEG*chain->getAng()).toString(3,3)<<" "<<
-                  strCtrlPoints.str()<<
-                  endl;
+        ostringstream strCtrlPoints;
+        deque<Vector> ctrlPoints=avhdl->getCtrlPointsPosition();
+        for (size_t i=0; i<ctrlPoints.size(); i++)
+            strCtrlPoints<<ctrlPoints[i].toString(3,3)<<" ";
 
-            return true;
-        }
-        else
-            return false;
+        fout<<t<<" "<<
+              xr.toString(3,3)<<" "<<
+              obstacle->toString()<<" "<<
+              v.toString(3,3)<<" "<<
+              (CTRL_RAD2DEG*chain->getAng()).toString(3,3)<<" "<<
+              strCtrlPoints.str()<<
+              endl;
+
+        return true;
     }
 
     /****************************************************************/
