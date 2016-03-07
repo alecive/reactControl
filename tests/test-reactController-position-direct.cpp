@@ -769,7 +769,7 @@ public:
             avhdl=new AvoidanceHandlerVisuoTactile(*arm); 
         else
         {
-            yError()<<"unrecognized avoidance type! exiting ...";
+            yError()<<"Unrecognized avoidance type! exiting ...";
             delete arm;
             return false;
         }
