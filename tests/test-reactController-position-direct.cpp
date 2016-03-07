@@ -28,6 +28,7 @@
 #include <IpIpoptApplication.hpp>
 
 #include <yarp/os/all.h>
+#include <yarp/dev/all.h>
 #include <yarp/sig/all.h>
 #include <yarp/math/Math.h>
 
@@ -39,6 +40,7 @@
 
 using namespace std;
 using namespace yarp::os;
+using namespace yarp::dev;
 using namespace yarp::sig;
 using namespace yarp::math;
 using namespace iCub::ctrl;
@@ -649,6 +651,9 @@ public:
 /****************************************************************/
 class ControllerModule : public RFModule
 {
+    PolyDriver drvTorso,drvArm;
+    VectorOf<int> armJoints;
+
     iCubArm *arm;
     iKinChain *chain;
     
@@ -671,6 +676,26 @@ public:
         T=rf.check("T",Value(1.0)).asDouble();
         sim_time=rf.check("sim-time",Value(10.0)).asDouble();
         string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();
+        string robot=rf.check("robot",Value("icub")).asString();
+
+        Property option("(device remote_controlboard)");
+        option.put("remote",("/"+robot+"/torso").c_str());
+        option.put("local","/test-reactController/torso");
+        if (!drvTorso.open(option))
+        {
+            yError()<<"Unable to open torso driver";
+            return false;
+        }
+
+        option.unput("remote"); option.unput("local");
+        option.put("remote",("/"+robot+"/left_arm").c_str());
+        option.put("local","/test-reactController/left_arm");
+        if (!drvArm.open(option))
+        {
+            yError()<<"Unable to open left_arm driver";
+            drvTorso.close();
+            return false;
+        }
 
         arm=new iCubArm("left");
         chain=arm->asChain();
@@ -679,8 +704,58 @@ public:
         chain->releaseLink(1);
         chain->releaseLink(2);
 
-        Vector q0(chain->getDOF(),0.0);
-        q0[3]=-25.0; q0[4]=20.0; q0[6]=50.0;
+        IControlLimits *ilim_torso,*ilim_arm;
+        drvTorso.view(ilim_torso);
+        drvArm.view(ilim_arm);
+        deque<IControlLimits*> ilim;
+        ilim.push_back(ilim_torso);
+        ilim.push_back(ilim_arm);
+        arm->alignJointsBounds(ilim);
+
+        IControlMode2 *imod;
+
+        drvTorso.view(imod);
+        imod->setControlMode(0,VOCAB_CM_POSITION_DIRECT);
+        imod->setControlMode(1,VOCAB_CM_POSITION_DIRECT);
+        imod->setControlMode(2,VOCAB_CM_POSITION_DIRECT);
+
+        drvArm.view(imod);
+        imod->setControlMode(0,VOCAB_CM_POSITION_DIRECT);
+        imod->setControlMode(1,VOCAB_CM_POSITION_DIRECT);
+        imod->setControlMode(2,VOCAB_CM_POSITION_DIRECT);
+        imod->setControlMode(3,VOCAB_CM_POSITION_DIRECT);
+        imod->setControlMode(4,VOCAB_CM_POSITION_DIRECT);
+        imod->setControlMode(5,VOCAB_CM_POSITION_DIRECT);
+        imod->setControlMode(6,VOCAB_CM_POSITION_DIRECT);
+
+        armJoints.push_back(0);
+        armJoints.push_back(1);
+        armJoints.push_back(2);
+        armJoints.push_back(3);
+        armJoints.push_back(4);
+        armJoints.push_back(5);
+        armJoints.push_back(6);
+
+        Vector q0(chain->getDOF());
+        IEncoders *ienc;
+        Vector encs(16,0.0);
+
+        drvTorso.view(ienc);        
+        ienc->getEncoders(encs.data());
+        q0[0]=encs[0];
+        q0[1]=encs[1];
+        q0[2]=encs[2];
+        
+        drvArm.view(ienc);        
+        ienc->getEncoders(encs.data());
+        q0[3]=encs[0];
+        q0[4]=encs[1];
+        q0[5]=encs[2];
+        q0[6]=encs[3];
+        q0[7]=encs[4];
+        q0[8]=encs[5];
+        q0[9]=encs[6];
+
         chain->setAng(CTRL_DEG2RAD*q0);
 
         lim.resize(chain->getDOF(),2);
@@ -775,7 +850,17 @@ public:
             Ipopt::ApplicationReturnStatus status=app->OptimizeTNLP(GetRawPtr(nlp));
 
             v=nlp->get_result();
-            chain->setAng(CTRL_DEG2RAD*motor->move(v));
+            Vector refs=motor->move(v);
+
+            IPositionDirect *idir;
+
+            drvTorso.view(idir);
+            idir->setPositions(refs.subVector(0,2).data());
+
+            drvArm.view(idir);
+            idir->setPositions(armJoints.size(),armJoints.getFirst(),refs.subVector(3,9).data());
+
+            chain->setAng(CTRL_DEG2RAD*refs);
             Vector xee=chain->EndEffPosition();
 
             yInfo()<<"        t [s] = "<<t;
@@ -805,6 +890,17 @@ public:
     /****************************************************************/
     bool close()
     {
+        IPositionControl2 *ipos;
+
+        drvTorso.view(ipos);
+        ipos->stop();
+
+        drvArm.view(ipos);
+        ipos->stop(armJoints.size(),armJoints.getFirst());
+
+        drvTorso.close();
+        drvArm.close();
+
         delete obstacle;
         delete target;
         delete motor;
