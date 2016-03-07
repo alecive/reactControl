@@ -28,6 +28,12 @@ include(YarpInstallationHelpers)   # pick up yarp's cmake scripts
 ## then modules
 add_subdirectory(modules)
 
+## then tests
+option(COMPILE_TESTS "Compile Tests" OFF)
+if(COMPILE_TESTS)
+    add_subdirectory(tests)
+endif()
+
 ## then apps
 add_subdirectory(app)
 
