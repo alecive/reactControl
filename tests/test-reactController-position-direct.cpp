@@ -737,7 +737,7 @@ public:
         encs.resize(numEncs);
         ienc->getEncoders(encs.data());
         for (cnt=0; cnt<encs.length(); cnt++)
-            q0[cnt]=encs[cnt];
+            q0[cnt]=encs[encs.length()-cnt-1];  // torso: swap readings
         
         drvArm.view(ienc);
         ienc->getAxes(&numEncs);
@@ -778,12 +778,12 @@ public:
         target=new minJerkTrajGen(chain->EndEffPosition(),dt,T);
         
         Vector xo(3);
-        xo[0]=-0.3;
-        xo[1]=0.0;
-        xo[2]=0.4;
+        xo[0]=-0.30;
+        xo[1]=-0.20;
+        xo[2]=+0.4;
         Vector vo(3,0.0);
         vo[2]=-0.05;
-        obstacle=new Obstacle(xo,0.07,vo,dt);
+        obstacle=new Obstacle(xo,0.05,vo,dt);
 
         v.resize(chain->getDOF(),0.0);
         fout.open("data.log");
@@ -803,13 +803,10 @@ public:
         double t=Time::now()-t0;
 
         Vector xd(3);
-        xd[0]=-0.35;
-        xd[1]=0.0;
-        xd[2]=0.1;
-
-        double rt=0.1;
-        xd[1]+=rt*cos(2.0*M_PI*0.1*t);
-        xd[2]+=rt*sin(2.0*M_PI*0.1*t);
+        double rt=0.05;
+        xd[0]=-0.30;
+        xd[1]=-0.20+rt*cos(2.0*M_PI*0.2*t);
+        xd[2]=+0.05+rt*sin(2.0*M_PI*0.2*t);
 
         target->computeNextValues(xd);
         Vector xr=target->getPos();
@@ -844,7 +841,11 @@ public:
         IPositionDirect *idir;
 
         drvTorso.view(idir);
-        idir->setPositions(refs.subVector(0,2).data());
+        Vector refs_swapped(3);
+        refs_swapped[0]=refs[2];
+        refs_swapped[1]=refs[1];
+        refs_swapped[2]=refs[0];
+        idir->setPositions(refs_swapped.data());
 
         drvArm.view(idir);
         idir->setPositions(armJoints.size(),armJoints.getFirst(),

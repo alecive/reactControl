@@ -28,10 +28,10 @@
 *.app
 
 # Build folder
-build/*
+build*
 
 # Sublime stuff
 *.sublime*
 
 # Temporary files
-*.~
+*~
