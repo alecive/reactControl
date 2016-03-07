@@ -34,7 +34,6 @@
 #include <iCub/ctrl/math.h>
 #include <iCub/ctrl/pids.h>
 #include <iCub/ctrl/minJerkCtrl.h>
-#include <iCub/ctrl/filters.h>
 #include <iCub/iKin/iKinFwd.h>
 
 
@@ -50,13 +49,6 @@ using namespace iCub::iKin;
 class ControllerNLP : public Ipopt::TNLP
 {
     iKinChain &chain;
-    deque<Vector> memory;
-
-    Filter *filter;
-    Vector filt_num;
-    Vector filt_den;
-    deque<Vector> filt_u;
-    deque<Vector> filt_y;
 
     Vector xr;
     Vector x0;
@@ -68,9 +60,6 @@ class ControllerNLP : public Ipopt::TNLP
     Matrix J0;
     Vector v;
     double dt;
-    double kp;
-    double td;
-    double tc;
 
     Vector qGuard;
     Vector qGuardMinExt;
@@ -156,21 +145,7 @@ public:
         bounds=v_lim;
 
         computeGuard();
-
         dt=0.01;
-        kp=1.0;
-        td=0.0;
-        tc=0.0;
-
-        filter=new Filter(ones(1),ones(1),zeros(v.length()));
-        filter->getCoeffs(filt_num,filt_den);
-        filter->getStates(filt_u,filt_y);
-    }
-
-    /****************************************************************/
-    ~ControllerNLP()
-    {
-        delete filter;
     }
 
     /****************************************************************/
@@ -200,41 +175,6 @@ public:
     }
 
     /****************************************************************/
-    void set_kp(const double kp)
-    {
-        yAssert(kp>0.0);
-        this->kp=kp;
-    }
-
-    /****************************************************************/
-    void set_td(const double td)
-    {
-        yAssert(td>=0.0);
-        this->td=td;
-
-        memory.clear();
-        memory.insert(memory.begin(),(int)floor(td/dt),
-                      zeros(v0.length()));
-    }
-
-    /****************************************************************/
-    void set_tc(const double tc)
-    {
-        yAssert(tc>=0.0);
-        yAssert(dt>0.0);
-        this->tc=tc;
-        
-        Vector den(2,1.0);
-        double c=(2.0*tc)/dt;
-        den[0]+=c; den[1]-=c;
-
-        delete filter;
-        filter=new Filter(ones(2),den,zeros(v.length()));
-        filter->getCoeffs(filt_num,filt_den);
-        filter->getStates(filt_u,filt_y);
-    }
-
-    /****************************************************************/
     void set_v0(const Vector &v0)
     {
         yAssert(this->v0.length()==v0.length());
@@ -244,15 +184,9 @@ public:
     /****************************************************************/
     void init()
     {
-        Integrator I(dt,chain.getAng(),q_lim);
-        for (size_t i=0; i<memory.size(); i++)
-            I.integrate(kp*memory[i]);
-
-        x0=chain.EndEffPosition(I.get());
+        x0=chain.EndEffPosition();
         J0=chain.GeoJacobian().submatrix(0,2,0,chain.getDOF()-1);
         computeBounds();
-        
-        filter->getStates(filt_u,filt_y);
     }
 
     /****************************************************************/
@@ -266,10 +200,6 @@ public:
     {
         Property parameters;
         parameters.put("dt",dt);
-        parameters.put("kp",kp);
-        parameters.put("td",td);
-        parameters.put("tc",tc);
-        parameters.put("memory-buffer",(int)memory.size());
         return parameters;
     }
 
@@ -313,15 +243,7 @@ public:
             for (size_t i=0; i<v.length(); i++)
                 v[i]=x[i];
 
-            Vector filt_v=filt_num[0]*v;
-            for (size_t i=1; i<filt_num.size(); i++)
-                filt_v+=filt_num[i]*filt_u[i-1];
-
-            for (size_t i=1; i<filt_den.size(); i++)
-                filt_v-=filt_den[i]*filt_y[i-1];
-            filt_v/=filt_den[0];
-
-            delta_x=xr-(x0+(kp*dt)*(J0*filt_v));
+            delta_x=xr-(x0+dt*(J0*v));
         }
     }
 
@@ -340,7 +262,7 @@ public:
     {
         computeQuantities(x,new_x);
         for (Ipopt::Index i=0; i<n; i++)
-            grad_f[i]=-2.0*(kp*dt)*dot(delta_x,J0.getCol(i)*(filt_num[0]/filt_den[0]));
+            grad_f[i]=-2.0*dt*dot(delta_x,J0.getCol(i));
         return true; 
     }
 
@@ -369,10 +291,6 @@ public:
     {
         for (Ipopt::Index i=0; i<n; i++)
             v[i]=x[i];
-
-        v=filter->filt(v);
-        memory.push_back(v);
-        memory.pop_front();
     }
 };
 
@@ -380,36 +298,23 @@ public:
 /****************************************************************/
 class Motor
 {
-    deque<Vector> memory;
     Property parameters;
     Integrator I;
     double dt;
-    double kp;
-    double td;    
 
 public:
     /****************************************************************/
     Motor(const Vector &q0, const Matrix &lim,
-          const double dt_, const double kp_,
-          const double td_) :
-          I(dt_,q0,lim), dt(dt_), kp(kp_), td(td_)
+          const double dt_) :
+          I(dt_,q0,lim), dt(dt_)
     {
-        memory.insert(memory.begin(),(int)floor(td/dt),
-                      zeros(q0.length()));
-
         parameters.put("dt",dt);
-        parameters.put("kp",kp);
-        parameters.put("td",td);
-        parameters.put("memory-buffer",(int)memory.size());
     }
 
     /****************************************************************/
     Vector move(const Vector &v)
     {
-        memory.push_front(v);
-        Vector v_=memory.back();
-        memory.pop_back();
-        return I.integrate(kp*v_);
+        return I.integrate(v);
     }
 
     /****************************************************************/
@@ -753,7 +658,6 @@ class ControllerModule : public RFModule
     Motor *motor;
 
     double dt,T,t0,sim_time;
-    double nlp_kp,nlp_td,nlp_tc;
     Matrix lim,v_lim;
 
     Vector v;
@@ -766,12 +670,6 @@ public:
         dt=rf.check("dt",Value(0.02)).asDouble();
         T=rf.check("T",Value(1.0)).asDouble();
         sim_time=rf.check("sim-time",Value(10.0)).asDouble();
-        nlp_kp=rf.check("nlp-kp",Value(1.0)).asDouble();
-        nlp_td=rf.check("nlp-td",Value(0.0)).asDouble();
-        nlp_tc=rf.check("nlp-tc",Value(0.0)).asDouble();
-
-        double motor_kp=rf.check("motor-kp",Value(1.0)).asDouble();
-        double motor_td=rf.check("motor-td",Value(0.0)).asDouble();
         string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();
 
         arm=new iCubArm("left");
@@ -811,7 +709,7 @@ public:
             return false;
         }
 
-        motor=new Motor(q0,lim,dt,motor_kp,motor_td);
+        motor=new Motor(q0,lim,dt);
         target=new minJerkTrajGen(chain->EndEffPosition(),dt,T);
         
         Vector xo(3);
@@ -869,9 +767,6 @@ public:
 
             Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(*chain);
             nlp->set_dt(dt);
-            nlp->set_kp(nlp_kp);
-            nlp->set_td(nlp_td);
-            nlp->set_tc(nlp_tc);
             nlp->set_xr(xr);
             nlp->set_v_lim(VLIM);
             nlp->set_v0(v);
@@ -880,7 +775,8 @@ public:
             Ipopt::ApplicationReturnStatus status=app->OptimizeTNLP(GetRawPtr(nlp));
 
             v=nlp->get_result();
-            Vector xee=chain->EndEffPosition(CTRL_DEG2RAD*motor->move(v));
+            chain->setAng(CTRL_DEG2RAD*motor->move(v));
+            Vector xee=chain->EndEffPosition();
 
             yInfo()<<"        t [s] = "<<t;
             yInfo()<<"    v [deg/s] = ("<<v.toString(3,3)<<")";
