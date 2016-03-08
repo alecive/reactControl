@@ -286,7 +286,8 @@ public:
                 Ipopt::Number &obj_value)
     {
         computeQuantities(x,new_x);
-        obj_value=norm2(err_ang);
+        //obj_value=norm2(err_ang);
+        obj_value=0.0;
         return true;
     }
 
@@ -296,7 +297,8 @@ public:
     {
         computeQuantities(x,new_x);
         for (Ipopt::Index i=0; i<n; i++)
-            grad_f[i]=-2.0*dt*dot(err_ang,J0_ang.getCol(i));
+            //grad_f[i]=-2.0*dt*dot(err_ang,J0_ang.getCol(i));
+            grad_f[i]=0.0;
         return true; 
     }
 
