@@ -53,14 +53,12 @@ class ControllerNLP : public Ipopt::TNLP
     iKinChain &chain;
 
     Vector xr;
-    Vector x0;
-    Vector delta_x;
-    Vector v0;
-    Matrix q_lim;
-    Matrix v_lim;
+    Matrix Des;    
+    Matrix q_lim,v_lim;    
+    Vector x0,v0,v;
+    Matrix J0,J0_xyz,J0_ang;
+    Vector err_xyz,err_ang;
     Matrix bounds;
-    Matrix J0;
-    Vector v;
     double dt;
 
     Vector qGuard;
@@ -126,11 +124,26 @@ class ControllerNLP : public Ipopt::TNLP
         }
     }
 
+    /****************************************************************/
+    Matrix v2m(const Vector &x)
+    {
+        Vector o=x.subVector(3,5);
+        double o_mag=norm(o);
+        o/=o_mag; o.push_back(o_mag);
+        Matrix H=axis2dcm(o);
+        H(0,3)=x[0];
+        H(1,3)=x[1];
+        H(2,3)=x[2];
+        return H;
+    }
+
 public:
     /****************************************************************/
     ControllerNLP(iKinChain &chain_) : chain(chain_)
     {
-        xr.resize(3,0.0);
+        xr.resize(6,0.0);
+        err_xyz.resize(3,0.0);
+        err_ang.resize(3,0.0);
         v0.resize(chain.getDOF(),0.0);
         v=v0;
 
@@ -153,8 +166,9 @@ public:
     /****************************************************************/
     void set_xr(const Vector &xr)
     {
-        yAssert(this->xr.length()==xr.length());
+        yAssert(this->xr.length()==xr.length());        
         this->xr=xr;
+        Des=v2m(xr);
     }
 
     /****************************************************************/
@@ -186,8 +200,16 @@ public:
     /****************************************************************/
     void init()
     {
-        x0=chain.EndEffPosition();
-        J0=chain.GeoJacobian().submatrix(0,2,0,chain.getDOF()-1);
+        x0=chain.EndEffPose();
+        x0[3]*=x0[6];
+        x0[4]*=x0[6];
+        x0[5]*=x0[6];
+        x0.pop_back();
+
+        J0=chain.GeoJacobian();
+        J0_xyz=J0.submatrix(0,2,0,chain.getDOF()-1);
+        J0_ang=J0.submatrix(3,5,0,chain.getDOF()-1);
+
         computeBounds();
     }
 
@@ -210,7 +232,8 @@ public:
                       Ipopt::Index &nnz_h_lag, IndexStyleEnum &index_style)
     {
         n=chain.getDOF();
-        m=nnz_jac_g=nnz_h_lag=0;
+        m=1; nnz_jac_g=n;
+        nnz_h_lag=0;
         index_style=TNLP::C_STYLE;
         return true;
     }
@@ -224,6 +247,7 @@ public:
             x_l[i]=bounds(i,0);
             x_u[i]=bounds(i,1);
         }
+        g_l[0]=g_u[0]=0.0;
         return true;
     }
 
@@ -245,7 +269,15 @@ public:
             for (size_t i=0; i<v.length(); i++)
                 v[i]=x[i];
 
-            delta_x=xr-(x0+dt*(J0*v));
+            Matrix H=v2m(x0+dt*(J0*v));
+            Vector err=dcm2axis(Des*SE3inv(H));
+
+            err_xyz[0]=xr[0]-H(0,3);
+            err_xyz[1]=xr[1]-H(1,3);
+            err_xyz[2]=xr[2]-H(2,3);
+            err_ang[0]=err[3]*err[0];
+            err_ang[1]=err[3]*err[1];
+            err_ang[2]=err[3]*err[2];
         }
     }
 
@@ -254,7 +286,7 @@ public:
                 Ipopt::Number &obj_value)
     {
         computeQuantities(x,new_x);
-        obj_value=norm2(delta_x);
+        obj_value=norm2(err_ang);
         return true;
     }
 
@@ -264,7 +296,7 @@ public:
     {
         computeQuantities(x,new_x);
         for (Ipopt::Index i=0; i<n; i++)
-            grad_f[i]=-2.0*dt*dot(delta_x,J0.getCol(i));
+            grad_f[i]=-2.0*dt*dot(err_ang,J0_ang.getCol(i));
         return true; 
     }
 
@@ -272,7 +304,9 @@ public:
     bool eval_g(Ipopt::Index n, const Ipopt::Number *x, bool new_x,
                 Ipopt::Index m, Ipopt::Number *g)
     {
-        return false;
+        computeQuantities(x,new_x);
+        g[0]=norm2(err_xyz);
+        return true;
     }
 
     /****************************************************************/
@@ -280,7 +314,22 @@ public:
                     Ipopt::Index m, Ipopt::Index nele_jac, Ipopt::Index *iRow,
                     Ipopt::Index *jCol, Ipopt::Number *values)
     {
-        return false;
+        if (values==NULL)
+        {
+            for (Ipopt::Index i=0; i<n; i++)
+            {
+                iRow[i]=0;
+                jCol[i]=i;
+            }
+        }
+        else
+        {
+            computeQuantities(x,new_x);
+            for (Ipopt::Index i=0; i<n; i++)
+                values[i]=-2.0*dt*dot(err_xyz,J0_xyz.getCol(i));
+        }
+
+        return true;
     }
 
     /****************************************************************/
@@ -677,12 +726,35 @@ public:
         string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();
         string robot=rf.check("robot",Value("icub")).asString();
 
+        arm=new iCubArm("left");
+        chain=arm->asChain();
+
+        chain->releaseLink(0);
+        chain->releaseLink(1);
+        chain->releaseLink(2);
+
+        if (avoidance_type=="none")
+            avhdl=new AvoidanceHandlerAbstract(*arm);
+        else if (avoidance_type=="visuo")
+            avhdl=new AvoidanceHandlerVisuo(*arm);
+        else if (avoidance_type=="tactile")
+            avhdl=new AvoidanceHandlerTactile(*arm);
+        else if (avoidance_type=="visuo-tactile")
+            avhdl=new AvoidanceHandlerVisuoTactile(*arm); 
+        else
+        {
+            yError()<<"Unrecognized avoidance type! exiting ...";
+            delete arm;
+            return false;
+        }
+
         Property option("(device remote_controlboard)");
         option.put("remote",("/"+robot+"/torso").c_str());
         option.put("local","/test-reactController/torso");
         if (!drvTorso.open(option))
         {
             yError()<<"Unable to open torso driver";
+            delete arm;
             return false;
         }
 
@@ -693,15 +765,9 @@ public:
         {
             yError()<<"Unable to open left_arm driver";
             drvTorso.close();
+            delete arm;
             return false;
         }
-
-        arm=new iCubArm("left");
-        chain=arm->asChain();
-
-        chain->releaseLink(0);
-        chain->releaseLink(1);
-        chain->releaseLink(2);
 
         IControlLimits *ilim_torso,*ilim_arm;
         drvTorso.view(ilim_torso);
@@ -759,23 +825,14 @@ public:
         }
         v_lim(1,0)=v_lim(1,1)=0.0;  // disable torso roll
         
-        if (avoidance_type=="none")
-            avhdl=new AvoidanceHandlerAbstract(*arm);
-        else if (avoidance_type=="visuo")
-            avhdl=new AvoidanceHandlerVisuo(*arm);
-        else if (avoidance_type=="tactile")
-            avhdl=new AvoidanceHandlerTactile(*arm);
-        else if (avoidance_type=="visuo-tactile")
-            avhdl=new AvoidanceHandlerVisuoTactile(*arm); 
-        else
-        {
-            yError()<<"Unrecognized avoidance type! exiting ...";
-            delete arm;
-            return false;
-        }
-
         motor=new Motor(q0,lim,dt);
-        target=new minJerkTrajGen(chain->EndEffPosition(),dt,T);
+
+        Vector xee=chain->EndEffPose();
+        xee[3]*=xee[6];
+        xee[4]*=xee[6];
+        xee[5]*=xee[6];
+        xee.pop_back();
+        target=new minJerkTrajGen(xee,dt,T);
         
         Vector xo(3);
         xo[0]=-0.30;
@@ -802,11 +859,14 @@ public:
     {
         double t=Time::now()-t0;
 
-        Vector xd(3);
+        Vector xd(6);
         double rt=0.05;
-        xd[0]=-0.30;
+        xd[0]=-0.28;
         xd[1]=-0.20+rt*cos(2.0*M_PI*0.2*t);
         xd[2]=+0.05+rt*sin(2.0*M_PI*0.2*t);
+        xd[3]=0.0;
+        xd[4]=0.0;
+        xd[5]=M_PI;
 
         target->computeNextValues(xd);
         Vector xr=target->getPos();
@@ -816,10 +876,12 @@ public:
         Matrix VLIM=avhdl->getVLIM(*obstacle,v_lim);
 
         Ipopt::SmartPtr<Ipopt::IpoptApplication> app=new Ipopt::IpoptApplication;
-        app->Options()->SetNumericValue("tol",1e-6);
+        app->Options()->SetNumericValue("tol",1e-3);
+        app->Options()->SetNumericValue("constr_viol_tol",1e-6);
+        app->Options()->SetIntegerValue("acceptable_iter",0);
         app->Options()->SetStringValue("mu_strategy","adaptive");
         app->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
-        app->Options()->SetNumericValue("max_cpu_time",0.5*dt);
+        app->Options()->SetNumericValue("max_cpu_time",0.75*dt);
         app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
         app->Options()->SetStringValue("hessian_approximation","limited-memory");
         app->Options()->SetStringValue("derivative_test","none");
@@ -852,11 +914,10 @@ public:
                            refs.subVector(3,3+armJoints.size()-1).data());
 
         chain->setAng(CTRL_DEG2RAD*refs);
-        Vector xee=chain->EndEffPosition();
 
         yInfo()<<"        t [s] = "<<t;
         yInfo()<<"    v [deg/s] = ("<<v.toString(3,3)<<")";
-        yInfo()<<" |xr-xee| [m] = "<<norm(xr-xee);
+        yInfo()<<" |xr-xee| [m] = "<<norm(xr.subVector(0,2)-chain->EndEffPosition());
         yInfo()<<"";
 
         ostringstream strCtrlPoints;
@@ -865,7 +926,7 @@ public:
             strCtrlPoints<<ctrlPoints[i].toString(3,3)<<" ";
 
         fout<<t<<" "<<
-              xr.toString(3,3)<<" "<<
+              xr.subVector(0,2).toString(3,3)<<" "<<
               obstacle->toString()<<" "<<
               v.toString(3,3)<<" "<<
               (CTRL_RAD2DEG*chain->getAng()).toString(3,3)<<" "<<
