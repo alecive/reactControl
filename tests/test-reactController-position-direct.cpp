@@ -52,6 +52,7 @@ class ControllerNLP : public Ipopt::TNLP
 {
     iKinChain &chain;
     bool hitting_constraints;
+    bool orientation_control;
 
     Vector xr;
     Matrix Des;    
@@ -165,8 +166,7 @@ class ControllerNLP : public Ipopt::TNLP
 
 public:
     /****************************************************************/
-    ControllerNLP(iKinChain &chain_, const bool hitting_constraints_) :
-                  chain(chain_), hitting_constraints(hitting_constraints_)
+    ControllerNLP(iKinChain &chain_) : chain(chain_)
     {
         xr.resize(6,0.0);
         err_xyz.resize(3,0.0);
@@ -185,9 +185,12 @@ public:
             v_lim(r,0)=-v_lim(r,1);
         }
         bounds=v_lim;
-
+        
         computeSelfAvoidanceConstraints();
         computeGuard();
+
+        hitting_constraints=true;
+        orientation_control=true;
         dt=0.01;
     }
 
@@ -209,6 +212,18 @@ public:
             yAssert(v_lim(r,0)<=v_lim(r,1));
 
         this->v_lim=CTRL_DEG2RAD*v_lim;
+    }
+
+    /****************************************************************/
+    void set_hitting_constraints(const bool hitting_constraints)
+    {
+        this->hitting_constraints=hitting_constraints;
+    }
+
+    /****************************************************************/
+    void set_orientation_control(const bool orientation_control)
+    {
+        this->orientation_control=orientation_control;
     }
 
     /****************************************************************/
@@ -355,8 +370,7 @@ public:
                 Ipopt::Number &obj_value)
     {
         computeQuantities(x,new_x);
-        //obj_value=norm2(err_ang);
-        obj_value=0.0;
+        obj_value=(orientation_control?norm2(err_ang):0.0);
         return true;
     }
 
@@ -366,8 +380,7 @@ public:
     {
         computeQuantities(x,new_x);
         for (Ipopt::Index i=0; i<n; i++)
-            //grad_f[i]=-2.0*dt*dot(err_ang,J0_ang.getCol(i));
-            grad_f[i]=0.0;
+            grad_f[i]=(orientation_control?-2.0*dt*dot(err_ang,J0_ang.getCol(i)):0.0);
         return true; 
     }
 
@@ -862,6 +875,7 @@ class ControllerModule : public RFModule
 
     double dt,T,t0;
     bool hitting_constraints;
+    bool orientation_control;
     Matrix lim,v_lim;
 
     Vector v;
@@ -874,6 +888,7 @@ public:
         dt=rf.check("dt",Value(0.02)).asDouble();
         T=rf.check("T",Value(1.0)).asDouble();
         hitting_constraints=rf.check("hitting-constraints",Value("on")).asString()=="on";
+        orientation_control=rf.check("orientation-control",Value("on")).asString()=="on";
         string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();
         string robot=rf.check("robot",Value("icub")).asString();        
 
@@ -1047,7 +1062,9 @@ public:
         app->Options()->SetIntegerValue("print_level",0);
         app->Initialize();
 
-        Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(*chain,hitting_constraints);
+        Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(*chain);
+        nlp->set_hitting_constraints(hitting_constraints);
+        nlp->set_orientation_control(orientation_control);
         nlp->set_dt(dt);
         nlp->set_xr(xr);
         nlp->set_v_lim(VLIM);
