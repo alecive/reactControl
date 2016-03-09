@@ -126,23 +126,23 @@ class ControllerNLP : public Ipopt::TNLP
     {
         for (size_t i=0; i<chain.getDOF(); i++)
         {
-            double qi=chain(i).getAng();
+            double qi=q0[i];
             if ((qi>=qGuardMinInt[i]) && (qi<=qGuardMaxInt[i]))
                 bounds(i,0)=bounds(i,1)=1.0;
-            else if ((qi<=qGuardMinExt[i]) || (qi>=qGuardMaxExt[i]))
-                bounds(i,0)=bounds(i,1)=0.0;
             else if (qi<qGuardMinInt[i])
             {
-                bounds(i,0)=0.5*(1.0+tanh(+10.0*(qi-qGuardMinCOG[i])/qGuard[i]));
+                bounds(i,0)=(qi<=qGuardMinExt[i]?0.0:
+                             0.5*(1.0+tanh(+10.0*(qi-qGuardMinCOG[i])/qGuard[i]))); 
                 bounds(i,1)=1.0;
             }
             else
             {
                 bounds(i,0)=1.0;
-                bounds(i,1)=0.5*(1.0+tanh(-10.0*(qi-qGuardMaxCOG[i])/qGuard[i]));
+                bounds(i,1)=(qi>=qGuardMaxExt[i]?0.0:
+                             0.5*(1.0+tanh(-10.0*(qi-qGuardMaxCOG[i])/qGuard[i])));
             }
         }
-        
+
         for (size_t i=0; i<chain.getDOF(); i++)
         {
             bounds(i,0)*=v_lim(i,0);
@@ -290,7 +290,7 @@ public:
         for (Ipopt::Index i=0; i<n; i++)
         {
             x_l[i]=bounds(i,0);
-            x_u[i]=bounds(i,1);
+            x_u[i]=bounds(i,1);            
         }
 
         // reaching in position
@@ -873,7 +873,7 @@ public:
     {
         dt=rf.check("dt",Value(0.02)).asDouble();
         T=rf.check("T",Value(1.0)).asDouble();
-        hitting_constraints=rf.check("hitting-constraints",Value("off")).asString()=="on";
+        hitting_constraints=rf.check("hitting-constraints",Value("on")).asString()=="on";
         string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();
         string robot=rf.check("robot",Value("icub")).asString();        
 
