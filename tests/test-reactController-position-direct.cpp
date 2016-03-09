@@ -914,7 +914,7 @@ public:
         option.put("local","/test-reactController/left_arm");
         if (!drvArm.open(option))
         {
-            yError()<<"Unable to open left_arm driver";
+            yError()<<"Unable to open arm driver";
             drvTorso.close();
             delete arm;
             return false;
@@ -935,9 +935,9 @@ public:
             modes.push_back(VOCAB_CM_POSITION_DIRECT);
         }
 
-        IControlMode2 *imod;        
+        IControlMode2 *imod;
 
-        drvTorso.view(imod);        
+        drvTorso.view(imod);
         imod->setControlModes(modes.getFirst());
 
         drvArm.view(imod);
@@ -952,14 +952,22 @@ public:
         drvTorso.view(ienc);
         ienc->getAxes(&numEncs);
         encs.resize(numEncs);
-        ienc->getEncoders(encs.data());
+        while (!ienc->getEncoders(encs.data()))
+        {
+            yInfo()<<"waiting for torso feedback";
+            Time::delay(0.1);
+        }
         for (cnt=0; cnt<encs.length(); cnt++)
             q0[cnt]=encs[encs.length()-cnt-1];  // torso: swap readings
         
         drvArm.view(ienc);
         ienc->getAxes(&numEncs);
         encs.resize(numEncs);
-        ienc->getEncoders(encs.data());
+        while (!ienc->getEncoders(encs.data()))
+        {
+            yInfo()<<"waiting for arm feedback";
+            Time::delay(0.1);
+        }
         for (size_t offs=cnt; cnt<q0.length(); cnt++)
             q0[cnt]=encs[cnt-offs];
 
