@@ -167,7 +167,7 @@ protected:
                     
                  cost_func=xd-(x0 + dT*(J0*filt_q_dot_after_kp)); 
                  // Ugo's: delta_x=xr-(x0+(kp*dt)*(J0*filt_v));
-                for (Ipopt::Index i=0; i<dim; i++)
+                for (size_t i=0; i<dim; i++)
                    grad_cost_func[i]=-2.0*(kps[i]*dT)*dot(cost_func,J0.getCol(i)*(filt_num[0]/filt_den[0]));
                      //Ugo's: grad_cost_func=2.0*cost_func*(-kp*dT*J_cst)*(filt_num[0]/filt_den[0]); 
                 //cost_func=xd -(x0 + kp*dT*J_cst*filt_q_dot);    
@@ -177,7 +177,7 @@ protected:
                 printMessage(9,"[react_NLP:computeQuantities]: ipopt running with no memory flag.\n");
                 cost_func=xd-(x0 + (J0*filt_q_dot));    
                 // Ugo's with memory: delta_x=xr-(x0+(kp*dt)*(J0*filt_v));
-                for (Ipopt::Index i=0; i<dim; i++)
+                for (size_t i=0; i<dim; i++)
                     grad_cost_func[i]=-2.0*(dT)*dot(cost_func,J0.getCol(i)*(filt_num[0]/filt_den[0]));
                      //Ugo's, with memory:   grad_f[i]=-2.0*(kp*dt)*dot(delta_x,J0.getCol(i)*(filt_num[0]/filt_den[0]));
             }
@@ -299,7 +299,7 @@ public:
         }
         
         yAssert(kps.length() == dim);
-        for (int i=0;i<dim;i++){
+        for (size_t i=0;i<dim;i++){
             if (kps[i] < 0.0)
                 kps[i] = 1.0;
         }
@@ -612,8 +612,7 @@ public:
                     values[11]= elb_m*kps[7]*dT;
                     values[12]= kps[7]*dT;
                 }
-                return true;
-            
+                return true;            
             }
             else if (n==7){
                 if (values == NULL){ //return the structure of the Jacobian
@@ -649,9 +648,8 @@ public:
                 return true;
             }
         }
-        else
-            return false;
-        
+
+        return false;
     }
     
     /************************************************************************/
