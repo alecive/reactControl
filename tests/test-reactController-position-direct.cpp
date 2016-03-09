@@ -154,10 +154,10 @@ class ControllerNLP : public Ipopt::TNLP
     /****************************************************************/
     Matrix v2m(const Vector &x)
     {
-        Vector o=x.subVector(3,5);
-        double o_mag=norm(o);
-        o/=o_mag; o.push_back(o_mag);
-        Matrix H=axis2dcm(o);
+        Vector ang=x.subVector(3,5);
+        double ang_mag=norm(ang);
+        ang/=ang_mag; ang.push_back(ang_mag);
+        Matrix H=axis2dcm(ang);
         H(0,3)=x[0];
         H(1,3)=x[1];
         H(2,3)=x[2];
@@ -1090,10 +1090,14 @@ public:
                            refs.subVector(3,3+armJoints.size()-1).data());
 
         chain->setAng(CTRL_DEG2RAD*refs);
+        Vector xee=chain->EndEffPose();
+        Vector xee_pos=xee.subVector(0,2);
+        Vector xee_ang=xee[6]*xee.subVector(3,5);
 
-        yInfo()<<"        t [s] = "<<t;
-        yInfo()<<"    v [deg/s] = ("<<v.toString(3,3)<<")";
-        yInfo()<<" |xr-xee| [m] = "<<norm(xr.subVector(0,2)-chain->EndEffPosition());
+        yInfo()<<"       t [s] = "<<t;
+        yInfo()<<"   v [deg/s] = ("<<v.toString(3,3)<<")";
+        yInfo()<<"   e_pos [m] = "<<norm(xr.subVector(0,2)-xee_pos);
+        yInfo()<<" e_ang [rad] = "<<norm(xr.subVector(3,5)-xee_ang);
         yInfo()<<"";
 
         ostringstream strCtrlPoints;
