@@ -51,15 +51,19 @@ using namespace iCub::iKin;
 class ControllerNLP : public Ipopt::TNLP
 {
     iKinChain &chain;
+    bool hitting_constraints;
 
     Vector xr;
     Matrix Des;    
     Matrix q_lim,v_lim;    
-    Vector x0,v0,v;
+    Vector q0,x0,v0,v;
     Matrix J0,J0_xyz,J0_ang;
     Vector err_xyz,err_ang;
     Matrix bounds;
     double dt;
+
+    double shou_m,shou_n;
+    double elb_m,elb_n;
 
     Vector qGuard;
     Vector qGuardMinExt;
@@ -68,6 +72,28 @@ class ControllerNLP : public Ipopt::TNLP
     Vector qGuardMaxExt;
     Vector qGuardMaxInt;
     Vector qGuardMaxCOG;
+
+    /****************************************************************/
+    void computeSelfAvoidanceConstraints()
+    {
+        double joint1_0, joint1_1;
+        double joint2_0, joint2_1;
+        joint1_0= 28.0*CTRL_DEG2RAD;
+        joint1_1= 23.0*CTRL_DEG2RAD;
+        joint2_0=-37.0*CTRL_DEG2RAD;
+        joint2_1= 80.0*CTRL_DEG2RAD;
+        shou_m=(joint1_1-joint1_0)/(joint2_1-joint2_0);
+        shou_n=joint1_0-shou_m*joint2_0;
+
+        double joint3_0, joint3_1;
+        double joint4_0, joint4_1;
+        joint3_0= 85.0*CTRL_DEG2RAD;
+        joint3_1=105.0*CTRL_DEG2RAD;
+        joint4_0= 90.0*CTRL_DEG2RAD;
+        joint4_1= 40.0*CTRL_DEG2RAD;
+        elb_m=(joint4_1-joint4_0)/(joint3_1-joint3_0);
+        elb_n=joint4_0-elb_m*joint3_0;
+    }
 
     /****************************************************************/
     void computeGuard()
@@ -139,7 +165,8 @@ class ControllerNLP : public Ipopt::TNLP
 
 public:
     /****************************************************************/
-    ControllerNLP(iKinChain &chain_) : chain(chain_)
+    ControllerNLP(iKinChain &chain_, const bool hitting_constraints_) :
+                  chain(chain_), hitting_constraints(hitting_constraints_)
     {
         xr.resize(6,0.0);
         err_xyz.resize(3,0.0);
@@ -159,6 +186,7 @@ public:
         }
         bounds=v_lim;
 
+        computeSelfAvoidanceConstraints();
         computeGuard();
         dt=0.01;
     }
@@ -200,6 +228,8 @@ public:
     /****************************************************************/
     void init()
     {
+        q0=chain.getAng();
+
         x0=chain.EndEffPose();
         x0[3]*=x0[6];
         x0[4]*=x0[6];
@@ -232,7 +262,22 @@ public:
                       Ipopt::Index &nnz_h_lag, IndexStyleEnum &index_style)
     {
         n=chain.getDOF();
+
+        // reaching in position
         m=1; nnz_jac_g=n;
+
+        if (hitting_constraints)
+        {
+            // shoulder's cables length
+            m+=3; nnz_jac_g+=2+3+2;
+
+            // avoid hitting torso
+            m+=1; nnz_jac_g+=2;
+
+            // avoid hitting forearm
+            m+=2; nnz_jac_g+=2+2;
+        }
+
         nnz_h_lag=0;
         index_style=TNLP::C_STYLE;
         return true;
@@ -247,7 +292,31 @@ public:
             x_l[i]=bounds(i,0);
             x_u[i]=bounds(i,1);
         }
+
+        // reaching in position
         g_l[0]=g_u[0]=0.0;
+
+        if (hitting_constraints)
+        {
+            // shoulder's cables length
+            g_l[1]=-347.00*CTRL_DEG2RAD;
+            g_u[1]=std::numeric_limits<double>::max();
+            g_l[2]=-366.57*CTRL_DEG2RAD;
+            g_u[2]=112.42*CTRL_DEG2RAD;
+            g_l[3]=-66.60*CTRL_DEG2RAD;
+            g_u[3]=213.30*CTRL_DEG2RAD;
+
+            // avoid hitting torso
+            g_l[4]=shou_n;
+            g_u[4]=std::numeric_limits<double>::max();
+
+            // avoid hitting forearm
+            g_l[5]=-std::numeric_limits<double>::max();
+            g_u[5]=elb_n;
+            g_l[6]=-elb_n;
+            g_u[6]=std::numeric_limits<double>::max();
+        }
+
         return true;
     }
 
@@ -307,7 +376,25 @@ public:
                 Ipopt::Index m, Ipopt::Number *g)
     {
         computeQuantities(x,new_x);
+
+        // reaching in position
         g[0]=norm2(err_xyz);
+
+        if (hitting_constraints)
+        {
+            // shoulder's cables length
+            g[1]=1.71*(q0[3+0]+dt*x[3+0]-(q0[3+1]+dt*x[3+1]));
+            g[2]=1.71*(q0[3+0]+dt*x[3+0]-(q0[3+1]+dt*x[3+1])-(q0[3+2]+dt*x[3+2]));
+            g[3]=q0[3+1]+dt*x[3+1]+q0[3+2]+dt*x[3+2];
+
+            // avoid hitting torso
+            g[4]=q0[3+1]+dt*x[3+1]-shou_m*(q0[3+2]+dt*x[3+2]);
+
+            // avoid hitting forearm
+            g[5]=-elb_m*(q0[3+3+0]+dt*x[3+3+0])+q0[3+3+1]+dt*x[3+3+1];
+            g[6]=elb_m*(q0[3+3+0]+dt*x[3+3+0])+q0[3+3+1]+dt*x[3+3+1];
+        }
+
         return true;
     }
 
@@ -318,17 +405,77 @@ public:
     {
         if (values==NULL)
         {
+            Ipopt::Index idx=0;
+
+            // reaching in position
             for (Ipopt::Index i=0; i<n; i++)
             {
-                iRow[i]=0;
-                jCol[i]=i;
+                iRow[i]=0; jCol[i]=i;
+                idx++;
+            }
+
+            if (hitting_constraints)
+            {
+                // shoulder's cables length
+                iRow[idx]=1; jCol[idx]=3+0; idx++;
+                iRow[idx]=1; jCol[idx]=3+1; idx++;
+
+                iRow[idx]=2; jCol[idx]=3+0; idx++;
+                iRow[idx]=2; jCol[idx]=3+1; idx++;
+                iRow[idx]=2; jCol[idx]=3+2; idx++;
+
+                iRow[idx]=3; jCol[idx]=3+1; idx++;
+                iRow[idx]=3; jCol[idx]=3+2; idx++;
+
+                // avoid hitting torso
+                iRow[idx]=4; jCol[idx]=3+1; idx++;
+                iRow[idx]=4; jCol[idx]=3+2; idx++;
+
+                // avoid hitting forearm
+                iRow[idx]=5; jCol[idx]=3+3+0; idx++;
+                iRow[idx]=5; jCol[idx]=3+3+1; idx++;
+
+                iRow[idx]=6; jCol[idx]=3+3+0; idx++;
+                iRow[idx]=6; jCol[idx]=3+3+1; idx++;
             }
         }
         else
         {
             computeQuantities(x,new_x);
+
+            Ipopt::Index idx=0;
+
+            // reaching in position
             for (Ipopt::Index i=0; i<n; i++)
+            {
                 values[i]=-2.0*dt*dot(err_xyz,J0_xyz.getCol(i));
+                idx++;
+            }
+
+            if (hitting_constraints)
+            {
+                // shoulder's cables length
+                values[idx++]=1.71*dt;
+                values[idx++]=-1.71*dt;
+
+                values[idx++]=1.71*dt;
+                values[idx++]=-1.71*dt;
+                values[idx++]=-1.71*dt;
+
+                values[idx++]=dt;
+                values[idx++]=dt;
+
+                // avoid hitting torso
+                values[idx++]=dt;
+                values[idx++]=-shou_m*dt;
+
+                // avoid hitting forearm
+                values[idx++]=-elb_m*dt;
+                values[idx++]=dt;
+
+                values[idx++]=elb_m*dt;
+                values[idx++]=dt;
+            }
         }
 
         return true;
@@ -714,6 +861,7 @@ class ControllerModule : public RFModule
     Motor *motor;
 
     double dt,T,t0;
+    bool hitting_constraints;
     Matrix lim,v_lim;
 
     Vector v;
@@ -725,8 +873,9 @@ public:
     {
         dt=rf.check("dt",Value(0.02)).asDouble();
         T=rf.check("T",Value(1.0)).asDouble();
+        hitting_constraints=rf.check("hitting-constraints",Value("off")).asString()=="on";
         string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();
-        string robot=rf.check("robot",Value("icub")).asString();
+        string robot=rf.check("robot",Value("icub")).asString();        
 
         arm=new iCubArm("left");
         chain=arm->asChain();
@@ -890,7 +1039,7 @@ public:
         app->Options()->SetIntegerValue("print_level",0);
         app->Initialize();
 
-        Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(*chain);
+        Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(*chain,hitting_constraints);
         nlp->set_dt(dt);
         nlp->set_xr(xr);
         nlp->set_v_lim(VLIM);
