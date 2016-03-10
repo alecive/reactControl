@@ -1106,7 +1106,7 @@ public:
             strCtrlPoints<<ctrlPoints[i].toString(3,3)<<" ";
 
         fout<<t<<" "<<
-              xr.subVector(0,2).toString(3,3)<<" "<<
+              xr.toString(3,3)<<" "<<
               obstacle->toString()<<" "<<
               v.toString(3,3)<<" "<<
               (CTRL_RAD2DEG*chain->getAng()).toString(3,3)<<" "<<

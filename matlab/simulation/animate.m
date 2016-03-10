@@ -20,10 +20,10 @@ end
 
 data=importdata(filein);
 t=data(:,1);
-xd=data(:,2:4);
-xo=data(:,5:8);
-q=data(:,19:19+10-1);
-ctrlp=data(:,19+10:end);
+xd=data(:,2:7);
+xo=data(:,8:11);
+q=data(:,22:22+10-1);
+ctrlp=data(:,22+10:end);
 
 P{1}.A =0.032;      P{1}.D =0;        P{1}.alpha =pi/2;  P{1}.offset =0;
 P{2}.A =0;          P{2}.D =-0.0055;  P{2}.alpha =pi/2;  P{2}.offset =-pi/2;
@@ -139,9 +139,7 @@ arm=plot3(hax,[x{1}(1) x{2}(1) x{3}(1) x{4}(1) x{5}(1) x{6}(1) x{7}(1) x{8}(1) x
               [x{1}(3) x{2}(3) x{3}(3) x{4}(3) x{5}(3) x{6}(3) x{7}(3) x{8}(3) x{9}(3) x{10}(3) x{11}(3)],...
               'Color','k','LineWidth',3);
           
-lim=axis(hax);
-scale=max(abs(lim))*0.1;
-     
+lim=axis(hax); scale=max(abs(lim))*0.1;
 ax(1)=quiver3(hax,x{end}(1),x{end}(2),x{end}(3),...
               axpoint{1}(1),axpoint{1}(2),axpoint{1}(3),scale,...
               'Color','r','Linewidth',2);
@@ -193,7 +191,25 @@ end
 
 [x,axpoint]=fkin(q(i,:));
 hg1=drawArm(x,axpoint,ctrlp(i,:));
-hg2=plot3(hax,xd(i,1),xd(i,2),xd(i,3),'go','LineWidth',3);
+
+ax(1)=plot3(hax,xd(i,1),xd(i,2),xd(i,3),'go','LineWidth',3);
+
+ang=norm(xd(i,4:6));
+axang=[xd(i,4:6)/ang ang];
+rotm=axang2rotm(axang);
+
+lim=axis(hax); scale=max(abs(lim))*0.1;
+ax(2)=quiver3(hax,xd(i,1),xd(i,2),xd(i,3),...
+              rotm(1,1),rotm(2,1),rotm(3,1),scale,...
+              'Color','r','Linewidth',2);
+ax(3)=quiver3(hax,xd(i,1),xd(i,2),xd(i,3),...
+              rotm(1,2),rotm(2,2),rotm(3,2),scale,...
+              'Color','g','Linewidth',2);
+ax(4)=quiver3(hax,xd(i,1),xd(i,2),xd(i,3),...
+              rotm(1,3),rotm(2,3),rotm(3,3),scale,...
+              'Color','b','Linewidth',2);
+hg2=hggroup;
+set(ax,'Parent',hg2);
 
 n=10;
 [x,y,z]=sphere(n); r=xo(i,4);
