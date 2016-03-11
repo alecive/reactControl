@@ -888,7 +888,7 @@ public:
         dt=rf.check("dt",Value(0.02)).asDouble();
         T=rf.check("T",Value(1.0)).asDouble();
         hitting_constraints=rf.check("hitting-constraints",Value("on")).asString()=="on";
-        orientation_control=rf.check("orientation-control",Value("on")).asString()=="on";
+        orientation_control=rf.check("orientation-control",Value("off")).asString()=="on";
         string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();
         string robot=rf.check("robot",Value("icub")).asString();        
 
