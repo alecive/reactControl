@@ -354,7 +354,7 @@ public:
                 v[i]=x[i];
 
             Matrix H=v2m(x0+dt*(J0*v));
-            Vector err=dcm2axis(Des*SE3inv(H));
+            Vector err=dcm2axis(Des*H.transposed());
 
             err_xyz[0]=xr[0]-H(0,3);
             err_xyz[1]=xr[1]-H(1,3);
