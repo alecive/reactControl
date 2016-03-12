@@ -55,10 +55,10 @@ class ControllerNLP : public Ipopt::TNLP
     bool orientation_control;
 
     Vector xr;
-    Matrix Des;    
+    Matrix Hr;    
     Matrix q_lim,v_lim;    
     Vector q0,x0,v0,v;
-    Matrix J0,J0_xyz,J0_ang;
+    Matrix J0,J0_xyz,J0_ang,Derr_ang;
     Vector err_xyz,err_ang;
     Matrix bounds;
     double dt;
@@ -154,6 +154,7 @@ class ControllerNLP : public Ipopt::TNLP
     /****************************************************************/
     Matrix v2m(const Vector &x)
     {
+        yAssert(x.length()>=6);
         Vector ang=x.subVector(3,5);
         double ang_mag=norm(ang);
         ang/=ang_mag; ang.push_back(ang_mag);
@@ -162,6 +163,18 @@ class ControllerNLP : public Ipopt::TNLP
         H(1,3)=x[1];
         H(2,3)=x[2];
         return H;
+    }
+
+    /****************************************************************/
+    Matrix skew(const Vector &w)
+    {
+        yAssert(w.length()>=3);
+        Matrix S(3,3);
+        S(0,0)=S(1,1)=S(2,2)=0.0;
+        S(1,0)= w[2]; S(0,1)=-S(1,0);
+        S(2,0)=-w[1]; S(0,2)=-S(2,0);
+        S(2,1)= w[0]; S(1,2)=-S(2,1);
+        return S;
     }
 
 public:
@@ -199,7 +212,7 @@ public:
     {
         yAssert(this->xr.length()==xr.length());        
         this->xr=xr;
-        Des=v2m(xr);
+        Hr=v2m(xr);
     }
 
     /****************************************************************/
@@ -353,15 +366,20 @@ public:
             for (size_t i=0; i<v.length(); i++)
                 v[i]=x[i];
 
-            Matrix H=v2m(x0+dt*(J0*v));
-            Vector err=dcm2axis(Des*H.transposed());
+            Matrix He=v2m(x0+dt*(J0*v));
+            Vector err_ang_=dcm2axis(Hr*He.transposed());
 
-            err_xyz[0]=xr[0]-H(0,3);
-            err_xyz[1]=xr[1]-H(1,3);
-            err_xyz[2]=xr[2]-H(2,3);
-            err_ang[0]=err[3]*err[0];
-            err_ang[1]=err[3]*err[1];
-            err_ang[2]=err[3]*err[2];
+            err_xyz[0]=xr[0]-He(0,3);
+            err_xyz[1]=xr[1]-He(1,3);
+            err_xyz[2]=xr[2]-He(2,3);
+            err_ang[0]=err_ang_[3]*err_ang_[0];
+            err_ang[1]=err_ang_[3]*err_ang_[1];
+            err_ang[2]=err_ang_[3]*err_ang_[2];
+
+            Matrix L=-0.5*(skew(Hr.getCol(0))*skew(He.getCol(0))+
+                           skew(Hr.getCol(1))*skew(He.getCol(1))+
+                           skew(Hr.getCol(2))*skew(He.getCol(2)));
+            Derr_ang=-dt*(L*J0_ang);
         }
     }
 
@@ -380,7 +398,7 @@ public:
     {
         computeQuantities(x,new_x);
         for (Ipopt::Index i=0; i<n; i++)
-            grad_f[i]=(orientation_control?-2.0*dt*dot(err_ang,J0_ang.getCol(i)):0.0);
+            grad_f[i]=(orientation_control?2.0*dot(err_ang,Derr_ang.getCol(i)):0.0);
         return true; 
     }
 
