@@ -57,8 +57,8 @@ class ControllerNLP : public Ipopt::TNLP
     Vector xr;
     Matrix Hr;    
     Matrix q_lim,v_lim;    
-    Vector q0,x0,v0,v;
-    Matrix J0,J0_xyz,J0_ang,Derr_ang;
+    Vector q0,v0,v;
+    Matrix H0,J0,J0_xyz,J0_ang,S,Derr_ang;
     Vector err_xyz,err_ang;
     Matrix bounds;
     double dt;
@@ -182,10 +182,8 @@ public:
     ControllerNLP(iKinChain &chain_) : chain(chain_)
     {
         xr.resize(6,0.0);
-        err_xyz.resize(3,0.0);
-        err_ang.resize(3,0.0);
-        v0.resize(chain.getDOF(),0.0);
-        v=v0;
+        v0.resize(chain.getDOF(),0.0); v=v0;
+        S=zeros(4,4);
 
         q_lim.resize(chain.getDOF(),2);
         v_lim.resize(chain.getDOF(),2);        
@@ -210,7 +208,7 @@ public:
     /****************************************************************/
     void set_xr(const Vector &xr)
     {
-        yAssert(this->xr.length()==xr.length());        
+        yAssert(this->xr.length()==xr.length());
         this->xr=xr;
         Hr=v2m(xr);
     }
@@ -257,13 +255,7 @@ public:
     void init()
     {
         q0=chain.getAng();
-
-        x0=chain.EndEffPose();
-        x0[3]*=x0[6];
-        x0[4]*=x0[6];
-        x0[5]*=x0[6];
-        x0.pop_back();
-
+        H0=chain.getH();
         J0=chain.GeoJacobian();
         J0_xyz=J0.submatrix(0,2,0,chain.getDOF()-1);
         J0_ang=J0.submatrix(3,5,0,chain.getDOF()-1);
@@ -366,19 +358,18 @@ public:
             for (size_t i=0; i<v.length(); i++)
                 v[i]=x[i];
 
-            Matrix He=v2m(x0+dt*(J0*v));
-            Vector err_ang_=dcm2axis(Hr*He.transposed());
+            Vector xe=H0.getCol(3).subVector(0,2)+dt*(J0_xyz*v);
+            err_xyz=xr.subVector(0,2)-xe;
+            
+            S.setSubmatrix(skew(J0_ang*v),0,0);
+            Matrix Re=H0+dt*(S*H0);
+            err_ang=dcm2axis(Hr*Re.transposed());
+            err_ang*=err_ang[3];
+            err_ang.pop_back();
 
-            err_xyz[0]=xr[0]-He(0,3);
-            err_xyz[1]=xr[1]-He(1,3);
-            err_xyz[2]=xr[2]-He(2,3);
-            err_ang[0]=err_ang_[3]*err_ang_[0];
-            err_ang[1]=err_ang_[3]*err_ang_[1];
-            err_ang[2]=err_ang_[3]*err_ang_[2];
-
-            Matrix L=-0.5*(skew(Hr.getCol(0))*skew(He.getCol(0))+
-                           skew(Hr.getCol(1))*skew(He.getCol(1))+
-                           skew(Hr.getCol(2))*skew(He.getCol(2)));
+            Matrix L=-0.5*(skew(Hr.getCol(0))*skew(Re.getCol(0))+
+                           skew(Hr.getCol(1))*skew(Re.getCol(1))+
+                           skew(Hr.getCol(2))*skew(Re.getCol(2)));
             Derr_ang=-dt*(L*J0_ang);
         }
     }
@@ -894,6 +885,7 @@ class ControllerModule : public RFModule
     double dt,T,t0;
     bool hitting_constraints;
     bool orientation_control;
+    bool verbosity;
     Matrix lim,v_lim;
 
     Vector v;
@@ -906,7 +898,8 @@ public:
         dt=rf.check("dt",Value(0.02)).asDouble();
         T=rf.check("T",Value(1.0)).asDouble();
         hitting_constraints=rf.check("hitting-constraints",Value("on")).asString()=="on";
-        orientation_control=rf.check("orientation-control",Value("off")).asString()=="on";
+        orientation_control=rf.check("orientation-control",Value("on")).asString()=="on";
+        verbosity=rf.check("verbosity",Value("off")).asString()=="on";
         string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();
         string robot=rf.check("robot",Value("icub")).asString();        
 
@@ -1076,8 +1069,8 @@ public:
         app->Options()->SetNumericValue("max_cpu_time",0.75*dt);
         app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
         app->Options()->SetStringValue("hessian_approximation","limited-memory");
-        app->Options()->SetStringValue("derivative_test","none");
-        app->Options()->SetIntegerValue("print_level",0);
+        app->Options()->SetStringValue("derivative_test",verbosity?"first-order":"none");
+        app->Options()->SetIntegerValue("print_level",verbosity?5:0);
         app->Initialize();
 
         Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(*chain);
