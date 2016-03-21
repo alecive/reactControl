@@ -54,11 +54,11 @@ class ControllerNLP : public Ipopt::TNLP
     bool hitting_constraints;
     bool orientation_control;
 
-    Vector xr;
-    Matrix Hr;    
+    Vector xr,pr;
+    Matrix Hr;
     Matrix q_lim,v_lim;    
-    Vector q0,v0,v;
-    Matrix H0,J0,J0_xyz,J0_ang,S,Derr_ang;
+    Vector q0,v0,v,p0;
+    Matrix H0,R0,He,J0_xyz,J0_ang,Derr_ang;
     Vector err_xyz,err_ang;
     Matrix bounds;
     double dt;
@@ -182,8 +182,10 @@ public:
     ControllerNLP(iKinChain &chain_) : chain(chain_)
     {
         xr.resize(6,0.0);
+        pr=xr.subVector(0,2);
+
         v0.resize(chain.getDOF(),0.0); v=v0;
-        S=zeros(4,4);
+        He=zeros(4,4); He(3,3)=1.0;
 
         q_lim.resize(chain.getDOF(),2);
         v_lim.resize(chain.getDOF(),2);        
@@ -211,6 +213,7 @@ public:
         yAssert(this->xr.length()==xr.length());
         this->xr=xr;
         Hr=v2m(xr);
+        pr=xr.subVector(0,2);
     }
 
     /****************************************************************/
@@ -256,7 +259,10 @@ public:
     {
         q0=chain.getAng();
         H0=chain.getH();
-        J0=chain.GeoJacobian();
+        R0=H0.submatrix(0,2,0,2);
+        p0=H0.getCol(3).subVector(0,2);
+
+        Matrix J0=chain.GeoJacobian();
         J0_xyz=J0.submatrix(0,2,0,chain.getDOF()-1);
         J0_ang=J0.submatrix(3,5,0,chain.getDOF()-1);
 
@@ -358,18 +364,20 @@ public:
             for (size_t i=0; i<v.length(); i++)
                 v[i]=x[i];
 
-            Vector xe=H0.getCol(3).subVector(0,2)+dt*(J0_xyz*v);
-            err_xyz=xr.subVector(0,2)-xe;
-            
-            S.setSubmatrix(skew(J0_ang*v),0,0);
-            Matrix Re=H0+dt*(S*H0);
-            err_ang=dcm2axis(Hr*Re.transposed());
+            He.setSubmatrix(R0+dt*(skew(J0_ang*v)*R0),0,0);
+            Vector pe=p0+dt*(J0_xyz*v);            
+            He(0,3)=pe[0];
+            He(1,3)=pe[1];
+            He(2,3)=pe[2];
+
+            err_xyz=pr-pe;
+            err_ang=dcm2axis(Hr*He.transposed());
             err_ang*=err_ang[3];
             err_ang.pop_back();
 
-            Matrix L=-0.5*(skew(Hr.getCol(0))*skew(Re.getCol(0))+
-                           skew(Hr.getCol(1))*skew(Re.getCol(1))+
-                           skew(Hr.getCol(2))*skew(Re.getCol(2)));
+            Matrix L=-0.5*(skew(Hr.getCol(0))*skew(He.getCol(0))+
+                           skew(Hr.getCol(1))*skew(He.getCol(1))+
+                           skew(Hr.getCol(2))*skew(He.getCol(2)));
             Derr_ang=-dt*(L*J0_ang);
         }
     }
