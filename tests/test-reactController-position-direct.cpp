@@ -55,7 +55,7 @@ class ControllerNLP : public Ipopt::TNLP
     bool orientation_control;
 
     Vector xr,pr;
-    Matrix Hr;
+    Matrix Hr,skew_nr,skew_sr,skew_ar;
     Matrix q_lim,v_lim;    
     Vector q0,v0,v,p0;
     Matrix H0,R0,He,J0_xyz,J0_ang,Derr_ang;
@@ -157,7 +157,9 @@ class ControllerNLP : public Ipopt::TNLP
         yAssert(x.length()>=6);
         Vector ang=x.subVector(3,5);
         double ang_mag=norm(ang);
-        ang/=ang_mag; ang.push_back(ang_mag);
+        if (ang_mag>0.0)
+            ang/=ang_mag;
+        ang.push_back(ang_mag);
         Matrix H=axis2dcm(ang);
         H(0,3)=x[0];
         H(1,3)=x[1];
@@ -182,7 +184,7 @@ public:
     ControllerNLP(iKinChain &chain_) : chain(chain_)
     {
         xr.resize(6,0.0);
-        pr=xr.subVector(0,2);
+        set_xr(xr);
 
         v0.resize(chain.getDOF(),0.0); v=v0;
         He=zeros(4,4); He(3,3)=1.0;
@@ -212,8 +214,13 @@ public:
     {
         yAssert(this->xr.length()==xr.length());
         this->xr=xr;
+
         Hr=v2m(xr);
         pr=xr.subVector(0,2);
+
+        skew_nr=skew(Hr.getCol(0));
+        skew_sr=skew(Hr.getCol(1));
+        skew_ar=skew(Hr.getCol(2));
     }
 
     /****************************************************************/
@@ -375,9 +382,9 @@ public:
             err_ang*=err_ang[3];
             err_ang.pop_back();
 
-            Matrix L=-0.5*(skew(Hr.getCol(0))*skew(He.getCol(0))+
-                           skew(Hr.getCol(1))*skew(He.getCol(1))+
-                           skew(Hr.getCol(2))*skew(He.getCol(2)));
+            Matrix L=-0.5*(skew_nr*skew(He.getCol(0))+
+                           skew_sr*skew(He.getCol(1))+
+                           skew_ar*skew(He.getCol(2)));
             Derr_ang=-dt*(L*J0_ang);
         }
     }
