@@ -62,7 +62,7 @@ class reactCtrlThread: public yarp::os::RateThread
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & , const string &_ ,
-                    int , bool , string , double , double , double , double , string , bool , bool , double , bool , bool , bool , double , bool , bool , bool , particleThread * );
+                    int , bool , string , double , double , double , double , string , bool , bool , bool, bool , bool , bool , bool , particleThread * );
     // INIT
     virtual bool threadInit();
     // RUN
@@ -145,13 +145,10 @@ protected:
     // Max velocity set for the joints
     double vMax;
     string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk"
-    bool ipOptMemoryOn; // whether ipopt should account for the real motor model
-    bool ipOptFilterOn; // whether ipopt should account for the real motor model
-    double ipOptFilter_tc; //related to filter cut-off frequency
-    bool boundSmoothnessFlag; //for ipopt - whether changes in velocity commands need to be smooth
-    double boundSmoothnessValue; //actual allowed change in every joint velocity commands in deg/s from one time step to the next. Note: this is not adapted to the thread rate set by the rctCtrlRate param
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
+    bool hittingConstraints; //inequality constraints for safety of shoudler assembly and to prevent self-collisions torso-upper arm, upper-arm - forearm
+    bool orientationControl; //if orientation should be controlled as well
     bool visualizeTargetInSim;  // will use the yarp rpc /icubSim/world to visualize the target
     // will use the yarp rpc /icubSim/world to visualize the particle (trajectory - intermediate targets)
     bool visualizeParticleInSim; 
@@ -199,6 +196,12 @@ protected:
     yarp::sig::Vector x_n;  // Desired next end-effector position
     yarp::sig::Vector x_d;  // Vector that stores the new target
 
+    yarp::sig::Vector o_0;  // Initial end-effector orientation
+    yarp::sig::Vector o_t;  // Current end-effector orientation
+    yarp::sig::Vector o_n;  // Desired next end-effector orientation
+    yarp::sig::Vector o_d;  // Vector that stores the new orientation
+
+
     bool movingTargetCircle;
     double radius;
     double frequency;
@@ -233,11 +236,6 @@ protected:
     reactIpOpt    *slv;    // solver
     int ipoptExitCode;
     double timeToSolveProblem_s; //time taken by q_dot = solveIK(ipoptExitCode) ~ ipopt + avoidance handler
-    std::deque<yarp::sig::Vector> memoryVelCommands_RAD; //buffer to store past velocities- this one is expceptionally in RAD - will be passed to ipopt
-    double motorModel_td;
-    yarp::sig::Vector motorModels_kp;
-    iCub::ctrl::Filter *filter;
-    double filterTc;
 
     // Mutex for handling things correctly
     yarp::os::Mutex mutex;

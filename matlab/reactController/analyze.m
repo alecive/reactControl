@@ -12,9 +12,10 @@ save_figs = true;
 chosen_time_column = 6; % 4 for sender, 6 for receiver 
 
 %path_prefix = 'input/';
-%path_prefix = 'icubTests/test_20160212a/';
-path_prefix = 'icubExperiments/moveWithIpoptWithoutAcceptHeuristicsOldTolerance_works/';
+path_prefix = 'icubTests/test_20160404a/';
+%path_prefix = 'icubExperiments/moveWithIpoptWithoutAcceptHeuristicsOldTolerance_works/';
 path_prefix_dumper = 'data/';
+
 
 if save_figs
   mkdir('output');
@@ -45,8 +46,8 @@ NR_EXTRA_TIME_COLUMNS = 4; % these will be created so that there is time startin
 %assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
 % variable - if torso on: 58: if torso off: 46; ipopt exit code (Solve_Succeeded=0)
 % variable - if torso on: 59: if torso off: 47; time taken to solve problem (s) ~ ipopt + avoidance handler
-d_orig=importdata([path_prefix path_prefix_dumper 'reactCtrl/data.log']);
 
+d_orig=importdata([path_prefix path_prefix_dumper 'reactCtrl/data.log']);
 
 TIME_FROM_ZERO_1_COLUMN = 4;
 TIME_FROM_ZERO_DELTA_1_COLUMN = 5;
@@ -125,7 +126,7 @@ if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 
      
      
     if ( (strcmp(controlMode,'positionDirect')) && (size(d_orig,2) <  65) )
-        error('It seems that intergrated positions were not logged.'); 
+        error('It seems that integrated positions were not logged.'); 
     end
         
 elseif((d_params(1) == 7) && (d_orig(1,4) == 7) ) % 7 DOF situation - arm

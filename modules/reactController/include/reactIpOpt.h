@@ -54,14 +54,10 @@ private:
 
 protected:
     // The IpOpt application that will solve the task
-    Ipopt::SmartPtr<Ipopt::IpoptApplication> App;
+    Ipopt::SmartPtr<Ipopt::IpoptApplication> app;
 
     iCub::iKin::iKinChain chainCopy; //this is a copy of the orig chain, which can be modified here - e.g. in posDirect mode
-    bool useMemory;
-    yarp::sig::Vector kps;
-    bool useFilter;
-    iCub::ctrl::Filter *fil;
-
+   
     int verbosity;
 
 public:
@@ -70,17 +66,13 @@ public:
     * @param c is the Chain object on which the control operates. Do 
     *          not change Chain DOF from this point onwards!!
     * @param _tol exits if 0.5*norm(xd-x)^2<tol.
-    * @param _useMemory - whether buffer of past velocities should be used
-    * @param _kps - constants for motor model - for each joint
-    * @param _useFilter 
-    * @param _fil - pointer to filter
-    * @param verbose is a integer number which progressively enables 
+    * @param verbose is an integer number which progressively enables 
     *                different levels of warning messages or status
     *                dump. The larger this value the more detailed
     *                is the output (0=>off by default).
     */
     reactIpOpt(const iCub::iKin::iKinChain &c,
-               const double _tol, const bool _useMemory, const yarp::sig::Vector _kps, const bool _useFilter, iCub::ctrl::Filter *_fil, const unsigned int verbose=0);
+               const double _tol, const unsigned int verbose=0);
 
     /**
     * Sets Tolerance.
@@ -103,16 +95,17 @@ public:
     */
     void setVerbosity(const unsigned int verbose);
 
+    
     /**
     * Executes the IpOpt algorithm trying to converge on target. 
-    * @param xd  is the End-Effector target Pose to be attained.
+    * @param xd  is the End-Effector target position to be attained.
+    * @param od  is the End-Effector target orientation to be attained. (compact axis-angle notation)
     * @param q    are the joint positions (real in velocityMode, integrated in positionDirect mode). 
     * @param q_dot_0   are the initial joint velocities of the chain.
-    * @param q_dot_memory buffer of past velocity commands - depending on td in motor model
     * @param dt        is the time step to use in order to solve the task. 
     * @param v_lim     are the joint velocity limits for individual joints.
-    * @param boundSmoothnessFlag whether the optimization should limit changes in joint vel control commmands between time steps
-    * @param boundSmoothnessValue  the actual value of the max allowed change in joint vel
+    * @param hittingConstraints whether shoulder assembly and other self-collision inequality constraints are active
+    * @param orientationControl  if orientation is controlled for
     * @param exit_code stores the exit code (NULL by default). It is one of these:
     *                   SUCCESS
     *                   MAXITER_EXCEEDED
@@ -130,8 +123,7 @@ public:
     *                   INTERNAL_ERROR
     * @return estimated joint velocities.
     */
-    virtual yarp::sig::Vector solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &q, const yarp::sig::Vector &q_dot_0, std::deque<yarp::sig::Vector> &q_dot_memory,
-                                    double dt, const yarp::sig::Matrix &v_lim, bool boundSmoothnessFlag, double boundSmoothnessValue, int *exit_code);
+    virtual yarp::sig::Vector solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &od, const yarp::sig::Vector &q, const yarp::sig::Vector &q_dot_0,                                 double dt, const yarp::sig::Matrix &v_lim, bool  hittingConstraints, bool orientationControl, int *exit_code);
 
     /**
     * Default destructor.

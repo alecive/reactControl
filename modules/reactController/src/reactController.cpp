@@ -106,15 +106,19 @@ private:
     double       vMax;  // max velocity set for the joints
     
     string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk" 
+    
+    bool hittingConstraints; //inequality constraints for safety of shoudler assembly and to prevent self-collisions torso-upper arm, upper-arm - forearm  
+    bool orientationControl; //if orientation should be controlled as well
+    
     bool ipOptMemoryOn; // whether ipopt should account for the real motor model
     bool ipOptFilterOn; 
-    double ipOptFilter_tc;
+    //double ipOptFilter_tc;
     
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
     
     bool boundSmoothnessFlag; //for ipopt - whether changes in velocity commands need to be smooth
-    double boundSmoothnessValue; //actual allowed change in every joint velocity commands in deg/s from one time step to the next. Note: this is not adapted to the thread rate set by the rctCtrlRate param
+    //double boundSmoothnessValue; //actual allowed change in every joint velocity commands in deg/s from one time step to the next. Note: this is not adapted to the thread rate set by the rctCtrlRate param
     
     bool visualizeTargetInSim; // will use the yarp rpc /icubSim/world to visualize the target
     bool visualizeParticleInSim; // will use the yarp rpc /icubSim/world to visualize the particle (trajectory - intermediate targets)
@@ -141,15 +145,17 @@ public:
         vMax         =  30.0;
         
         referenceGen = "uniformParticle";
+        hittingConstraints = true;
+        orientationControl = true;
         ipOptMemoryOn = false;
         ipOptFilterOn = false;
-        ipOptFilter_tc = 0.25;
+        //ipOptFilter_tc = 0.25;
         
         tactileCollisionPointsOn = false;
         visualCollisionPointsOn = false;
         
         boundSmoothnessFlag = false;
-        boundSmoothnessValue = 30; // 30 deg/s change in a time step is huge - would have no effect 
+        //boundSmoothnessValue = 30; // 30 deg/s change in a time step is huge - would have no effect 
         
         if(robot == "icubSim"){
             visualizeTargetInSim = true;
@@ -497,13 +503,47 @@ public:
             else yInfo("[reactController] Could not find tol in the config file; using %g as default",tol);
    
         
+            //*********** hitting constraints *************************************************/
+            if (rf.check("hittingConstraints"))
+            {
+                if(rf.find("hittingConstraints").asString()=="on"){
+                    hittingConstraints = true;
+                    yInfo("[reactController] hittingConstraints flag set to on.");
+                }
+                else{
+                    hittingConstraints = false;
+                    yInfo("[reactController] hittingConstraints flag set to off.");
+                }
+            }
+            else
+            {
+                yInfo("[reactController] Could not find hittingConstraints flag (on/off) in the config file; using %d as default",hittingConstraints);
+            }  
+            
+            //*********** orientation control *************************************************/
+            if (rf.check("orientationControl"))
+            {
+                if(rf.find("orientationControl").asString()=="on"){
+                    orientationControl = true;
+                    yInfo("[reactController] orientationControl flag set to on.");
+                }
+                else{
+                    orientationControl = false;
+                    yInfo("[reactController] orientationControl flag set to off.");
+                }
+            }
+            else
+            {
+                yInfo("[reactController] Could not find orientationControl flag (on/off) in the config file; using %d as default",orientationControl);
+            }  
+            
             
             //********************** ipopt using memory - motor model ***********************
             if (rf.check("ipOptMemory"))
             {
                 if(rf.find("ipOptMemory").asString()=="on"){
-                    ipOptMemoryOn = true;
-                    yInfo("[reactController] ipOptMemory flag set to on.");
+                    ipOptMemoryOn = false;
+                    yWarning("[reactController] ipOptMemory flag on requested, but setting to off - currently not supported.");
                 }
                 else{
                     ipOptMemoryOn = false;
@@ -519,8 +559,8 @@ public:
             if (rf.check("ipOptFilter"))
             {
                 if(rf.find("ipOptFilter").asString()=="on"){
-                    ipOptFilterOn = true;
-                    yInfo("[reactController] ipOptFilter flag set to on.");
+                    ipOptFilterOn = false;
+                    yWarning("[reactController] ipOptFilter flag on requested, but setting to off - currently not supported.");
                 }
                 else{
                     ipOptFilterOn = false;
@@ -531,19 +571,19 @@ public:
             {
                  yInfo("[reactController] Could not find ipOptFilter flag (on/off) in the config file; using %d as default",ipOptFilterOn);
             }  
-            if (rf.check("ipOptFilter_tc"))
-                {
-                ipOptFilter_tc = rf.find("ipOptFilter_tc").asDouble();
-                yInfo("[reactController] ipopt: ipOptFilter_tc set to %g.",ipOptFilter_tc);
-            }
-            else yInfo("[reactController] Could not find ipOptFilter_tc in the config file; using %g as default",ipOptFilter_tc);
-       
+//             if (rf.check("ipOptFilter_tc"))
+//                 {
+//                 ipOptFilter_tc = rf.find("ipOptFilter_tc").asDouble();
+//                 yInfo("[reactController] ipopt: ipOptFilter_tc set to %g.",ipOptFilter_tc);
+//             }
+//             else yInfo("[reactController] Could not find ipOptFilter_tc in the config file; using %g as default",ipOptFilter_tc);
+//        
         
         if (rf.check("boundSmoothnessFlag"))
         {
             if(rf.find("boundSmoothnessFlag").asString()=="on"){
-                boundSmoothnessFlag = true;
-                yInfo("[reactController] ipopt: boundSmoothnessFlag flag set to on.");
+                boundSmoothnessFlag = false;
+                yWarning("[reactController] ipopt: boundSmoothnessFlag flag on requested, but setting to off - currently not supported.");
                 
             }
             else{
@@ -555,13 +595,13 @@ public:
         {
             yInfo("[reactController] Could not find boundSmoothnessFlag flag (on/off) in the config file; using %d as default",boundSmoothnessFlag);
         }
-        if (rf.check("boundSmoothnessValue"))
+        /*if (rf.check("boundSmoothnessValue"))
         {
               boundSmoothnessValue = rf.find("boundSmoothnessValue").asDouble();
                yInfo("[reactController] ipopt: boundSmoothnessValue set to %g deg/s (allowed change in joint vel in a time step).",boundSmoothnessValue);
         }
         else yInfo("[reactController] Could not find boundSmoothnessValue in the config file; using %g as default",boundSmoothnessValue);
-           
+        */   
          //********************** Visualizations in simulator ***********************
             if (robot == "icubSim"){
                 if (rf.check("visualizeTargetInSim"))
@@ -644,9 +684,8 @@ public:
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
                                           disableTorso, controlMode, trajSpeed, 
                                           globalTol, vMax, tol, referenceGen, 
-                                          ipOptMemoryOn, ipOptFilterOn,ipOptFilter_tc,
                                           tactileCollisionPointsOn,visualCollisionPointsOn,
-                                          boundSmoothnessFlag,boundSmoothnessValue,
+                                          hittingConstraints, orientationControl,
                                           visualizeTargetInSim, visualizeParticleInSim,
                                           visualizeCollisionPointsInSim, prtclThrd);
         if (!rctCtrlThrd->start())

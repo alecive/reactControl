@@ -50,18 +50,18 @@ using namespace iCub::skinDynLib;
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,  const string &_part,
                                  int _verbosity, bool _disableTorso,  string _controlMode, 
                                  double _trajSpeed, double _globalTol, double _vMax, double _tol,
-                                 string _referenceGen, bool _ipOptMemoryOn, 
-                                 bool _ipOptFilterOn, double _ipOptFilter_tc,
+                                 string _referenceGen, 
                                  bool _tactileCollisionPointsOn, bool _visualCollisionPointsOn,
-                                 bool _boundSmoothnessFlag, double _boundSmoothnessValue, 
+                                 bool _hittingConstraints, bool _orientationControl,
                                  bool _visualizeTargetInSim, bool _visualizeParticleInSim, bool _visualizeCollisionPointsInSim,
                                  particleThread *_pT) :
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
                                  verbosity(_verbosity), useTorso(!_disableTorso), controlMode(_controlMode),
                                  trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol),
-                                 referenceGen(_referenceGen), ipOptMemoryOn(_ipOptMemoryOn), ipOptFilterOn(_ipOptFilterOn), ipOptFilter_tc(_ipOptFilter_tc),
+                                 referenceGen(_referenceGen), 
                                  tactileCollisionPointsOn(_tactileCollisionPointsOn), visualCollisionPointsOn(_visualCollisionPointsOn),
-                                 boundSmoothnessFlag(_boundSmoothnessFlag), boundSmoothnessValue(_boundSmoothnessValue),                                 visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
+                                 hittingConstraints(_hittingConstraints),orientationControl(_orientationControl),
+                                 visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
                                  visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim)
 {
     dT=getRate()/1000.0;
@@ -120,7 +120,10 @@ bool reactCtrlThread::threadInit()
         vLimNominal(r,1)=vMax;
         vLimAdapted(r,1)=vMax;
     }
-    //optionally: if (useTorso) vLimNominal(1,0)=vLimNominal(1,1)=0.0;  // disable torso roll
+    if (useTorso){ // disable torso roll
+        vLimNominal(1,0)=vLimNominal(1,1)=0.0;  
+        vLimAdapted(1,0)=vLimAdapted(1,1)=0.0;  
+    }     
          
     H.resize(4,4);
 
@@ -226,59 +229,16 @@ bool reactCtrlThread::threadInit()
     x_t.resize(3,0.0);
     x_n.resize(3,0.0);
     x_d.resize(3,0.0);
+    
+    //set initial orientation to palm pointing away from body - using compact axis-angle representation
+    //the one below works for both palms
+    o_0.resize(3,0.0); o_0(2)=M_PI;
+    o_t.resize(3,0.0); o_t(2)=M_PI;
+    o_n.resize(3,0.0); o_n(2)=M_PI;
+    o_d.resize(3,0.0); o_d(2)=M_PI;
        
     slv=NULL; //ipOpt solver - our wrapper class
-    memoryVelCommands_RAD.clear();
-    motorModels_kp.resize(chainActiveDOF,1.0);
-    if (ipOptMemoryOn){
-        if (robot == "icub"){
-            motorModel_td = 0.05; //same lag for all - in seconds
-            if(useTorso){
-                motorModels_kp(0) = 1.0; //torso not identified currently
-                motorModels_kp(1) = 1.0;
-                motorModels_kp(2) = 1.0;
-                motorModels_kp(3) = 1.12;
-                motorModels_kp(4) = 1.05;
-                motorModels_kp(5) = 1.93;
-                motorModels_kp(6) = 1.06;
-                motorModels_kp(7) = 1.01;
-                motorModels_kp(8) = 1.01; //wrist not identified, assume it is like elbow pronosupination 
-                motorModels_kp(9) = 1.01;
-            }
-            else{
-                yAssert(chainActiveDOF == 7);   
-                motorModels_kp(0) = 1.12;
-                motorModels_kp(1) = 1.05;
-                motorModels_kp(2) = 1.93;
-                motorModels_kp(3) = 1.06;
-                motorModels_kp(4) = 1.01;
-                motorModels_kp(5) = 1.01; //wrist not identified, assume it is like elbow pronosupination 
-                motorModels_kp(6) = 1.01;
-           }
-        }
-        else if (robot == "icubSim"){
-            motorModels_kp =  0.45;
-            motorModel_td = 0.023;
-        }
-        memoryVelCommands_RAD.insert(memoryVelCommands_RAD.begin(),(int)floor(motorModel_td/dT),
-                      zeros(chainActiveDOF)); //for say lag td 0.08s and dT 0.01, we will have 8 velocity vectors in the memory 
-    }
-    else{
-        //kp_s were already initialized correctly to 1.0 during resize
-        motorModel_td = 0.0;
-    }
-    if (ipOptFilterOn)
-    {
-       
-        Vector den(2,1.0);
-        double c=(2.0*ipOptFilter_tc)/dT;
-        den[0]+=c; den[1]-=c;
-        filter=new Filter(ones(2),den,zeros(chainActiveDOF));
-    }
-    else
-        filter = new Filter(ones(1),ones(1),zeros(chainActiveDOF)); //~ identity
-      
-        
+            
     if(controlMode == "positionDirect")
          I = new Integrator(dT,q,lim);        
     else
@@ -313,26 +273,17 @@ bool reactCtrlThread::threadInit()
         fout_param<<vLimNominal(j,0)<<" ";
         fout_param<<vLimNominal(j,1)<<" ";
     }
-    fout_param<<-1<<" "<<trajSpeed<<" "<<tol<<" "<<globalTol<<" "<<dT<<" "<<boundSmoothnessFlag<<" "<<boundSmoothnessValue<<" ";
+    fout_param<<-1<<" "<<trajSpeed<<" "<<tol<<" "<<globalTol<<" "<<dT<<" "<<0<<" "<<0<<" ";
     // the -1 used to be trajTime, keep it for compatibility with matlab scripts 
+    //the 0s used to be boundSmoothnessFlag and boundSmoothnessValue
     if(controlMode == "velocity")
         fout_param<<"1 ";
     else if(controlMode == "positionDirect")
         fout_param<<"2 ";
-    if(ipOptMemoryOn)
-        fout_param<<"1 ";
-    else 
-        fout_param<<"0 ";
-    if(ipOptFilterOn)
-        fout_param<<"1 ";
-    else 
-        fout_param<<"0 ";
-    fout_param<<filterTc<<" ";
-         
+    fout_param<<"0 0 0 "<<endl; //used to be ipOptMemoryOn, ipOptFilterOn, filterTc  
     yInfo("Written to param file and closing..");    
     fout_param.close();
-     
-      
+         
     /**** visualizing targets and collision points in simulator ***************************/
     
     if((robot == "icubSim") && (visualizeTargetInSim || visualizeParticleInSim || visualizeCollisionPointsInSim) ){ 
@@ -442,40 +393,28 @@ void reactCtrlThread::run()
             {
                 if (ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
                     yWarning("[reactCtrlThread] Ipopt cpu time was higher than the rate of the thread!");
-                
-                if(controlMode == "positionDirect"){
-                    qIntegrated = I->integrate(q_dot);    
-                    if (!controlArm(controlMode,qIntegrated)){
-                            yError("I am not able to properly control the arm in positionDirect!");
-                            controlSuccess = false;
-                    }
-                    else
-                        controlSuccess = true; 
-                }
-                else if (controlMode == "velocity"){
-                    if (!controlArm(controlMode,q_dot)){
-                        yError("I am not able to properly control the arm in velocity!");
-                        controlSuccess = false;   
-                    }
-                    else
-                        controlSuccess = true;
-                }
-                
-                if(controlSuccess){
-                    if(ipOptFilterOn){
-                        //printf("[reactCtrlThread::run()]: ipOptFilterOn: q_dot from ipopt: %s \n",q_dot.toString(3,3).c_str());
-                        q_dot=filter->filt(q_dot);
-                       // printf("[reactCtrlThread::run()]: ipOptFilterOn: q_dot filtered: %s \n",q_dot.toString(3,3).c_str());
-                    }
-                    if(ipOptMemoryOn){
-                        memoryVelCommands_RAD.push_back(q_dot*CTRL_DEG2RAD);
-                        memoryVelCommands_RAD.pop_front();
-                    }
-                }
             }
             else
                   yWarning("[reactCtrlThread] Ipopt solve did not succeed!");
 
+            if(controlMode == "positionDirect"){
+                qIntegrated = I->integrate(q_dot);    
+                if (!controlArm(controlMode,qIntegrated)){
+                    yError("I am not able to properly control the arm in positionDirect!");
+                    controlSuccess = false;
+                }
+                else
+                    controlSuccess = true; 
+                }
+            else if (controlMode == "velocity"){
+                if (!controlArm(controlMode,q_dot)){
+                    yError("I am not able to properly control the arm in velocity!");
+                    controlSuccess = false;   
+                }
+                else
+                    controlSuccess = true;
+                }
+            
             break;
         }
         case STATE_IDLE:
@@ -527,14 +466,6 @@ void reactCtrlThread::threadRelease()
         I = NULL;    
     }
     
-    if(filter != NULL){
-       yDebug("deleting filter");
-       delete filter;
-       filter = NULL;
-    }
-    
-    memoryVelCommands_RAD.clear(); 
-        
     if (visualizeIniCubGui)
         yInfo("Resetting objects in iCubGui");
         if (outPortiCubGui.getOutputCount()>0)
@@ -773,7 +704,7 @@ bool reactCtrlThread::stopControlAndSwitchToPositionMode()
 
 Vector reactCtrlThread::solveIK(int &_exit_code)
 {
-    slv=new reactIpOpt(*arm->asChain(),tol,ipOptMemoryOn, motorModels_kp, ipOptFilterOn, filter, verbosity);
+    slv=new reactIpOpt(*arm->asChain(),tol, verbosity);
     // Next step will be provided iteratively.
     // The equation is x(t_next) = x_t + (x_d - x_t) * (t_next - t_now/T-t_now)
     //                              s.t. t_next = t_now + dT
@@ -840,9 +771,9 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
    Vector res(chainActiveDOF,0.0); 
   
    if (controlMode == "positionDirect") //in this mode, ipopt will use the qIntegrated values to update its copy of chain
-        res=slv->solve(x_n,qIntegrated*CTRL_DEG2RAD,q_dot*CTRL_DEG2RAD,memoryVelCommands_RAD,dT,vLimAdapted*CTRL_DEG2RAD, boundSmoothnessFlag,boundSmoothnessValue*CTRL_DEG2RAD,&exit_code)*CTRL_RAD2DEG;
+        res=slv->solve(x_n,o_n,qIntegrated*CTRL_DEG2RAD,q_dot*CTRL_DEG2RAD,dT,vLimAdapted*CTRL_DEG2RAD, hittingConstraints, orientationControl,  &exit_code);
    else if (controlMode == "velocity")
-        res=slv->solve(x_n,q*CTRL_DEG2RAD, q_dot*CTRL_DEG2RAD,memoryVelCommands_RAD,dT,vLimAdapted*CTRL_DEG2RAD, boundSmoothnessFlag,boundSmoothnessValue*CTRL_DEG2RAD,&exit_code)*CTRL_RAD2DEG;
+        res=slv->solve(x_n,o_n,q*CTRL_DEG2RAD, q_dot*CTRL_DEG2RAD,dT,vLimAdapted*CTRL_DEG2RAD, hittingConstraints, orientationControl, &exit_code);
    
     
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
@@ -1023,7 +954,7 @@ bool reactCtrlThread::setCtrlModes(const VectorOf<int> &jointsToSet,
     return true;
 }
 
-//N.B. the targeValues can be either positions or velocities, depending on the control mode!
+//N.B. the targetValues can be either positions or velocities, depending on the control mode!
 bool reactCtrlThread::controlArm(const string _controlMode, const yarp::sig::Vector &_targetValues)
 {   
     VectorOf<int> jointsToSetA;
