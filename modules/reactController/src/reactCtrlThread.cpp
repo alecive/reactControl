@@ -318,10 +318,10 @@ bool reactCtrlThread::threadInit()
 void reactCtrlThread::run()
 {
     bool controlSuccess =false;
-    printMessage(2,"[reactCtrlThread::run()] started, state: %d.\n",state);
+    //printMessage(2,"[reactCtrlThread::run()] started, state: %d.\n",state);
     //yarp::os::LockGuard lg(mutex);
     updateArmChain();
-    printMessage(10,"[reactCtrlThread::run()] updated arm chain.\n");
+    //printMessage(10,"[reactCtrlThread::run()] updated arm chain.\n");
     //debug - see Jacobian
     //iCub::iKin::iKinChain &chain_temp=*arm->asChain();
     //yarp::sig::Matrix J1_temp=chain_temp.GeoJacobian();
@@ -385,12 +385,12 @@ void reactCtrlThread::run()
                 break;
             }
 
-            printMessage(2,"[reactCtrlThread::run()]: Will call solveIK.\n");
+            //printMessage(2,"[reactCtrlThread::run()]: Will call solveIK.\n");
             double t_1=yarp::os::Time::now();
             q_dot = solveIK(ipoptExitCode);
             timeToSolveProblem_s  = yarp::os::Time::now()-t_1;
                
-            if (ipoptExitCode==Ipopt::Solve_Succeeded || ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
+           if (ipoptExitCode==Ipopt::Solve_Succeeded || ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
             {
                 if (ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
                     yWarning("[reactCtrlThread] Ipopt cpu time was higher than the rate of the thread!");
@@ -792,8 +792,8 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
    nlp->set_orientation_control(orientationControl);
    nlp->set_dt(dT);
    nlp->set_xr(xr);
-   nlp->set_v_lim(vLimAdapted*CTRL_DEG2RAD);
-   nlp->set_v0(q_dot*CTRL_DEG2RAD);
+   nlp->set_v_lim(vLimAdapted);
+   nlp->set_v0(q_dot);
    nlp->init();
 
    _exit_code=app->OptimizeTNLP(GetRawPtr(nlp));
