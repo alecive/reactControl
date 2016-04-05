@@ -320,8 +320,8 @@ void reactCtrlThread::run()
     bool controlSuccess =false;
     printMessage(2,"[reactCtrlThread::run()] started, state: %d.\n",state);
     yarp::os::LockGuard lg(mutex);
-    updateArmChain();
-    printMessage(10,"[reactCtrlThread::run()] updated arm chain.\n");
+    //updateArmChain();
+    //printMessage(10,"[reactCtrlThread::run()] updated arm chain.\n");
     //debug - see Jacobian
     //iCub::iKin::iKinChain &chain_temp=*arm->asChain();
     //yarp::sig::Matrix J1_temp=chain_temp.GeoJacobian();
@@ -649,6 +649,10 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
         }
           
     }
+    
+    if(controlMode == "positionDirect")
+        I->reset(q);   
+    q_dot.zero();    
         
     if (firstTarget)
         firstTarget = false;
@@ -704,7 +708,7 @@ bool reactCtrlThread::stopControlAndSwitchToPositionMode()
 
 Vector reactCtrlThread::solveIK(int &_exit_code)
 {
-    slv=new reactIpOpt(*arm->asChain(),tol, verbosity);
+    slv=new reactIpOpt(*arm->asChain(),tol,dT,verbosity);
     // Next step will be provided iteratively.
     // The equation is x(t_next) = x_t + (x_d - x_t) * (t_next - t_now/T-t_now)
     //                              s.t. t_next = t_now + dT
@@ -767,14 +771,13 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     //printf("calling ipopt with the following joint velocity limits (rad): \n %s \n",(vLimAdapted*CTRL_DEG2RAD).toString(3,3).c_str());
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
-    // So, q_dot_0 is in degrees, but I have to convert it in radians before sending it to ipopt
    
    Vector res(chainActiveDOF,0.0); 
   
    if (controlMode == "positionDirect") //in this mode, ipopt will use the qIntegrated values to update its copy of chain
-        res=slv->solve(x_n,o_n,qIntegrated*CTRL_DEG2RAD,q_dot*CTRL_DEG2RAD,dT,vLimAdapted*CTRL_DEG2RAD, hittingConstraints, orientationControl,  &exit_code);
+        res=slv->solve(x_n,o_n,qIntegrated*CTRL_DEG2RAD,q_dot*CTRL_DEG2RAD,vLimAdapted*CTRL_DEG2RAD, hittingConstraints, orientationControl,  &exit_code);
    else if (controlMode == "velocity")
-        res=slv->solve(x_n,o_n,q*CTRL_DEG2RAD, q_dot*CTRL_DEG2RAD,dT,vLimAdapted*CTRL_DEG2RAD, hittingConstraints, orientationControl, &exit_code);
+        res=slv->solve(x_n,o_n,q*CTRL_DEG2RAD, q_dot*CTRL_DEG2RAD,vLimAdapted*CTRL_DEG2RAD, hittingConstraints, orientationControl, &exit_code);
    
     
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);

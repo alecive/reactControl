@@ -57,7 +57,7 @@ protected:
     Ipopt::SmartPtr<Ipopt::IpoptApplication> app;
 
     iCub::iKin::iKinChain chainCopy; //this is a copy of the orig chain, which can be modified here - e.g. in posDirect mode
-   
+    double dT; //time step in seconds
     int verbosity;
 
 public:
@@ -66,13 +66,14 @@ public:
     * @param c is the Chain object on which the control operates. Do 
     *          not change Chain DOF from this point onwards!!
     * @param _tol exits if 0.5*norm(xd-x)^2<tol.
+    * @param _dt is the time step to use in order to solve the task. 
     * @param verbose is an integer number which progressively enables 
     *                different levels of warning messages or status
     *                dump. The larger this value the more detailed
     *                is the output (0=>off by default).
     */
     reactIpOpt(const iCub::iKin::iKinChain &c,
-               const double _tol, const unsigned int verbose=0);
+               const double _tol, const double _dT, const unsigned int verbose=0);
 
     /**
     * Sets Tolerance.
@@ -102,7 +103,6 @@ public:
     * @param od  is the End-Effector target orientation to be attained. (compact axis-angle notation)
     * @param q    are the joint positions (real in velocityMode, integrated in positionDirect mode). 
     * @param q_dot_0   are the initial joint velocities of the chain.
-    * @param dt        is the time step to use in order to solve the task. 
     * @param v_lim     are the joint velocity limits for individual joints.
     * @param hittingConstraints whether shoulder assembly and other self-collision inequality constraints are active
     * @param orientationControl  if orientation is controlled for
@@ -123,7 +123,8 @@ public:
     *                   INTERNAL_ERROR
     * @return estimated joint velocities.
     */
-    virtual yarp::sig::Vector solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &od, const yarp::sig::Vector &q, const yarp::sig::Vector &q_dot_0,                                 double dt, const yarp::sig::Matrix &v_lim, bool  hittingConstraints, bool orientationControl, int *exit_code);
+    virtual yarp::sig::Vector solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &od, const yarp::sig::Vector &q, const yarp::sig::Vector &q_dot_0,
+                                    const yarp::sig::Matrix &v_lim, bool  hittingConstraints, bool orientationControl, int *exit_code);
 
     /**
     * Default destructor.

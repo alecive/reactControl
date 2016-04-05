@@ -523,8 +523,8 @@ public:
 
 
 /************************************************************************/
-reactIpOpt::reactIpOpt(const iKinChain &c, const double _tol,  const unsigned int verbose) :
-                       chainCopy(c), verbosity(verbose)
+reactIpOpt::reactIpOpt(const iKinChain &c, const double _tol, const double _dT, const unsigned int verbose) :
+                       chainCopy(c), dT(_dT), verbosity(verbose)
 {
     //reactIpOpt makes a copy of the original chain, which may be modified here; then it will be passed as reference to react_NLP in reactIpOpt::solve
     chainCopy.setAllConstraints(false); // this is required since IpOpt initially relaxes constraints
@@ -536,6 +536,7 @@ reactIpOpt::reactIpOpt(const iKinChain &c, const double _tol,  const unsigned in
     app->Options()->SetIntegerValue("acceptable_iter",0);
     app->Options()->SetStringValue("mu_strategy","adaptive");
     app->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
+    app->Options()->SetNumericValue("max_cpu_time",0.75*dT);
     app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
     app->Options()->SetStringValue("hessian_approximation","limited-memory");
     app->Options()->SetStringValue("derivative_test",verbosity?"first-order":"none");
@@ -582,7 +583,7 @@ void reactIpOpt::setVerbosity(const unsigned int verbose)
 
 
 /************************************************************************/
-yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &od,const yarp::sig::Vector &q, const yarp::sig::Vector &q_dot_0,double dt, const yarp::sig::Matrix &v_lim, bool hittingConstraints, bool orientationControl, int *exit_code)
+yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &od,const yarp::sig::Vector &q, const yarp::sig::Vector &q_dot_0, const yarp::sig::Matrix &v_lim, bool hittingConstraints, bool orientationControl, int *exit_code)
 {
     
     chainCopy.setAng(q); //these differ from the real positions in the case of positionDirect mode
@@ -592,16 +593,13 @@ yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig
     Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(chainCopy);
     nlp->set_hitting_constraints(hittingConstraints);
     nlp->set_orientation_control(orientationControl);
-    nlp->set_dt(dt);
+    nlp->set_dt(dT);
     nlp->set_xr(xr);
     nlp->set_v_lim(v_lim);
     nlp->set_v0(q_dot_0);
     nlp->init();
 
-    
-    app->Options()->SetNumericValue("max_cpu_time",0.75*dt);
-    
-    Ipopt::ApplicationReturnStatus status=app->OptimizeTNLP(GetRawPtr(nlp));
+   Ipopt::ApplicationReturnStatus status=app->OptimizeTNLP(GetRawPtr(nlp));
 
     if (exit_code!=NULL)
         *exit_code=status;
