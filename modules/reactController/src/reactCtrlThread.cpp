@@ -319,7 +319,7 @@ void reactCtrlThread::run()
 {
     bool controlSuccess =false;
     printMessage(2,"[reactCtrlThread::run()] started, state: %d.\n",state);
-    yarp::os::LockGuard lg(mutex);
+    //yarp::os::LockGuard lg(mutex);
     updateArmChain();
     printMessage(10,"[reactCtrlThread::run()] updated arm chain.\n");
     //debug - see Jacobian
@@ -379,6 +379,7 @@ void reactCtrlThread::run()
             if ((norm(x_t-x_d) < globalTol)) //we keep solving until we reach the desired target
             {
                 yDebug(0,"[reactCtrlThread] norm(x_t-x_d) %g\tglobalTol %g\n",norm(x_t-x_d),globalTol);
+                state=STATE_IDLE;
                 if (!stopControlHelper())
                     yError("[reactCtrlThread] Unable to properly stop the control of the arm!");
                 break;
@@ -399,7 +400,6 @@ void reactCtrlThread::run()
 
             if(controlMode == "positionDirect"){
                 qIntegrated = I->integrate(q_dot);    
-                virtualChain.setAng(qIntegrated*CTRL_DEG2RAD);
                 if (!controlArm(controlMode,qIntegrated)){
                     yError("I am not able to properly control the arm in positionDirect!");
                     controlSuccess = false;
@@ -407,6 +407,7 @@ void reactCtrlThread::run()
                 else{
                     controlSuccess = true; 
                 }
+               virtualChain.setAng(qIntegrated*CTRL_DEG2RAD);
             }
         
             else if (controlMode == "velocity"){
@@ -510,7 +511,7 @@ void reactCtrlThread::threadRelease()
 
 bool reactCtrlThread::enableTorso()
 {
-    yarp::os::LockGuard lg(mutex);
+   // yarp::os::LockGuard lg(mutex);
     if (state==STATE_REACH)
     {
         return false;
@@ -527,7 +528,7 @@ bool reactCtrlThread::enableTorso()
 
 bool reactCtrlThread::disableTorso()
 {
-    yarp::os::LockGuard lg(mutex);
+    //yarp::os::LockGuard lg(mutex);
     if (state==STATE_REACH)
     {
         return false;
@@ -641,8 +642,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
         yInfo("[reactCtrlThread] got new target: x_0: %s",x_0.toString(3,3).c_str());
         yInfo("[reactCtrlThread]                 x_d: %s",x_d.toString(3,3).c_str());
         //yInfo("[reactCtrlThread]                 vel: %s",vel.toString(3,3).c_str());
-        state=STATE_REACH;
-
+       
         if(visualizeTargetIniCubGui)
             sendiCubGuiObject("target");
                
@@ -654,11 +654,12 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
             else
                moveSphere(2,x_0_sim); //sphere created as second will keep the index 2  
         }
-          
-         
+              
         if (firstTarget)
             firstTarget = false;
-            
+       
+        state=STATE_REACH;
+             
         return true;
     }
     else
@@ -668,7 +669,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
 bool reactCtrlThread::setNewRelativeTarget(const Vector& _rel_x_d)
 {
     if(_rel_x_d == Vector(3,0.0)) return false;
-
+    updateArmChain(); //updates chain, q and x_t
     Vector _x_d = x_t + _rel_x_d;
     return setNewTarget(_x_d,false);
 }
@@ -677,6 +678,7 @@ bool reactCtrlThread::setNewCircularTarget(const double _radius,const double _fr
 {
     radius = _radius;
     frequency = _frequency;
+    updateArmChain(); //updates chain, q and x_t
     circleCenter = x_t; // set it to end-eff position at this point 
     
     setNewTarget(getPosMovingTargetOnCircle(),true);
@@ -686,7 +688,7 @@ bool reactCtrlThread::setNewCircularTarget(const double _radius,const double _fr
 
 bool reactCtrlThread::stopControl()
 {
-    yarp::os::LockGuard lg(mutex);
+    //yarp::os::LockGuard lg(mutex);
     bool stoppedOk = stopControlHelper();
     if (stoppedOk)
         yInfo("reactCtrlThread::stopControl(): Sucessfully stopped controllers");
@@ -697,7 +699,7 @@ bool reactCtrlThread::stopControl()
 
 bool reactCtrlThread::stopControlAndSwitchToPositionMode()
 {
-    yarp::os::LockGuard lg(mutex);
+    //yarp::os::LockGuard lg(mutex);
     bool stoppedOk = stopControlAndSwitchToPositionModeHelper();
     if (stoppedOk)
         yInfo("reactCtrlThread::stopControlAndSwitchToPositionMode(): Sucessfully stopped controllers");
@@ -1068,7 +1070,6 @@ bool reactCtrlThread::controlArm(const string _controlMode, const yarp::sig::Vec
 
 bool reactCtrlThread::stopControlHelper()
 {
-    state=STATE_IDLE;
     if (useTorso)
     {
         return ivelA->stop() && ivelT->stop();
