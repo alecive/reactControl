@@ -23,114 +23,92 @@
 #include <IpTNLP.hpp>
 #include <IpIpoptApplication.hpp>
 
-#include <deque>
-
-#include <yarp/sig/Vector.h>
-#include <yarp/sig/Matrix.h>
-
 #include <yarp/os/all.h>
-#include <yarp/os/Log.h>
+#include <yarp/dev/all.h>
+#include <yarp/sig/all.h>
+#include <yarp/math/Math.h>
 
-#include <yarp/math/SVD.h>
-
+#include <iCub/ctrl/math.h>
+#include <iCub/ctrl/pids.h>
+#include <iCub/ctrl/minJerkCtrl.h>
 #include <iCub/iKin/iKinFwd.h>
-#include <iCub/iKin/iKinIpOpt.h>
-
 #include <iCub/skinDynLib/common.h>
 
-/**
-*
-* Class for reactive control of kinematic chain with target and obstacles
-*/
-class reactIpOpt
+using namespace std;
+using namespace yarp::os;
+using namespace yarp::dev;
+using namespace yarp::sig;
+using namespace yarp::math;
+using namespace iCub::ctrl;
+using namespace iCub::iKin;
+
+
+
+/****************************************************************/
+class ControllerNLP : public Ipopt::TNLP
 {
-private:
-    // Default constructor: not implemented.
-    reactIpOpt();
-    // Copy constructor: not implemented.
-    reactIpOpt(const reactIpOpt&);
-    // Assignment operator: not implemented.
-    reactIpOpt &operator=(const reactIpOpt&);    
+    iKinChain &chain;
+    bool hitting_constraints;
+    bool orientation_control;
 
-protected:
-    // The IpOpt application that will solve the task
-    Ipopt::SmartPtr<Ipopt::IpoptApplication> app;
+    Vector xr,pr;
+    Matrix Hr,skew_nr,skew_sr,skew_ar;
+    Matrix q_lim,v_lim;    
+    Vector q0,v0,v,p0;
+    Matrix H0,R0,He,J0_xyz,J0_ang,Derr_ang;
+    Vector err_xyz,err_ang;
+    Matrix bounds;
+    double dt;
 
-    iCub::iKin::iKinChain chainCopy; //this is a copy of the orig chain, which can be modified here - e.g. in posDirect mode
-    double dT; //time step in seconds
-    int verbosity;
+    double shou_m,shou_n;
+    double elb_m,elb_n;
 
-public:
-    /**
-    * Constructor. 
-    * @param c is the Chain object on which the control operates. Do 
-    *          not change Chain DOF from this point onwards!!
-    * @param _tol exits if 0.5*norm(xd-x)^2<tol.
-    * @param _dt is the time step to use in order to solve the task. 
-    * @param verbose is an integer number which progressively enables 
-    *                different levels of warning messages or status
-    *                dump. The larger this value the more detailed
-    *                is the output (0=>off by default).
-    */
-    reactIpOpt(const iCub::iKin::iKinChain &c,
-               const double _tol, const double _dT, const unsigned int verbose=0);
+    Vector qGuard;
+    Vector qGuardMinExt;
+    Vector qGuardMinInt;
+    Vector qGuardMinCOG;
+    Vector qGuardMaxExt;
+    Vector qGuardMaxInt;
+    Vector qGuardMaxCOG;
 
-    /**
-    * Sets Tolerance.
-    * @param tol exits if norm(xd-x)<tol.
-    */
-    void setTol(const double tol);
+    /****************************************************************/
+    void computeSelfAvoidanceConstraints();
+    void computeGuard();
+    void computeBounds();
+    Matrix v2m(const Vector &x);
+    Matrix skew(const Vector &w);
 
-    /**
-    * Retrieves Tolerance.
-    * @return tolerance.
-    */
-    double getTol() const;
-
-    /**
-    * Sets Verbosity.
-    * @param verbose is a integer number which progressively enables 
-    *                different levels of warning messages or status
-    *                dump. The larger this value the more detailed
-    *                is the output.
-    */
-    void setVerbosity(const unsigned int verbose);
-
-    
-    /**
-    * Executes the IpOpt algorithm trying to converge on target. 
-    * @param xd  is the End-Effector target position to be attained.
-    * @param od  is the End-Effector target orientation to be attained. (compact axis-angle notation)
-    * @param q    are the joint positions (real in velocityMode, integrated in positionDirect mode). 
-    * @param q_dot_0   are the initial joint velocities of the chain.
-    * @param v_lim     are the joint velocity limits for individual joints.
-    * @param hittingConstraints whether shoulder assembly and other self-collision inequality constraints are active
-    * @param orientationControl  if orientation is controlled for
-    * @param exit_code stores the exit code (NULL by default). It is one of these:
-    *                   SUCCESS
-    *                   MAXITER_EXCEEDED
-    *                   CPUTIME_EXCEEDED
-    *                   STOP_AT_TINY_STEP
-    *                   STOP_AT_ACCEPTABLE_POINT
-    *                   LOCAL_INFEASIBILITY
-    *                   USER_REQUESTED_STOP
-    *                   FEASIBLE_POINT_FOUND
-    *                   DIVERGING_ITERATES
-    *                   RESTORATION_FAILURE
-    *                   ERROR_IN_STEP_COMPUTATION
-    *                   INVALID_NUMBER_DETECTED
-    *                   TOO_FEW_DEGREES_OF_FREEDOM
-    *                   INTERNAL_ERROR
-    * @return estimated joint velocities.
-    */
-    virtual yarp::sig::Vector solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &od, const yarp::sig::Vector &q, const yarp::sig::Vector &q_dot_0,
-                                    const yarp::sig::Matrix &v_lim, bool  hittingConstraints, bool orientationControl, int *exit_code);
-
-    /**
-    * Default destructor.
-    */
-    virtual ~reactIpOpt();
+    public:
+    ControllerNLP(iKinChain &chain_);
+    void set_xr(const Vector &xr);
+    void set_v_lim(const Matrix &v_lim);
+    void set_hitting_constraints(const bool _hitting_constraints);
+    void set_orientation_control(const bool _orientation_control);
+    void set_dt(const double dt);
+    void set_v0(const Vector &v0);
+    void init();
+    Vector get_resultInDegPerSecond() const;
+    Property getParameters() const;
+    bool get_nlp_info(Ipopt::Index &n, Ipopt::Index &m, Ipopt::Index &nnz_jac_g,
+                      Ipopt::Index &nnz_h_lag, IndexStyleEnum &index_style);
+    bool get_bounds_info(Ipopt::Index n, Ipopt::Number *x_l, Ipopt::Number *x_u,
+                         Ipopt::Index m, Ipopt::Number *g_l, Ipopt::Number *g_u);
+    bool get_starting_point(Ipopt::Index n, bool init_x, Ipopt::Number *x,
+                            bool init_z, Ipopt::Number *z_L, Ipopt::Number *z_U,
+                            Ipopt::Index m, bool init_lambda, Ipopt::Number *lambda);
+    void computeQuantities(const Ipopt::Number *x, const bool new_x);
+    bool eval_f(Ipopt::Index n, const Ipopt::Number *x, bool new_x, Ipopt::Number &obj_value);
+    bool eval_grad_f(Ipopt::Index n, const Ipopt::Number* x, bool new_x, Ipopt::Number *grad_f);
+    bool eval_g(Ipopt::Index n, const Ipopt::Number *x, bool new_x,Ipopt::Index m, Ipopt::Number *g);
+    bool eval_jac_g(Ipopt::Index n, const Ipopt::Number *x, bool new_x, Ipopt::Index m, Ipopt::Index nele_jac, Ipopt::Index *iRow,
+                    Ipopt::Index *jCol, Ipopt::Number *values);
+    void finalize_solution(Ipopt::SolverReturn status, Ipopt::Index n, const Ipopt::Number *x, const Ipopt::Number *z_L,
+                           const Ipopt::Number *z_U, Ipopt::Index m, const Ipopt::Number *g, const Ipopt::Number *lambda,
+                           Ipopt::Number obj_value, const Ipopt::IpoptData *ip_data, Ipopt::IpoptCalculatedQuantities *ip_cq);
 };
+
+
+
 
 #endif
 

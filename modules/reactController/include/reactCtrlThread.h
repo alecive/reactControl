@@ -190,6 +190,7 @@ protected:
     int jntsT;
     
     size_t chainActiveDOF;
+    iCub::iKin::iKinChain virtualChain; //copy of the chain on which ipopt will be working in the positionDirect mode case
     
     yarp::sig::Vector x_0;  // Initial end-effector position
     yarp::sig::Vector x_t;  // Current end-effector position
@@ -233,7 +234,6 @@ protected:
     yarp::os::Stamp ts;
  
     // IPOPT STUFF
-    reactIpOpt    *slv;    // solver
     int ipoptExitCode;
     double timeToSolveProblem_s; //time taken by q_dot = solveIK(ipoptExitCode) ~ ipopt + avoidance handler
 

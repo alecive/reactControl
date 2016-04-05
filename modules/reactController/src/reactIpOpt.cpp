@@ -16,55 +16,11 @@
  * Public License for more details.
 */
 
-#include <limits>
-#include <sstream>
-#include <cmath>
+#include "reactIpOpt.h";
 
-#include "assert.h"
-
-#include "reactIpOpt.h"
-
-#define CAST_IPOPTAPP(x)             (static_cast<IpoptApplication*>(x))
-
-using namespace std;
-using namespace yarp::os;
-using namespace yarp::dev;
-using namespace yarp::sig;
-using namespace yarp::math;
-using namespace iCub::ctrl;
-using namespace iCub::iKin;
-using namespace iCub::skinDynLib;
-
-
-/****************************************************************/
-class ControllerNLP : public Ipopt::TNLP
-{
-    iKinChain &chain;
-    bool hitting_constraints;
-    bool orientation_control;
-
-    Vector xr,pr;
-    Matrix Hr,skew_nr,skew_sr,skew_ar;
-    Matrix q_lim,v_lim;    
-    Vector q0,v0,v,p0;
-    Matrix H0,R0,He,J0_xyz,J0_ang,Derr_ang;
-    Vector err_xyz,err_ang;
-    Matrix bounds;
-    double dt;
-
-    double shou_m,shou_n;
-    double elb_m,elb_n;
-
-    Vector qGuard;
-    Vector qGuardMinExt;
-    Vector qGuardMinInt;
-    Vector qGuardMinCOG;
-    Vector qGuardMaxExt;
-    Vector qGuardMaxInt;
-    Vector qGuardMaxCOG;
 
     /****************************************************************/
-    void computeSelfAvoidanceConstraints()
+    void ControllerNLP::computeSelfAvoidanceConstraints()
     {
         double joint1_0, joint1_1;
         double joint2_0, joint2_1;
@@ -86,7 +42,7 @@ class ControllerNLP : public Ipopt::TNLP
     }
 
     /****************************************************************/
-    void computeGuard()
+    void ControllerNLP::computeGuard()
     {
         double guardRatio=0.1;
         qGuard.resize(chain.getDOF());
@@ -112,7 +68,7 @@ class ControllerNLP : public Ipopt::TNLP
     }
 
     /****************************************************************/
-    void computeBounds()
+    void ControllerNLP::computeBounds()
     {
         for (size_t i=0; i<chain.getDOF(); i++)
         {
@@ -141,7 +97,7 @@ class ControllerNLP : public Ipopt::TNLP
     }
 
     /****************************************************************/
-    Matrix v2m(const Vector &x)
+    Matrix ControllerNLP::v2m(const Vector &x)
     {
         yAssert(x.length()>=6);
         Vector ang=x.subVector(3,5);
@@ -157,7 +113,7 @@ class ControllerNLP : public Ipopt::TNLP
     }
 
     /****************************************************************/
-    Matrix skew(const Vector &w)
+    Matrix ControllerNLP::skew(const Vector &w)
     {
         yAssert(w.length()>=3);
         Matrix S(3,3);
@@ -168,9 +124,9 @@ class ControllerNLP : public Ipopt::TNLP
         return S;
     }
 
-public:
+//public:
     /****************************************************************/
-    ControllerNLP(iKinChain &chain_) : chain(chain_)
+    ControllerNLP::ControllerNLP(iKinChain &chain_) : chain(chain_)
     {
         xr.resize(6,0.0);
         set_xr(xr);
@@ -199,7 +155,7 @@ public:
     }
 
     /****************************************************************/
-    void set_xr(const Vector &xr)
+    void ControllerNLP::set_xr(const Vector &xr)
     {
         yAssert(this->xr.length()==xr.length());
         this->xr=xr;
@@ -213,7 +169,7 @@ public:
     }
 
     /****************************************************************/
-    void set_v_lim(const Matrix &v_lim)
+    void ControllerNLP::set_v_lim(const Matrix &v_lim)
     {
         yAssert((this->v_lim.rows()==v_lim.rows()) &&
                 (this->v_lim.cols()==v_lim.cols()));
@@ -225,33 +181,33 @@ public:
     }
 
     /****************************************************************/
-    void set_hitting_constraints(const bool hitting_constraints)
+    void ControllerNLP::set_hitting_constraints(const bool _hitting_constraints)
     {
-        this->hitting_constraints=hitting_constraints;
+        hitting_constraints=_hitting_constraints;
     }
 
     /****************************************************************/
-    void set_orientation_control(const bool orientation_control)
+    void ControllerNLP::set_orientation_control(const bool _orientation_control)
     {
-        this->orientation_control=orientation_control;
+        orientation_control=_orientation_control;
     }
 
     /****************************************************************/
-    void set_dt(const double dt)
+    void ControllerNLP::set_dt(const double dt)
     {
         yAssert(dt>0.0);
         this->dt=dt;
     }
 
     /****************************************************************/
-    void set_v0(const Vector &v0)
+    void ControllerNLP::set_v0(const Vector &v0)
     {
         yAssert(this->v0.length()==v0.length());
         this->v0=CTRL_DEG2RAD*v0;
     }
 
     /****************************************************************/
-    void init()
+    void ControllerNLP::init()
     {
         q0=chain.getAng();
         H0=chain.getH();
@@ -266,13 +222,13 @@ public:
     }
 
     /****************************************************************/
-    Vector get_resultInDeg() const
+    Vector ControllerNLP::get_resultInDegPerSecond() const
     {
         return CTRL_RAD2DEG*v;
     }
 
     /****************************************************************/
-    Property getParameters() const
+    Property ControllerNLP::getParameters() const
     {
         Property parameters;
         parameters.put("dt",dt);
@@ -280,7 +236,7 @@ public:
     }
 
     /****************************************************************/
-    bool get_nlp_info(Ipopt::Index &n, Ipopt::Index &m, Ipopt::Index &nnz_jac_g,
+    bool ControllerNLP::get_nlp_info(Ipopt::Index &n, Ipopt::Index &m, Ipopt::Index &nnz_jac_g,
                       Ipopt::Index &nnz_h_lag, IndexStyleEnum &index_style)
     {
         n=chain.getDOF();
@@ -306,7 +262,7 @@ public:
     }
 
     /****************************************************************/
-    bool get_bounds_info(Ipopt::Index n, Ipopt::Number *x_l, Ipopt::Number *x_u,
+    bool ControllerNLP::get_bounds_info(Ipopt::Index n, Ipopt::Number *x_l, Ipopt::Number *x_u,
                          Ipopt::Index m, Ipopt::Number *g_l, Ipopt::Number *g_u)
     {
         for (Ipopt::Index i=0; i<n; i++)
@@ -343,7 +299,7 @@ public:
     }
 
     /****************************************************************/
-    bool get_starting_point(Ipopt::Index n, bool init_x, Ipopt::Number *x,
+    bool ControllerNLP::get_starting_point(Ipopt::Index n, bool init_x, Ipopt::Number *x,
                             bool init_z, Ipopt::Number *z_L, Ipopt::Number *z_U,
                             Ipopt::Index m, bool init_lambda, Ipopt::Number *lambda)
     {
@@ -353,7 +309,7 @@ public:
     }
 
     /************************************************************************/
-    void computeQuantities(const Ipopt::Number *x, const bool new_x)
+    void ControllerNLP::computeQuantities(const Ipopt::Number *x, const bool new_x)
     {
         if (new_x)
         {
@@ -379,7 +335,7 @@ public:
     }
 
     /****************************************************************/
-    bool eval_f(Ipopt::Index n, const Ipopt::Number *x, bool new_x,
+    bool ControllerNLP::eval_f(Ipopt::Index n, const Ipopt::Number *x, bool new_x,
                 Ipopt::Number &obj_value)
     {
         computeQuantities(x,new_x);
@@ -388,7 +344,7 @@ public:
     }
 
     /****************************************************************/
-    bool eval_grad_f(Ipopt::Index n, const Ipopt::Number* x, bool new_x,
+    bool ControllerNLP::eval_grad_f(Ipopt::Index n, const Ipopt::Number* x, bool new_x,
                      Ipopt::Number *grad_f)
     {
         computeQuantities(x,new_x);
@@ -398,7 +354,7 @@ public:
     }
 
     /****************************************************************/
-    bool eval_g(Ipopt::Index n, const Ipopt::Number *x, bool new_x,
+    bool ControllerNLP::eval_g(Ipopt::Index n, const Ipopt::Number *x, bool new_x,
                 Ipopt::Index m, Ipopt::Number *g)
     {
         computeQuantities(x,new_x);
@@ -425,7 +381,7 @@ public:
     }
 
     /****************************************************************/
-    bool eval_jac_g(Ipopt::Index n, const Ipopt::Number *x, bool new_x,
+    bool ControllerNLP::eval_jac_g(Ipopt::Index n, const Ipopt::Number *x, bool new_x,
                     Ipopt::Index m, Ipopt::Index nele_jac, Ipopt::Index *iRow,
                     Ipopt::Index *jCol, Ipopt::Number *values)
     {
@@ -508,7 +464,7 @@ public:
     }
 
     /****************************************************************/
-    void finalize_solution(Ipopt::SolverReturn status, Ipopt::Index n,
+    void ControllerNLP::finalize_solution(Ipopt::SolverReturn status, Ipopt::Index n,
                            const Ipopt::Number *x, const Ipopt::Number *z_L,
                            const Ipopt::Number *z_U, Ipopt::Index m,
                            const Ipopt::Number *g, const Ipopt::Number *lambda,
@@ -518,100 +474,5 @@ public:
         for (Ipopt::Index i=0; i<n; i++)
             v[i]=x[i];
     }
-};
-
-
-
-/************************************************************************/
-reactIpOpt::reactIpOpt(const iKinChain &c, const double _tol, const double _dT, const unsigned int verbose) :
-                       chainCopy(c), dT(_dT), verbosity(verbose)
-{
-    //reactIpOpt makes a copy of the original chain, which may be modified here; then it will be passed as reference to react_NLP in reactIpOpt::solve
-    chainCopy.setAllConstraints(false); // this is required since IpOpt initially relaxes constraints
-    //note that this is about limits not about joints being blocked (which is preserved)
-
-    app=new Ipopt::IpoptApplication();
-    app->Options()->SetNumericValue("tol",_tol); //e.g. 1e-3
-    app->Options()->SetNumericValue("constr_viol_tol",1e-6);
-    app->Options()->SetIntegerValue("acceptable_iter",0);
-    app->Options()->SetStringValue("mu_strategy","adaptive");
-    app->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
-    app->Options()->SetNumericValue("max_cpu_time",0.75*dT);
-    app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
-    app->Options()->SetStringValue("hessian_approximation","limited-memory");
-    app->Options()->SetStringValue("derivative_test",verbosity?"first-order":"none");
-    app->Options()->SetIntegerValue("print_level",verbosity?5:0);
-    
-    /* original options from Ale
-    CAST_IPOPTAPP(App)->Options()->SetNumericValue("tol",_tol);
-    CAST_IPOPTAPP(App)->Options()->SetNumericValue("acceptable_tol",_tol);
-    CAST_IPOPTAPP(App)->Options()->SetIntegerValue("acceptable_iter",10);
-    CAST_IPOPTAPP(App)->Options()->SetStringValue("mu_strategy","adaptive");
-    CAST_IPOPTAPP(App)->Options()->SetIntegerValue("print_level",verbose);
-    // CAST_IPOPTAPP(App)->Options()->SetStringValue("jacobian_approximation","finite-difference-values");
-    CAST_IPOPTAPP(App)->Options()->SetStringValue("nlp_scaling_method","gradient-based");
-    CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","none");
-    // CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test","first-order");
-    CAST_IPOPTAPP(App)->Options()->SetStringValue("derivative_test_print_all","yes");
-    // CAST_IPOPTAPP(App)->Options()->SetStringValue("print_timing_statistics","yes");
-    // CAST_IPOPTAPP(App)->Options()->SetStringValue("print_options_documentation","no");
-    // CAST_IPOPTAPP(App)->Options()->SetStringValue("skip_finalize_solution_call","yes");
-    CAST_IPOPTAPP(App)->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
-    CAST_IPOPTAPP(App)->Options()->SetStringValue("hessian_approximation","limited-memory"); */
-
-    Ipopt::ApplicationReturnStatus status = app->Initialize();
-    if (status != Ipopt::Solve_Succeeded)
-        yError("Error during initialization!");
-}
-
-
-/************************************************************************/
-double reactIpOpt::getTol() const
-{
-    double tol;
-    app->Options()->GetNumericValue("tol",tol,"");
-    return tol;
-}
-
-
-/************************************************************************/
-void reactIpOpt::setVerbosity(const unsigned int verbose)
-{
-    app->Options()->SetIntegerValue("print_level",verbose);
-    app->Initialize();
-}
-
-
-/************************************************************************/
-yarp::sig::Vector reactIpOpt::solve(const yarp::sig::Vector &xd, const yarp::sig::Vector &od,const yarp::sig::Vector &q, const yarp::sig::Vector &q_dot_0, const yarp::sig::Matrix &v_lim, bool hittingConstraints, bool orientationControl, int *exit_code)
-{
-    
-    chainCopy.setAng(q); //these differ from the real positions in the case of positionDirect mode
-    yarp::sig::Vector xr(6,0.0); //3 positions, 3 orientations in compact axis-angle representation
-    xr.setSubvector(0,xd);
-    xr.setSubvector(3,od);
-    Ipopt::SmartPtr<ControllerNLP> nlp=new ControllerNLP(chainCopy);
-    nlp->set_hitting_constraints(hittingConstraints);
-    nlp->set_orientation_control(orientationControl);
-    nlp->set_dt(dT);
-    nlp->set_xr(xr);
-    nlp->set_v_lim(v_lim);
-    nlp->set_v0(q_dot_0);
-    nlp->init();
-
-   Ipopt::ApplicationReturnStatus status=app->OptimizeTNLP(GetRawPtr(nlp));
-
-    if (exit_code!=NULL)
-        *exit_code=status;
-
-    return nlp->get_resultInDeg();
-}
-
-/************************************************************************/
-reactIpOpt::~reactIpOpt()
-{
-    //App changed to Ipopt::SmartPtr<Ipopt::IpoptApplication> - according to ipopt documentation, object will be automatically deleted as the smart ptr goes out of scope - so no delete
-    //delete App;
-}
 
 

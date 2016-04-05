@@ -224,7 +224,8 @@ bool reactCtrlThread::threadInit()
     circleCenter(0) = -0.3; //for safety, we assign the x-coordinate on in it within iCub's reachable space
   
     updateArmChain(); 
-        
+    virtualChain =  *(arm->asChain());
+           
     x_0.resize(3,0.0);
     x_t.resize(3,0.0);
     x_n.resize(3,0.0);
@@ -237,8 +238,7 @@ bool reactCtrlThread::threadInit()
     o_n.resize(3,0.0); o_n(2)=M_PI;
     o_d.resize(3,0.0); o_d(2)=M_PI;
        
-    slv=NULL; //ipOpt solver - our wrapper class
-            
+     
     if(controlMode == "positionDirect")
          I = new Integrator(dT,q,lim);        
     else
@@ -320,8 +320,8 @@ void reactCtrlThread::run()
     bool controlSuccess =false;
     printMessage(2,"[reactCtrlThread::run()] started, state: %d.\n",state);
     yarp::os::LockGuard lg(mutex);
-    //updateArmChain();
-    //printMessage(10,"[reactCtrlThread::run()] updated arm chain.\n");
+    updateArmChain();
+    printMessage(10,"[reactCtrlThread::run()] updated arm chain.\n");
     //debug - see Jacobian
     //iCub::iKin::iKinChain &chain_temp=*arm->asChain();
     //yarp::sig::Matrix J1_temp=chain_temp.GeoJacobian();
@@ -399,13 +399,16 @@ void reactCtrlThread::run()
 
             if(controlMode == "positionDirect"){
                 qIntegrated = I->integrate(q_dot);    
+                virtualChain.setAng(qIntegrated*CTRL_DEG2RAD);
                 if (!controlArm(controlMode,qIntegrated)){
                     yError("I am not able to properly control the arm in positionDirect!");
                     controlSuccess = false;
                 }
-                else
+                else{
                     controlSuccess = true; 
                 }
+            }
+        
             else if (controlMode == "velocity"){
                 if (!controlArm(controlMode,q_dot)){
                     yError("I am not able to properly control the arm in velocity!");
@@ -598,7 +601,11 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
     if (_x_d.size()==3)
     {
         movingTargetCircle = _movingCircle;
-        q_dot.resize(chainActiveDOF,0.0);
+        q_dot.zero();
+        updateArmChain(); //updates chain, q and x_t
+        virtualChain = *(arm->asChain());
+        if(controlMode == "positionDirect")
+           I->reset(q);   
         x_0=x_t;
         x_n=x_0;
         x_d=_x_d;
@@ -648,16 +655,14 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
                moveSphere(2,x_0_sim); //sphere created as second will keep the index 2  
         }
           
+         
+        if (firstTarget)
+            firstTarget = false;
+            
+        return true;
     }
-    
-    if(controlMode == "positionDirect")
-        I->reset(q);   
-    q_dot.zero();    
-        
-    if (firstTarget)
-        firstTarget = false;
-        
-    return true;
+    else
+        return false;
 }
 
 bool reactCtrlThread::setNewRelativeTarget(const Vector& _rel_x_d)
@@ -708,25 +713,10 @@ bool reactCtrlThread::stopControlAndSwitchToPositionMode()
 
 Vector reactCtrlThread::solveIK(int &_exit_code)
 {
-    slv=new reactIpOpt(*arm->asChain(),tol,dT,verbosity);
     // Next step will be provided iteratively.
     // The equation is x(t_next) = x_t + (x_d - x_t) * (t_next - t_now/T-t_now)
     //                              s.t. t_next = t_now + dT
-    
-    int    exit_code=-1;
-
-    // if (t_t>=t_d)
-    // {
-    //     return Vector(3,0.0);
-    // }
-
-    // First test: the next point will be given w.r.t. the current one
-    // x_n = x_t + (x_d-x_t) * (dT/(t_d-t_t));
-    // Second test: the next point will be agnostic of the current 
-    // configuration
-    // x_n = x_0 + (x_d-x_0) * ((t_t+dT-t_0)/(t_d-t_0));
-    // Third solution: use the particleThread
-    // If the particle reached the target, let's stop it
+  
     if (movingTargetCircle){
         x_d = getPosMovingTargetOnCircle();
         if (visualizeTargetIniCubGui){
@@ -773,13 +763,41 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
    
    Vector res(chainActiveDOF,0.0); 
-  
-   if (controlMode == "positionDirect") //in this mode, ipopt will use the qIntegrated values to update its copy of chain
-        res=slv->solve(x_n,o_n,qIntegrated*CTRL_DEG2RAD,q_dot*CTRL_DEG2RAD,vLimAdapted*CTRL_DEG2RAD, hittingConstraints, orientationControl,  &exit_code);
-   else if (controlMode == "velocity")
-        res=slv->solve(x_n,o_n,q*CTRL_DEG2RAD, q_dot*CTRL_DEG2RAD,vLimAdapted*CTRL_DEG2RAD, hittingConstraints, orientationControl, &exit_code);
-   
     
+   Vector xr(6,0.0);
+   xr.setSubvector(0,x_n);
+   xr.setSubvector(3,o_n);
+    
+   Ipopt::SmartPtr<Ipopt::IpoptApplication> app=new Ipopt::IpoptApplication;
+   app->Options()->SetNumericValue("tol",tol);
+   app->Options()->SetNumericValue("constr_viol_tol",1e-6);
+   app->Options()->SetIntegerValue("acceptable_iter",0);
+   app->Options()->SetStringValue("mu_strategy","adaptive");
+   app->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
+   app->Options()->SetNumericValue("max_cpu_time",0.75*dT);
+   app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
+   app->Options()->SetStringValue("hessian_approximation","limited-memory");
+   app->Options()->SetStringValue("derivative_test",verbosity?"first-order":"none");
+   app->Options()->SetIntegerValue("print_level",verbosity?5:0);
+   app->Initialize();
+
+   Ipopt::SmartPtr<ControllerNLP> nlp;
+   if (controlMode == "positionDirect") //in this mode, ipopt will use the qIntegrated values to update its copy of chain
+        nlp=new ControllerNLP(virtualChain);
+   else
+        nlp=new ControllerNLP(*(arm->asChain()));
+   nlp->set_hitting_constraints(hittingConstraints);
+   nlp->set_orientation_control(orientationControl);
+   nlp->set_dt(dT);
+   nlp->set_xr(xr);
+   nlp->set_v_lim(vLimAdapted*CTRL_DEG2RAD);
+   nlp->set_v0(q_dot*CTRL_DEG2RAD);
+   nlp->init();
+
+   _exit_code=app->OptimizeTNLP(GetRawPtr(nlp));
+  
+   res=nlp->get_resultInDegPerSecond();
+   
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
     if(verbosity >= 1){
         printf("x_n: %s\tx_d: %s\tdT %g\n",x_n.toString(3,3).c_str(),x_d.toString(3,3).c_str(),dT);
@@ -788,9 +806,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
                     norm(x_n-x_t), norm(x_d-x_n), norm(x_d-x_t));
         printf("Result (solved velocities (deg/s)): %s\n",res.toString(3,3).c_str());
     }
-    _exit_code=exit_code;
     
-    delete slv; slv = NULL;
     return res;
 }
 
