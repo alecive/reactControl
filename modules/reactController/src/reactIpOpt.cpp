@@ -526,7 +526,7 @@ public:
 reactIpOpt::reactIpOpt(const iKinChain &c, const double _tol,  const unsigned int verbose) :
                        chainCopy(c), verbosity(verbose)
 {
-    //reactIpOpt makes a copy of the original chain, which may me modified here; then it will be passed as reference to react_NLP in reactIpOpt::solve
+    //reactIpOpt makes a copy of the original chain, which may be modified here; then it will be passed as reference to react_NLP in reactIpOpt::solve
     chainCopy.setAllConstraints(false); // this is required since IpOpt initially relaxes constraints
     //note that this is about limits not about joints being blocked (which is preserved)
 

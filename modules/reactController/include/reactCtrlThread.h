@@ -161,7 +161,7 @@ protected:
     double dT;  //period of the thread in seconds  =getRate()/1000.0;
 
     particleThread  *prtclThrd;     // Pointer to the particleThread in order to access its data - if referenceGen is "uniformParticle"
-    iCub::ctrl::minJerkRefGen *refGenMinJerk; //If referenceGen is "minJerk"
+    iCub::ctrl::minJerkTrajGen *minJerkTarget; //if referenceGen is "minJerk"
     iCub::ctrl::Integrator *I; //if controlMode == positionDirect, we need to integrate the velocity control commands
 
     int        state;        // Flag to know in which state the thread is in

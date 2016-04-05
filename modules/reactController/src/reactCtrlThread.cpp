@@ -214,9 +214,9 @@ bool reactCtrlThread::threadInit()
    
     /************ variables related to target and the optimization problem for ipopt *******/
     if(referenceGen == "minJerk") 
-        refGenMinJerk = new minJerkRefGen(3,dT,1.0); //dim 3, dT, trajTime 1s - will be overwritten later
+        minJerkTarget = new minJerkTrajGen(3,dT,1.0); //dim 3, dT, trajTime 1s - will be overwritten later
     else
-        refGenMinJerk = NULL;
+        minJerkTarget = NULL;
   
     movingTargetCircle = false;
     radius = 0.0; frequency = 0.0;
@@ -455,10 +455,10 @@ void reactCtrlThread::threadRelease()
     
     collisionPoints.clear();    
     
-    if(refGenMinJerk != NULL){
-        yDebug("deleting refGenMinJerk.");
-        delete refGenMinJerk;
-        refGenMinJerk = NULL;    
+    if(minJerkTarget != NULL){
+        yDebug("deleting minJerkTarget.");
+        delete minJerkTarget;
+        minJerkTarget = NULL;    
     }
     if(I != NULL){
         yDebug("deleting integrator I");
@@ -623,12 +623,12 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
             }
         }
         else if(referenceGen == "minJerk"){
-            refGenMinJerk->init(x_0); //initial pos
-            refGenMinJerk->setTs(dT); //time step
+            minJerkTarget->init(x_0); //initial pos
+            minJerkTarget->setTs(dT); //time step
             double T = 1.0; // 1 s 
             //calculate the time to reach from the distance to target and desired velocity - this was wrong somehow
             //double T = sqrt( (x_d(0)-x_0(0))*(x_d(0)-x_0(0)) + (x_d(1)-x_0(1))*(x_d(1)-x_0(1)) + (x_d(2)-x_0(2))*(x_d(2)-x_0(2)) )  / trajSpeed; 
-            refGenMinJerk->setT(T);
+            minJerkTarget->setT(T);
        }
         
         yInfo("[reactCtrlThread] got new target: x_0: %s",x_0.toString(3,3).c_str());
@@ -742,8 +742,9 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
         x_n=prtclThrd->getParticle(); //to get next target
     }
     else if(referenceGen == "minJerk"){
-        refGenMinJerk->computeNextValues(x_t,x_d);    
-        x_n = refGenMinJerk->getPos();
+        minJerkTarget->computeNextValues(x_d);    
+        //refGenMinJerk->computeNextValues(x_t,x_d); 
+        x_n = minJerkTarget->getPos();
     }
  
     if(visualizeParticleIniCubGui){
@@ -1218,7 +1219,7 @@ void reactCtrlThread::sendData()
             vectorIntoBottle(x_n,b);
             //variable - if torso on: 11:20: joint velocities as solution to control and sent to robot 
             vectorIntoBottle(q_dot,b); 
-            //variable - if torso on: 21:30: joint positions as solution from ipopt and sent to robot 
+            //variable - if torso on: 21:30: actual joint positions 
             vectorIntoBottle(q,b); 
             //variable - if torso on: 31:50; joint vel limits as input to ipopt, after avoidanceHandler,
             matrixIntoBottle(vLimAdapted,b); // assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
