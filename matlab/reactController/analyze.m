@@ -13,7 +13,7 @@ chosen_time_column = 6; % 4 for sender, 6 for receiver
 
 %path_prefix = 'input/';
 %path_prefix = 'icubSimTests/test_20160404a/';
-path_prefix = 'icubSimTests/test_20160405_testCodeUgo/';
+path_prefix = 'icubSimTests/test_20160408b_ugoCode/';
 %path_prefix = 'icubExperiments/moveWithIpoptWithoutAcceptHeuristicsOldTolerance_works/';
 path_prefix_dumper = 'data/';
 

@@ -125,7 +125,7 @@ bool reactCtrlThread::threadInit()
         vLimAdapted(1,0)=vLimAdapted(1,1)=0.0;  
     }     
          
-    H.resize(4,4);
+    //H.resize(4,4);
 
     T_world_root = zeros(4,4); 
     T_world_root(0,1)=-1;
@@ -205,11 +205,11 @@ bool reactCtrlThread::threadInit()
     }
    
     //filling joint pos limits Matrix
-    iCub::iKin::iKinChain chainTemp = *(arm->asChain());
+    armChain=arm->asChain();
     for (size_t jointIndex=0; jointIndex<chainActiveDOF; jointIndex++)
     {
-        lim(jointIndex,0)= CTRL_RAD2DEG*(chainTemp(jointIndex).getMin());
-        lim(jointIndex,1)= CTRL_RAD2DEG*(chainTemp(jointIndex).getMax());
+        lim(jointIndex,0)= CTRL_RAD2DEG*(*armChain)(jointIndex).getMin();
+        lim(jointIndex,1)= CTRL_RAD2DEG*(*armChain)(jointIndex).getMax();
     }
    
     /************ variables related to target and the optimization problem for ipopt *******/
@@ -224,8 +224,7 @@ bool reactCtrlThread::threadInit()
     circleCenter(0) = -0.3; //for safety, we assign the x-coordinate on in it within iCub's reachable space
   
     updateArmChain(); 
-    virtualChain =  *(arm->asChain());
-           
+   
     x_0.resize(3,0.0);
     x_t.resize(3,0.0);
     x_n.resize(3,0.0);
@@ -238,13 +237,16 @@ bool reactCtrlThread::threadInit()
     o_n.resize(3,0.0); o_n(2)=M_PI;
     o_d.resize(3,0.0); o_d(2)=M_PI;
        
-     
-    if(controlMode == "positionDirect")
-         I = new Integrator(dT,q,lim);        
-    else
+    if(controlMode == "positionDirect"){
+        virtualArm = new iCubArm(*arm);  //Creates a new Limb from an already existing Limb object - but they will be too independent limbs from now on
+        virtualArmChain = virtualArm->asChain();
+        I = new Integrator(dT,q,lim);  
+    }
+    else{
+        virtualArm = NULL;
+        virtualArmChain = NULL;
         I = NULL;
-    
-      
+    }      
     /*** visualize in iCubGui  ***************/
     visualizeIniCubGui = true;
     visualizeParticleIniCubGui = true;
@@ -311,6 +313,7 @@ bool reactCtrlThread::threadInit()
     firstTarget = true;
     printMessage(5,"[reactCtrlThread] threadInit() finished.\n");
     yarp::os::Time::delay(0.2);
+    t_0=Time::now();
 
     return true;
 }
@@ -326,7 +329,8 @@ void reactCtrlThread::run()
     //iCub::iKin::iKinChain &chain_temp=*arm->asChain();
     //yarp::sig::Matrix J1_temp=chain_temp.GeoJacobian();
     //yDebug("GeoJacobian: \n %s \n",J1_temp.toString(3,3).c_str());    
-               
+    
+       
     collisionPoints.clear();
     
       
@@ -399,7 +403,15 @@ void reactCtrlThread::run()
                   yWarning("[reactCtrlThread] Ipopt solve did not succeed!");
 
             if(controlMode == "positionDirect"){
+                //yInfo()<<"   t after opt, before control [s] = "<<yarp::os::Time::now() -t_0;
+                //yInfo()<<"   q_dot [deg/s] = ("<<q_dot.toString(3,3)<<")";
+                //yInfo()<<"   integrate joint pos with time step: "<<dT;
+                //yInfo("E.g., %f + %f*%f = %f",qIntegrated(0),q_dot(0),dT,qIntegrated(0)+q_dot(0)*dT);
+                //yInfo()<<"   qIntegrated before integration [deg] = ("<<qIntegrated.toString(3,3)<<")";
                 qIntegrated = I->integrate(q_dot);    
+                //yInfo()<<"   qIntegrated after integration [deg] = ("<<qIntegrated.toString(3,3)<<")";
+                //yInfo()<<"   joint positions real before control [deg] ("<<q.toString(3,3)<<")";
+                //yInfo()<<"   xee_pos_real before                    control [m] = "<<x_t.toString(3,3);         
                 if (!controlArm(controlMode,qIntegrated)){
                     yError("I am not able to properly control the arm in positionDirect!");
                     controlSuccess = false;
@@ -407,7 +419,13 @@ void reactCtrlThread::run()
                 else{
                     controlSuccess = true; 
                 }
-               virtualChain.setAng(qIntegrated*CTRL_DEG2RAD);
+               //Vector xee_pos_virtual_before=virtualArmChain->EndEffPosition();
+               //yInfo()<<"   xee_pos_virtual before updating virtual chain [m] = "<<xee_pos_virtual_before.toString(3,3);         
+               //Vector qVirtualChainReturn = CTRL_RAD2DEG*
+               virtualArmChain->setAng(qIntegrated*CTRL_DEG2RAD);
+               //yInfo()<<"   virtualChain setAng return [deg] = ("<<qVirtualChainReturn.toString(3,3)<<")";
+                
+               
             }
         
             else if (controlMode == "velocity"){
@@ -417,7 +435,20 @@ void reactCtrlThread::run()
                 }
                 else
                     controlSuccess = true;
-                }
+            }
+            
+            updateArmChain();
+            //Vector xee_pos_virtual_after=virtualArmChain->EndEffPosition();
+            //yInfo()<<"   t after opt and control [s] = "<<yarp::os::Time::now() -t_0;
+            //yInfo()<<"   xee_pos_virtual after updating virtual chain [m] = "<<xee_pos_virtual_after.toString(3,3);         
+            //yInfo()<<"   xee_pos_real after                    control [m] = "<<x_t.toString(3,3);         
+            //yInfo("  virtualChain.getAng() [deg] (%s)",(virtualArmChain->getAng()*CTRL_RAD2DEG).toString().c_str());
+            //yInfo("  arm->getAng()         [deg] (%s)",(arm->getAng()*CTRL_RAD2DEG).toString().c_str());
+            //yInfo()<<"   joint positions real after control [deg] ("<<q.toString(3,3)<<")";
+            //yInfo()<<"   e_pos_real after opt step and control [m] = "<<norm(x_n-x_t);
+            //yInfo()<<"   e_pos_virtual after opt step and control [m] = "<<norm(x_n-xee_pos_virtual_after);
+            //yInfo()<<"";
+    
             
             break;
         }
@@ -446,7 +477,6 @@ void reactCtrlThread::threadRelease()
     delete encsA; encsA = NULL;
     delete encsT; encsT = NULL;
     delete   arm;   arm = NULL;
-   
     bool stoppedOk = stopControlAndSwitchToPositionMode();
     if (stoppedOk)
         yInfo("Sucessfully stopped controllers");
@@ -455,8 +485,7 @@ void reactCtrlThread::threadRelease()
     yInfo("Closing controllers..");
     ddA.close();
     ddT.close();
-   
-    
+       
     collisionPoints.clear();    
     
     if(minJerkTarget != NULL){
@@ -464,12 +493,20 @@ void reactCtrlThread::threadRelease()
         delete minJerkTarget;
         minJerkTarget = NULL;    
     }
+  
+    if(virtualArm != NULL){
+        yDebug("deleting virtualArm");
+        delete virtualArm;
+        virtualArm = NULL;   
+        virtualArmChain = NULL;    
+    }
+         
     if(I != NULL){
         yDebug("deleting integrator I");
         delete I;
         I = NULL;    
     }
-    
+       
     if (visualizeIniCubGui)
         yInfo("Resetting objects in iCubGui");
         if (outPortiCubGui.getOutputCount()>0)
@@ -604,7 +641,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
         movingTargetCircle = _movingCircle;
         q_dot.zero();
         updateArmChain(); //updates chain, q and x_t
-        virtualChain = *(arm->asChain());
+        virtualArmChain->setAng(q); //with new target, we make the two chains identical at the start
         if(controlMode == "positionDirect")
            I->reset(q);   
         x_0=x_t;
@@ -764,6 +801,13 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
    
+   //Vector xee_pos_virtual=virtualArmChain->EndEffPosition();
+   //Vector xee_pos_real= arm->asChain()->EndEffPosition();
+   //yInfo()<<"   t [s] = "<<yarp::os::Time::now() -t_0;
+   //yInfo()<<"   e_pos_real before opt step [m] = "<<norm(x_n-xee_pos_real);
+   //yInfo()<<"   e_pos real using x_t       [m] = "<<norm(x_n-x_t); 
+   //yInfo()<<"   e_pos_virtual before opt step [m] = "<<norm(x_n-xee_pos_virtual);
+        
    Vector res(chainActiveDOF,0.0); 
     
    Vector xr(6,0.0);
@@ -785,15 +829,15 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
 
    Ipopt::SmartPtr<ControllerNLP> nlp;
    if (controlMode == "positionDirect") //in this mode, ipopt will use the qIntegrated values to update its copy of chain
-        nlp=new ControllerNLP(virtualChain);
+        nlp=new ControllerNLP(*virtualArmChain);
    else
         nlp=new ControllerNLP(*(arm->asChain()));
    nlp->set_hitting_constraints(hittingConstraints);
    nlp->set_orientation_control(orientationControl);
    nlp->set_dt(dT);
    nlp->set_xr(xr);
-   nlp->set_v_lim(vLimAdapted);
-   nlp->set_v0(q_dot);
+   nlp->set_v_limInDegPerSecond(vLimAdapted);
+   nlp->set_v0InDegPerSecond(q_dot);
    nlp->init();
 
    _exit_code=app->OptimizeTNLP(GetRawPtr(nlp));
@@ -808,7 +852,8 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
                     norm(x_n-x_t), norm(x_d-x_n), norm(x_d-x_t));
         printf("Result (solved velocities (deg/s)): %s\n",res.toString(3,3).c_str());
     }
-    
+     
+   
     return res;
 }
 
@@ -835,8 +880,9 @@ void reactCtrlThread::updateArmChain()
         q = qA;        
     }
     arm->setAng(q*CTRL_DEG2RAD);
-    H=arm->getH();
-    x_t=H.subcol(0,3,3);
+    //H=arm->getH();
+    //x_t=H.subcol(0,3,3);
+    x_t = arm->EndEffPosition();
 }
 
 bool reactCtrlThread::alignJointsBounds()

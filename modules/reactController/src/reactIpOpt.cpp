@@ -169,7 +169,7 @@
     }
 
     /****************************************************************/
-    void ControllerNLP::set_v_lim(const Matrix &v_lim)
+    void ControllerNLP::set_v_limInDegPerSecond(const Matrix &v_lim)
     {
         yAssert((this->v_lim.rows()==v_lim.rows()) &&
                 (this->v_lim.cols()==v_lim.cols()));
@@ -200,7 +200,7 @@
     }
 
     /****************************************************************/
-    void ControllerNLP::set_v0(const Vector &v0)
+    void ControllerNLP::set_v0InDegPerSecond(const Vector &v0)
     {
         yAssert(this->v0.length()==v0.length());
         this->v0=CTRL_DEG2RAD*v0;

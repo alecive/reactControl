@@ -81,11 +81,11 @@ class ControllerNLP : public Ipopt::TNLP
     public:
     ControllerNLP(iKinChain &chain_);
     void set_xr(const Vector &xr);
-    void set_v_lim(const Matrix &v_lim);
+    void set_v_limInDegPerSecond(const Matrix &v_lim);
     void set_hitting_constraints(const bool _hitting_constraints);
     void set_orientation_control(const bool _orientation_control);
     void set_dt(const double dt);
-    void set_v0(const Vector &v0);
+    void set_v0InDegPerSecond(const Vector &v0);
     void init();
     Vector get_resultInDegPerSecond() const;
     Property getParameters() const;

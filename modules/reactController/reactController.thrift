@@ -140,18 +140,12 @@ service reactController_IDL
   **/
   bool disable_torso();
 
-  /**
-  * Disables the controller
-  * @return true/false on success/failure.
-  **/
-  bool stop();
-  
-  
+   
   /**
   * Disables the controller and switches to position mode
   * @return true/false on success/failure.
   **/
-  bool stp();
+  bool stop();
 
   /**
   * Gets the state of the reactCtrlThread. 

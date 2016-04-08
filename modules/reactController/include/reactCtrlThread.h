@@ -177,7 +177,8 @@ protected:
     IControlMode2         *imodA;
     IControlLimits        *ilimA;
     yarp::sig::Vector     *encsA;
-    iCub::iKin::iCubArm     *arm;
+    iCub::iKin::iCubArm    *arm;
+    iCub::iKin::iKinChain  *armChain;
     int jntsA;
 
     // "Classical" interfaces for the torso
@@ -190,7 +191,9 @@ protected:
     int jntsT;
     
     size_t chainActiveDOF;
-    iCub::iKin::iKinChain virtualChain; //copy of the chain on which ipopt will be working in the positionDirect mode case
+    //parallel virtual arm and chain on which ipopt will be working in the positionDirect mode case
+    iCub::iKin::iCubArm    *virtualArm;
+    iCub::iKin::iKinChain *virtualArmChain; 
     
     yarp::sig::Vector x_0;  // Initial end-effector position
     yarp::sig::Vector x_t;  // Current end-effector position
@@ -220,7 +223,7 @@ protected:
     yarp::sig::Matrix vLimNominal;     //matrix with min/max velocity limits for the current chain
     yarp::sig::Matrix vLimAdapted;  //matrix with min/max velocity limits after adptation by avoidanceHandler
       
-    yarp::sig::Matrix H;      // End-effector pose
+    //yarp::sig::Matrix H;      // End-effector pose
       
     // ports and files
     yarp::os::BufferedPort<yarp::os::Bottle> aggregSkinEventsInPort; //coming from /skinEventsAggregator/skin_events_aggreg:o
@@ -232,6 +235,7 @@ protected:
     ofstream fout_param; //log parameters that stay constant during the simulation, but are important for analysis - e.g. joint limits 
     // Stamp for the setEnvelope for the ports
     yarp::os::Stamp ts;
+    double t_0; 
  
     // IPOPT STUFF
     int ipoptExitCode;
