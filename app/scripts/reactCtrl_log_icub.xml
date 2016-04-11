@@ -48,7 +48,7 @@
     <module>
         <name>yarpdatadumper</name>
 	<parameters>--name /data/skin_tactile_comp_left_hand --txTime --rxTime</parameters>
-        <node>icub19</node>
+        <node>localhost</node>
         <stdio></stdio>
         <tag>dataDumperSkinLeftHandComp</tag>
     </module>

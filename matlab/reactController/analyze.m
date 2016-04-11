@@ -596,7 +596,7 @@ if visualize_single_joint_in_detail
 end
 
 
-%% inequality constraints - shoulder assembly
+%% inequality constraints - shoulder assembly + self-collisions
 
 if visualize_ineq_constr
 
