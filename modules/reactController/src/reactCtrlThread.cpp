@@ -43,6 +43,7 @@ using namespace iCub::skinDynLib;
 #define STATE_IDLE              2
 
 #define NR_ARM_JOINTS 7
+#define NR_ARM_JOINTS_FOR_INTERACTION_MODE 5
 #define NR_TORSO_JOINTS 3 
 
 /*********** public methods ****************************************************************************/ 
@@ -159,6 +160,8 @@ bool reactCtrlThread::threadInit()
         okA = okA && ddA.view(iposDirA);
         okA = okA && ddA.view(imodA);
         okA = okA && ddA.view(ilimA);
+        okA = okA && ddA.view(iintmodeA);
+        okA = okA && ddA.view(iimpA);
     }
     iencsA->getAxes(&jntsA);
     encsA = new yarp::sig::Vector(jntsA,0.0);
@@ -190,6 +193,7 @@ bool reactCtrlThread::threadInit()
         okT = okT && ddT.view(iposDirT);
         okT = okT && ddT.view(imodT);
         okT = okT && ddT.view(ilimT);
+        
     }
     iencsT->getAxes(&jntsT);
     encsT = new yarp::sig::Vector(jntsT,0.0);
@@ -199,7 +203,26 @@ bool reactCtrlThread::threadInit()
         yError("[reactCtrlThread]Problems acquiring torso interfaces!!!!");
         return false;
     }
-
+    
+    interactionModesOrig.resize(NR_ARM_JOINTS_FOR_INTERACTION_MODE,VOCAB_IM_STIFF);
+    jointsToSetInteractionA.clear();
+    for (int i=0; i<NR_ARM_JOINTS_FOR_INTERACTION_MODE;i++)
+        jointsToSetInteractionA.push_back(i);
+    iintmodeA->getInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.getFirst(),interactionModesOrig.getFirst());
+    if(stiffInteraction){
+        interactionModesNew.resize(NR_ARM_JOINTS_FOR_INTERACTION_MODE,VOCAB_IM_STIFF);
+        iintmodeA->setInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.getFirst(),interactionModesNew.getFirst());
+    }
+    else{
+        interactionModesNew.resize(NR_ARM_JOINTS_FOR_INTERACTION_MODE,VOCAB_IM_COMPLIANT);
+        iintmodeA->setInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.getFirst(),interactionModesNew.getFirst());
+        iimpA->setImpedance(0,0.4,0.03); 
+        iimpA->setImpedance(1,0.4,0.03);
+        iimpA->setImpedance(2,0.4,0.03);
+        iimpA->setImpedance(3,0.2,0.01);
+        iimpA->setImpedance(4,0.2,0.0);
+    }
+    
     if (!alignJointsBounds())
     {
         yError("[reactCtrlThread]alignJointsBounds failed!!!\n");
@@ -302,6 +325,11 @@ bool reactCtrlThread::threadInit()
     else if(controlMode == "positionDirect")
         fout_param<<"2 ";
     fout_param<<"0 0 0 "<<endl; //used to be ipOptMemoryOn, ipOptFilterOn, filterTc  
+    if(stiffInteraction)
+        fout_param<<"1 ";
+    else 
+        fout_param<<"0 ";
+    
     yInfo("Written to param file and closing..");    
     fout_param.close();
          
@@ -528,6 +556,12 @@ void reactCtrlThread::run()
 
 void reactCtrlThread::threadRelease()
 {
+    
+    yInfo("Putting back original interaction modes."); 
+    iintmodeA->setInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.getFirst(),interactionModesOrig.getFirst());
+    jointsToSetInteractionA.clear();
+    interactionModesNew.clear();
+    interactionModesOrig.clear();
     
     yInfo("threadRelease(): deleting arm and torso encoder arrays and arm object.");
     delete encsA; encsA = NULL;
@@ -1046,6 +1080,9 @@ bool reactCtrlThread::setCtrlModes(const VectorOf<int> &jointsToSet,
     }
     else
         return false;
+    
+    
+    
 
     return true;
 }

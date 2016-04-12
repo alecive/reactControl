@@ -180,12 +180,18 @@ protected:
     IVelocityControl2     *ivelA;
     IPositionDirect       *iposDirA;
     IControlMode2         *imodA;
+    IInteractionMode     *iintmodeA;
+    IImpedanceControl    *iimpA;
     IControlLimits        *ilimA;
     yarp::sig::Vector     *encsA;
     iCub::iKin::iCubArm    *arm;
     iCub::iKin::iKinChain  *armChain;
     int jntsA;
-
+    
+    VectorOf<InteractionModeEnum> interactionModesOrig;
+    VectorOf<InteractionModeEnum> interactionModesNew;
+    VectorOf<int> jointsToSetInteractionA;
+    
     // "Classical" interfaces for the torso
     IEncoders            *iencsT;
     IVelocityControl2     *ivelT;
@@ -195,7 +201,7 @@ protected:
     yarp::sig::Vector     *encsT;
     int jntsT;
     
-    // Gaze interfacer
+    // Gaze interface
     IGazeControl    *igaze;
     int contextGaze;
 
