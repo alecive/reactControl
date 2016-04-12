@@ -52,6 +52,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  double _trajSpeed, double _globalTol, double _vMax, double _tol,
                                  string _referenceGen, 
                                  bool _tactileCollisionPointsOn, bool _visualCollisionPointsOn,
+                                 bool _gazeControl, bool _stiffInteraction,
                                  bool _hittingConstraints, bool _orientationControl,
                                  bool _visualizeTargetInSim, bool _visualizeParticleInSim, bool _visualizeCollisionPointsInSim,
                                  particleThread *_pT) :
@@ -60,6 +61,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol),
                                  referenceGen(_referenceGen), 
                                  tactileCollisionPointsOn(_tactileCollisionPointsOn), visualCollisionPointsOn(_visualCollisionPointsOn),
+                                 gazeControl(_gazeControl), stiffInteraction(_stiffInteraction),
                                  hittingConstraints(_hittingConstraints),orientationControl(_orientationControl),
                                  visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
                                  visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim)
@@ -202,6 +204,23 @@ bool reactCtrlThread::threadInit()
     {
         yError("[reactCtrlThread]alignJointsBounds failed!!!\n");
         return false;
+    }
+   
+    if(gazeControl){ 
+        Property OptGaze;
+        OptGaze.put("device","gazecontrollerclient");
+        OptGaze.put("remote","/iKinGazeCtrl");
+        OptGaze.put("local",("/"+name+"/gaze").c_str());
+
+        if ((!ddG.open(OptGaze)) || (!ddG.view(igaze))){
+        yError(" could not open the Gaze Controller!");
+        return false;
+        }
+
+        igaze -> storeContext(&contextGaze);
+        igaze -> setSaccadesMode(false);
+        igaze -> setNeckTrajTime(0.75);
+        igaze -> setEyesTrajTime(0.5);
     }
    
     //filling joint pos limits Matrix
@@ -388,7 +407,44 @@ void reactCtrlThread::run()
                     yError("[reactCtrlThread] Unable to properly stop the control of the arm!");
                 break;
             }
-
+            
+            if (movingTargetCircle){
+                x_d = getPosMovingTargetOnCircle();
+                if (visualizeTargetIniCubGui){
+                    sendiCubGuiObject("target");
+                }
+                if(visualizeTargetInSim){
+                    Vector x_d_sim(3,0.0);
+                    convertPosFromRootToSimFoR(x_d,x_d_sim);
+                    moveSphere(1,x_d_sim);
+                }
+            }
+            if (referenceGen == "uniformParticle"){
+                if ( (norm(x_n-x_0) > norm(x_d-x_0)) || movingTargetCircle) //if the particle is farther than the final target, we reset the particle - it will stay with the target; or if target is moving
+                {
+                    prtclThrd->resetParticle(x_d);
+                }
+                x_n=prtclThrd->getParticle(); //to get next target
+            }
+            else if(referenceGen == "minJerk"){
+                minJerkTarget->computeNextValues(x_d);    
+                //refGenMinJerk->computeNextValues(x_t,x_d); 
+                x_n = minJerkTarget->getPos();
+            }
+ 
+            if(visualizeParticleIniCubGui){
+                sendiCubGuiObject("particle");
+            }
+    
+            if(visualizeParticleInSim){
+                Vector x_n_sim(3,0.0);
+                convertPosFromRootToSimFoR(x_n,x_n_sim);
+                moveSphere(2,x_n_sim); //sphere created as second (particle) will keep the index 2  
+            }
+            
+            if(gazeControl)
+                igaze -> lookAtFixationPoint(x_d); //for now looking at final target (x_d), not at intermediate/next target x_n
+            
             //printMessage(2,"[reactCtrlThread::run()]: Will call solveIK.\n");
             double t_1=yarp::os::Time::now();
             q_dot = solveIK(ipoptExitCode);
@@ -473,19 +529,28 @@ void reactCtrlThread::run()
 void reactCtrlThread::threadRelease()
 {
     
-    yInfo("threadRelease(): deleting encoder arrays and arm object.");
+    yInfo("threadRelease(): deleting arm and torso encoder arrays and arm object.");
     delete encsA; encsA = NULL;
     delete encsT; encsT = NULL;
     delete   arm;   arm = NULL;
     bool stoppedOk = stopControlAndSwitchToPositionMode();
     if (stoppedOk)
-        yInfo("Sucessfully stopped controllers");
+        yInfo("Sucessfully stopped arm and torso controllers");
     else
         yWarning("Controllers not stopped sucessfully");
     yInfo("Closing controllers..");
     ddA.close();
     ddT.close();
-       
+    
+    if(gazeControl){
+        yInfo("Closing gaze controller..");
+        Vector ang(3,0.0);
+        igaze -> lookAtAbsAngles(ang);
+        igaze -> restoreContext(contextGaze);
+        igaze -> stopControl();
+        ddG.close();
+    }
+    
     collisionPoints.clear();    
     
     if(minJerkTarget != NULL){
@@ -752,44 +817,7 @@ bool reactCtrlThread::stopControlAndSwitchToPositionMode()
 
 Vector reactCtrlThread::solveIK(int &_exit_code)
 {
-    // Next step will be provided iteratively.
-    // The equation is x(t_next) = x_t + (x_d - x_t) * (t_next - t_now/T-t_now)
-    //                              s.t. t_next = t_now + dT
-  
-    if (movingTargetCircle){
-        x_d = getPosMovingTargetOnCircle();
-        if (visualizeTargetIniCubGui){
-            sendiCubGuiObject("target");
-        }
-        if(visualizeTargetInSim){
-            Vector x_d_sim(3,0.0);
-            convertPosFromRootToSimFoR(x_d,x_d_sim);
-            moveSphere(1,x_d_sim);
-        }
-    }
-    if (referenceGen == "uniformParticle"){
-        if ( (norm(x_n-x_0) > norm(x_d-x_0)) || movingTargetCircle) //if the particle is farther than the final target, we reset the particle - it will stay with the target; or if target is moving
-        {
-            prtclThrd->resetParticle(x_d);
-        }
-        x_n=prtclThrd->getParticle(); //to get next target
-    }
-    else if(referenceGen == "minJerk"){
-        minJerkTarget->computeNextValues(x_d);    
-        //refGenMinJerk->computeNextValues(x_t,x_d); 
-        x_n = minJerkTarget->getPos();
-    }
- 
-    if(visualizeParticleIniCubGui){
-        sendiCubGuiObject("particle");
-    }
-    
-    if(visualizeParticleInSim){
-        Vector x_n_sim(3,0.0);
-        convertPosFromRootToSimFoR(x_n,x_n_sim);
-        moveSphere(2,x_n_sim); //sphere created as second (particle) will keep the index 2  
-    }
-   
+      
     if (tactileCollisionPointsOn || visualCollisionPointsOn){
         AvoidanceHandlerAbstract *avhdl; 
         avhdl = new AvoidanceHandlerTactile(*arm->asChain(),collisionPoints,verbosity); //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
