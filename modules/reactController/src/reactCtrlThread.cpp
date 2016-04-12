@@ -1296,7 +1296,7 @@ void reactCtrlThread::convertPosFromLinkToRootFoR(const Vector &pos,const SkinPa
 
 bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, double gain, string which_chain,std::vector<collisionPoint_t> &collPoints)
 {
-    printMessage(9,"[reactCtrlThread::getCollisionPointsFromPort].\n");
+    //printMessage(9,"[reactCtrlThread::getCollisionPointsFromPort].\n");
     collisionPoint_t collPoint;    
     SkinPart sp = SKIN_PART_UNKNOWN;
     
@@ -1310,7 +1310,7 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
          printMessage(5,"[reactCtrlThread::getCollisionPointsFromPort]: There were %d bottles on the port.\n",collPointsMultiBottle->size());
          for(int i=0; i< collPointsMultiBottle->size();i++){
              Bottle* collPointBottle = collPointsMultiBottle->get(i).asList();
-             printMessage(5,"Bottle %d contains %s", i,collPointBottle->toString().c_str());
+             printMessage(5,"Bottle %d contains %s \n", i,collPointBottle->toString().c_str());
              sp =  (SkinPart)(collPointBottle->get(0).asInt());
              //we take only those collision points that are relevant for the chain we are controlling
              if( ((which_chain == "left") && ( (sp==SKIN_LEFT_HAND) || (sp==SKIN_LEFT_FOREARM) || (sp==SKIN_LEFT_UPPER_ARM) ) )
