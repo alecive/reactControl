@@ -35,7 +35,7 @@ using namespace yarp::math;
 using namespace iCub::ctrl;
 using namespace iCub::skinDynLib;
 
-#define TACTILE_INPUT_GAIN 1.0
+#define TACTILE_INPUT_GAIN 1.5
 #define VISUAL_INPUT_GAIN 0.5
 
 #define STATE_WAIT              0
@@ -123,7 +123,11 @@ bool reactCtrlThread::threadInit()
         vLimNominal(r,1)=vMax;
         vLimAdapted(r,1)=vMax;
     }
-    if (useTorso){ // disable torso roll
+    if (useTorso){ 
+        // disable torso pitch
+        vLimNominal(0,0)=vLimNominal(0,1)=0.0;  
+        vLimAdapted(0,0)=vLimAdapted(0,1)=0.0;  
+        // disable torso roll
         vLimNominal(1,0)=vLimNominal(1,1)=0.0;  
         vLimAdapted(1,0)=vLimAdapted(1,1)=0.0;  
     }     
@@ -473,6 +477,13 @@ void reactCtrlThread::run()
             if(gazeControl)
                 igaze -> lookAtFixationPoint(x_d); //for now looking at final target (x_d), not at intermediate/next target x_n
             
+             if (tactileCollisionPointsOn || visualCollisionPointsOn){
+                AvoidanceHandlerAbstract *avhdl; 
+                avhdl = new AvoidanceHandlerTactile(*arm->asChain(),collisionPoints,verbosity); //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
+                vLimAdapted=avhdl->getVLIM(vLimNominal);
+                delete avhdl; avhdl = NULL; //TODO this is not efficient, in the future find a way to reset the handler, not recreate
+            }
+                  
             //printMessage(2,"[reactCtrlThread::run()]: Will call solveIK.\n");
             double t_1=yarp::os::Time::now();
             q_dot = solveIK(ipoptExitCode);
@@ -852,12 +863,6 @@ bool reactCtrlThread::stopControlAndSwitchToPositionMode()
 Vector reactCtrlThread::solveIK(int &_exit_code)
 {
       
-    if (tactileCollisionPointsOn || visualCollisionPointsOn){
-        AvoidanceHandlerAbstract *avhdl; 
-        avhdl = new AvoidanceHandlerTactile(*arm->asChain(),collisionPoints,verbosity); //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
-        vLimAdapted=avhdl->getVLIM(vLimNominal);
-        delete avhdl; avhdl = NULL; //TODO this is not efficient, in the future find a way to reset the handler, not recreate
-    }
     printMessage(3,"calling ipopt with the following joint velocity limits (deg): \n %s \n",vLimAdapted.toString(3,3).c_str());
     //printf("calling ipopt with the following joint velocity limits (rad): \n %s \n",(vLimAdapted*CTRL_DEG2RAD).toString(3,3).c_str());
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
