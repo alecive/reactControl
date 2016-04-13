@@ -277,12 +277,20 @@ bool reactCtrlThread::threadInit()
     x_d.resize(3,0.0);
     
     //set initial orientation to palm pointing away from body - using compact axis-angle representation
-    //the one below works for both palms
-    o_0.resize(3,0.0); o_0(2)=M_PI;
-    o_t.resize(3,0.0); o_t(2)=M_PI;
-    o_n.resize(3,0.0); o_n(2)=M_PI;
-    o_d.resize(3,0.0); o_d(2)=M_PI;
-       
+    //the one below works for both palms - well, maybe not exactly
+    //o_0.resize(3,0.0); o_0(2)=M_PI;
+    //o_t.resize(3,0.0); o_t(2)=M_PI;
+    //o_n.resize(3,0.0); o_n(2)=M_PI;
+    //o_d.resize(3,0.0); o_d(2)=M_PI;
+
+   //palm facing inwards
+    o_0.resize(3,0.0);  o_0(1)=-0.707*M_PI;     o_0(2)=+0.707*M_PI;
+    o_t.resize(3,0.0);  o_t(1)=-0.707*M_PI;     o_t(2)=+0.707*M_PI;
+    o_n.resize(3,0.0);  o_n(1)=-0.707*M_PI;     o_n(2)=+0.707*M_PI;
+    o_d.resize(3,0.0);  o_d(1)=-0.707*M_PI;     o_d(2)=+0.707*M_PI;
+
+
+
     if(controlMode == "positionDirect"){
         virtualArm = new iCubArm(*arm);  //Creates a new Limb from an already existing Limb object - but they will be too independent limbs from now on
         virtualArmChain = virtualArm->asChain();
