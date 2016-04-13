@@ -295,7 +295,7 @@ bool reactCtrlThread::threadInit()
     }      
     /*** visualize in iCubGui  ***************/
     visualizeIniCubGui = true;
-    visualizeParticleIniCubGui = true;
+    visualizeParticleIniCubGui = false;
     visualizeTargetIniCubGui = true;
     
     /***************** ports and files*************************************************************************************/
@@ -1404,8 +1404,8 @@ void reactCtrlThread::sendiCubGuiObject(const string object_type)
             obj.addDouble(0.0);
         
             // color
-            obj.addInt(255);
             obj.addInt(125);
+            obj.addInt(255);
             obj.addInt(125);
         
             // transparency
@@ -1431,9 +1431,9 @@ void reactCtrlThread::sendiCubGuiObject(const string object_type)
             obj.addDouble(0.0);
         
             // color
+            obj.addInt(0);
             obj.addInt(255);
-            obj.addInt(125);
-            obj.addInt(125);
+            obj.addInt(0);
         
             // transparency
             obj.addDouble(0.7);
