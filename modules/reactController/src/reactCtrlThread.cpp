@@ -451,14 +451,14 @@ void reactCtrlThread::run()
             
             if (movingTargetCircle){
                 x_d = getPosMovingTargetOnCircle();
-                if (visualizeTargetIniCubGui){
-                    sendiCubGuiObject("target");
-                }
                 if(visualizeTargetInSim){
                     Vector x_d_sim(3,0.0);
                     convertPosFromRootToSimFoR(x_d,x_d_sim);
                     moveSphere(1,x_d_sim);
                 }
+            }
+            if (visualizeTargetIniCubGui){
+                sendiCubGuiObject("target");
             }
             if (referenceGen == "uniformParticle"){
                 if ( (norm(x_n-x_0) > norm(x_d-x_0)) || movingTargetCircle) //if the particle is farther than the final target, we reset the particle - it will stay with the target; or if target is moving
