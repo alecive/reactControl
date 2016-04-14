@@ -328,11 +328,12 @@ bool reactCtrlThread::threadInit()
         fout_param<<"1 ";
     else if(controlMode == "positionDirect")
         fout_param<<"2 ";
-    fout_param<<"0 0 0 "<<endl; //used to be ipOptMemoryOn, ipOptFilterOn, filterTc  
+    fout_param<<"0 0 0 "; //used to be ipOptMemoryOn, ipOptFilterOn, filterTc  
     if(stiffInteraction)
         fout_param<<"1 ";
     else 
         fout_param<<"0 ";
+    fout_param<<endl;
     
     yInfo("Written to param file and closing..");    
     fout_param.close();
