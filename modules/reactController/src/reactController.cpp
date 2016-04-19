@@ -98,6 +98,9 @@ private:
 
     bool disableTorso;  // flag to know if the torso has to be used or not
 
+    bool gazeControl; //will follow target with gaze
+    bool stiffInteraction; //stiff vs. compliant interaction mode
+    
     string controlMode; //either "velocity" (original) or "positionDirect" (new option after problems with oscillations)
     
     double  trajSpeed;  // trajectory speed
@@ -138,6 +141,8 @@ public:
         rctCtrlRate  =    10;    
         prtclRate    =    10;
         disableTorso = false;
+        gazeControl = false;
+        stiffInteraction = true;
         controlMode = "velocity";        
         trajSpeed    =   0.1;
         tol          =  1e-5;
@@ -424,6 +429,40 @@ public:
         {
             yInfo("[reactController] Could not find visualCollisionPoints flag (on/off) in the config file; using %d as default",visualCollisionPointsOn);
         }  
+        
+        //************************** gazeControl ******************************************************8
+        if (rf.check("gazeControl"))
+        {
+            if(rf.find("gazeControl").asString()=="on"){
+                gazeControl = true;
+                yInfo("[reactController] gazeControl flag set to on.");
+            }
+            else{
+                gazeControl = false;
+                yInfo("[reactController] gazeControl flag set to off.");
+            }
+        }
+        else
+        {
+            yInfo("[reactController] Could not find gazeControl flag (on/off) in the config file; using %d as default",gazeControl);
+        }  
+         
+        //************************** gazeControl ******************************************************8
+        if (rf.check("stiff"))
+        {
+            if(rf.find("stiff").asString()=="on"){
+                stiffInteraction = true;
+                yInfo("[reactController] stiff interaction flag set to on.");
+            }
+            else{
+                stiffInteraction = false;
+                yInfo("[reactController] stiff interaction flag set to off.");
+            }
+        }
+        else
+        {
+            yInfo("[reactController] Could not find stiff flag (on/off) in the config file; using %d as default",stiffInteraction);
+        }   
             
           //****************** globalTol ******************
             if (rf.check("globalTol"))
@@ -679,6 +718,7 @@ public:
                                           disableTorso, controlMode, trajSpeed, 
                                           globalTol, vMax, tol, referenceGen, 
                                           tactileCollisionPointsOn,visualCollisionPointsOn,
+                                          gazeControl,stiffInteraction,
                                           hittingConstraints, orientationControl,
                                           visualizeTargetInSim, visualizeParticleInSim,
                                           visualizeCollisionPointsInSim, prtclThrd);

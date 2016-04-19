@@ -35,7 +35,7 @@ using namespace yarp::math;
 using namespace iCub::ctrl;
 using namespace iCub::skinDynLib;
 
-#define TACTILE_INPUT_GAIN 1.0
+#define TACTILE_INPUT_GAIN 1.5
 #define VISUAL_INPUT_GAIN 0.5
 
 #define STATE_WAIT              0
@@ -43,6 +43,7 @@ using namespace iCub::skinDynLib;
 #define STATE_IDLE              2
 
 #define NR_ARM_JOINTS 7
+#define NR_ARM_JOINTS_FOR_INTERACTION_MODE 5
 #define NR_TORSO_JOINTS 3 
 
 /*********** public methods ****************************************************************************/ 
@@ -52,6 +53,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  double _trajSpeed, double _globalTol, double _vMax, double _tol,
                                  string _referenceGen, 
                                  bool _tactileCollisionPointsOn, bool _visualCollisionPointsOn,
+                                 bool _gazeControl, bool _stiffInteraction,
                                  bool _hittingConstraints, bool _orientationControl,
                                  bool _visualizeTargetInSim, bool _visualizeParticleInSim, bool _visualizeCollisionPointsInSim,
                                  particleThread *_pT) :
@@ -60,6 +62,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol),
                                  referenceGen(_referenceGen), 
                                  tactileCollisionPointsOn(_tactileCollisionPointsOn), visualCollisionPointsOn(_visualCollisionPointsOn),
+                                 gazeControl(_gazeControl), stiffInteraction(_stiffInteraction),
                                  hittingConstraints(_hittingConstraints),orientationControl(_orientationControl),
                                  visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
                                  visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim)
@@ -120,7 +123,11 @@ bool reactCtrlThread::threadInit()
         vLimNominal(r,1)=vMax;
         vLimAdapted(r,1)=vMax;
     }
-    if (useTorso){ // disable torso roll
+    if (useTorso){ 
+        // disable torso pitch
+        vLimNominal(0,0)=vLimNominal(0,1)=0.0;  
+        vLimAdapted(0,0)=vLimAdapted(0,1)=0.0;  
+        // disable torso roll
         vLimNominal(1,0)=vLimNominal(1,1)=0.0;  
         vLimAdapted(1,0)=vLimAdapted(1,1)=0.0;  
     }     
@@ -157,6 +164,8 @@ bool reactCtrlThread::threadInit()
         okA = okA && ddA.view(iposDirA);
         okA = okA && ddA.view(imodA);
         okA = okA && ddA.view(ilimA);
+        okA = okA && ddA.view(iintmodeA);
+        okA = okA && ddA.view(iimpA);
     }
     iencsA->getAxes(&jntsA);
     encsA = new yarp::sig::Vector(jntsA,0.0);
@@ -188,6 +197,7 @@ bool reactCtrlThread::threadInit()
         okT = okT && ddT.view(iposDirT);
         okT = okT && ddT.view(imodT);
         okT = okT && ddT.view(ilimT);
+        
     }
     iencsT->getAxes(&jntsT);
     encsT = new yarp::sig::Vector(jntsT,0.0);
@@ -197,11 +207,47 @@ bool reactCtrlThread::threadInit()
         yError("[reactCtrlThread]Problems acquiring torso interfaces!!!!");
         return false;
     }
-
+    
+    interactionModesOrig.resize(NR_ARM_JOINTS_FOR_INTERACTION_MODE,VOCAB_IM_STIFF);
+    jointsToSetInteractionA.clear();
+    for (int i=0; i<NR_ARM_JOINTS_FOR_INTERACTION_MODE;i++)
+        jointsToSetInteractionA.push_back(i);
+    iintmodeA->getInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.getFirst(),interactionModesOrig.getFirst());
+    if(stiffInteraction){
+        interactionModesNew.resize(NR_ARM_JOINTS_FOR_INTERACTION_MODE,VOCAB_IM_STIFF);
+        iintmodeA->setInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.getFirst(),interactionModesNew.getFirst());
+    }
+    else{
+        interactionModesNew.resize(NR_ARM_JOINTS_FOR_INTERACTION_MODE,VOCAB_IM_COMPLIANT);
+        iintmodeA->setInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.getFirst(),interactionModesNew.getFirst());
+        iimpA->setImpedance(0,0.4,0.03); 
+        iimpA->setImpedance(1,0.4,0.03);
+        iimpA->setImpedance(2,0.4,0.03);
+        iimpA->setImpedance(3,0.2,0.01);
+        iimpA->setImpedance(4,0.2,0.0);
+    }
+    
     if (!alignJointsBounds())
     {
         yError("[reactCtrlThread]alignJointsBounds failed!!!\n");
         return false;
+    }
+   
+    if(gazeControl){ 
+        Property OptGaze;
+        OptGaze.put("device","gazecontrollerclient");
+        OptGaze.put("remote","/iKinGazeCtrl");
+        OptGaze.put("local",("/"+name+"/gaze").c_str());
+
+        if ((!ddG.open(OptGaze)) || (!ddG.view(igaze))){
+        yError(" could not open the Gaze Controller!");
+        return false;
+        }
+
+        igaze -> storeContext(&contextGaze);
+        igaze -> setSaccadesMode(false);
+        igaze -> setNeckTrajTime(0.75);
+        igaze -> setEyesTrajTime(0.5);
     }
    
     //filling joint pos limits Matrix
@@ -231,12 +277,20 @@ bool reactCtrlThread::threadInit()
     x_d.resize(3,0.0);
     
     //set initial orientation to palm pointing away from body - using compact axis-angle representation
-    //the one below works for both palms
-    o_0.resize(3,0.0); o_0(2)=M_PI;
-    o_t.resize(3,0.0); o_t(2)=M_PI;
-    o_n.resize(3,0.0); o_n(2)=M_PI;
-    o_d.resize(3,0.0); o_d(2)=M_PI;
-       
+    //the one below works for both palms - well, maybe not exactly
+    //o_0.resize(3,0.0); o_0(2)=M_PI;
+    //o_t.resize(3,0.0); o_t(2)=M_PI;
+    //o_n.resize(3,0.0); o_n(2)=M_PI;
+    //o_d.resize(3,0.0); o_d(2)=M_PI;
+
+   //palm facing inwards
+    o_0.resize(3,0.0);  o_0(1)=-0.707*M_PI;     o_0(2)=+0.707*M_PI;
+    o_t.resize(3,0.0);  o_t(1)=-0.707*M_PI;     o_t(2)=+0.707*M_PI;
+    o_n.resize(3,0.0);  o_n(1)=-0.707*M_PI;     o_n(2)=+0.707*M_PI;
+    o_d.resize(3,0.0);  o_d(1)=-0.707*M_PI;     o_d(2)=+0.707*M_PI;
+
+
+
     if(controlMode == "positionDirect"){
         virtualArm = new iCubArm(*arm);  //Creates a new Limb from an already existing Limb object - but they will be too independent limbs from now on
         virtualArmChain = virtualArm->asChain();
@@ -249,7 +303,7 @@ bool reactCtrlThread::threadInit()
     }      
     /*** visualize in iCubGui  ***************/
     visualizeIniCubGui = true;
-    visualizeParticleIniCubGui = true;
+    visualizeParticleIniCubGui = false;
     visualizeTargetIniCubGui = true;
     
     /***************** ports and files*************************************************************************************/
@@ -282,7 +336,13 @@ bool reactCtrlThread::threadInit()
         fout_param<<"1 ";
     else if(controlMode == "positionDirect")
         fout_param<<"2 ";
-    fout_param<<"0 0 0 "<<endl; //used to be ipOptMemoryOn, ipOptFilterOn, filterTc  
+    fout_param<<"0 0 0 "; //used to be ipOptMemoryOn, ipOptFilterOn, filterTc  
+    if(stiffInteraction)
+        fout_param<<"1 ";
+    else 
+        fout_param<<"0 ";
+    fout_param<<endl;
+    
     yInfo("Written to param file and closing..");    
     fout_param.close();
          
@@ -388,7 +448,51 @@ void reactCtrlThread::run()
                     yError("[reactCtrlThread] Unable to properly stop the control of the arm!");
                 break;
             }
-
+            
+            if (movingTargetCircle){
+                x_d = getPosMovingTargetOnCircle();
+                if(visualizeTargetInSim){
+                    Vector x_d_sim(3,0.0);
+                    convertPosFromRootToSimFoR(x_d,x_d_sim);
+                    moveSphere(1,x_d_sim);
+                }
+            }
+            if (visualizeTargetIniCubGui){
+                sendiCubGuiObject("target");
+            }
+            if (referenceGen == "uniformParticle"){
+                if ( (norm(x_n-x_0) > norm(x_d-x_0)) || movingTargetCircle) //if the particle is farther than the final target, we reset the particle - it will stay with the target; or if target is moving
+                {
+                    prtclThrd->resetParticle(x_d);
+                }
+                x_n=prtclThrd->getParticle(); //to get next target
+            }
+            else if(referenceGen == "minJerk"){
+                minJerkTarget->computeNextValues(x_d);    
+                //refGenMinJerk->computeNextValues(x_t,x_d); 
+                x_n = minJerkTarget->getPos();
+            }
+ 
+            if(visualizeParticleIniCubGui){
+                sendiCubGuiObject("particle");
+            }
+    
+            if(visualizeParticleInSim){
+                Vector x_n_sim(3,0.0);
+                convertPosFromRootToSimFoR(x_n,x_n_sim);
+                moveSphere(2,x_n_sim); //sphere created as second (particle) will keep the index 2  
+            }
+            
+            if(gazeControl)
+                igaze -> lookAtFixationPoint(x_d); //for now looking at final target (x_d), not at intermediate/next target x_n
+            
+             if (tactileCollisionPointsOn || visualCollisionPointsOn){
+                AvoidanceHandlerAbstract *avhdl; 
+                avhdl = new AvoidanceHandlerTactile(*arm->asChain(),collisionPoints,verbosity); //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
+                vLimAdapted=avhdl->getVLIM(vLimNominal);
+                delete avhdl; avhdl = NULL; //TODO this is not efficient, in the future find a way to reset the handler, not recreate
+            }
+                  
             //printMessage(2,"[reactCtrlThread::run()]: Will call solveIK.\n");
             double t_1=yarp::os::Time::now();
             q_dot = solveIK(ipoptExitCode);
@@ -473,19 +577,34 @@ void reactCtrlThread::run()
 void reactCtrlThread::threadRelease()
 {
     
-    yInfo("threadRelease(): deleting encoder arrays and arm object.");
+    yInfo("Putting back original interaction modes."); 
+    iintmodeA->setInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.getFirst(),interactionModesOrig.getFirst());
+    jointsToSetInteractionA.clear();
+    interactionModesNew.clear();
+    interactionModesOrig.clear();
+    
+    yInfo("threadRelease(): deleting arm and torso encoder arrays and arm object.");
     delete encsA; encsA = NULL;
     delete encsT; encsT = NULL;
     delete   arm;   arm = NULL;
     bool stoppedOk = stopControlAndSwitchToPositionMode();
     if (stoppedOk)
-        yInfo("Sucessfully stopped controllers");
+        yInfo("Sucessfully stopped arm and torso controllers");
     else
         yWarning("Controllers not stopped sucessfully");
     yInfo("Closing controllers..");
     ddA.close();
     ddT.close();
-       
+    
+    if(gazeControl){
+        yInfo("Closing gaze controller..");
+        Vector ang(3,0.0);
+        igaze -> lookAtAbsAngles(ang);
+        igaze -> restoreContext(contextGaze);
+        igaze -> stopControl();
+        ddG.close();
+    }
+    
     collisionPoints.clear();    
     
     if(minJerkTarget != NULL){
@@ -752,50 +871,7 @@ bool reactCtrlThread::stopControlAndSwitchToPositionMode()
 
 Vector reactCtrlThread::solveIK(int &_exit_code)
 {
-    // Next step will be provided iteratively.
-    // The equation is x(t_next) = x_t + (x_d - x_t) * (t_next - t_now/T-t_now)
-    //                              s.t. t_next = t_now + dT
-  
-    if (movingTargetCircle){
-        x_d = getPosMovingTargetOnCircle();
-        if (visualizeTargetIniCubGui){
-            sendiCubGuiObject("target");
-        }
-        if(visualizeTargetInSim){
-            Vector x_d_sim(3,0.0);
-            convertPosFromRootToSimFoR(x_d,x_d_sim);
-            moveSphere(1,x_d_sim);
-        }
-    }
-    if (referenceGen == "uniformParticle"){
-        if ( (norm(x_n-x_0) > norm(x_d-x_0)) || movingTargetCircle) //if the particle is farther than the final target, we reset the particle - it will stay with the target; or if target is moving
-        {
-            prtclThrd->resetParticle(x_d);
-        }
-        x_n=prtclThrd->getParticle(); //to get next target
-    }
-    else if(referenceGen == "minJerk"){
-        minJerkTarget->computeNextValues(x_d);    
-        //refGenMinJerk->computeNextValues(x_t,x_d); 
-        x_n = minJerkTarget->getPos();
-    }
- 
-    if(visualizeParticleIniCubGui){
-        sendiCubGuiObject("particle");
-    }
-    
-    if(visualizeParticleInSim){
-        Vector x_n_sim(3,0.0);
-        convertPosFromRootToSimFoR(x_n,x_n_sim);
-        moveSphere(2,x_n_sim); //sphere created as second (particle) will keep the index 2  
-    }
-   
-    if (tactileCollisionPointsOn || visualCollisionPointsOn){
-        AvoidanceHandlerAbstract *avhdl; 
-        avhdl = new AvoidanceHandlerTactile(*arm->asChain(),collisionPoints,verbosity); //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
-        vLimAdapted=avhdl->getVLIM(vLimNominal);
-        delete avhdl; avhdl = NULL; //TODO this is not efficient, in the future find a way to reset the handler, not recreate
-    }
+      
     printMessage(3,"calling ipopt with the following joint velocity limits (deg): \n %s \n",vLimAdapted.toString(3,3).c_str());
     //printf("calling ipopt with the following joint velocity limits (rad): \n %s \n",(vLimAdapted*CTRL_DEG2RAD).toString(3,3).c_str());
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
@@ -1018,6 +1094,9 @@ bool reactCtrlThread::setCtrlModes(const VectorOf<int> &jointsToSet,
     }
     else
         return false;
+    
+    
+    
 
     return true;
 }
@@ -1226,7 +1305,7 @@ void reactCtrlThread::convertPosFromLinkToRootFoR(const Vector &pos,const SkinPa
 
 bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, double gain, string which_chain,std::vector<collisionPoint_t> &collPoints)
 {
-    printMessage(9,"[reactCtrlThread::getCollisionPointsFromPort].\n");
+    //printMessage(9,"[reactCtrlThread::getCollisionPointsFromPort].\n");
     collisionPoint_t collPoint;    
     SkinPart sp = SKIN_PART_UNKNOWN;
     
@@ -1240,7 +1319,7 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
          printMessage(5,"[reactCtrlThread::getCollisionPointsFromPort]: There were %d bottles on the port.\n",collPointsMultiBottle->size());
          for(int i=0; i< collPointsMultiBottle->size();i++){
              Bottle* collPointBottle = collPointsMultiBottle->get(i).asList();
-             printMessage(5,"Bottle %d contains %s", i,collPointBottle->toString().c_str());
+             printMessage(5,"Bottle %d contains %s \n", i,collPointBottle->toString().c_str());
              sp =  (SkinPart)(collPointBottle->get(0).asInt());
              //we take only those collision points that are relevant for the chain we are controlling
              if( ((which_chain == "left") && ( (sp==SKIN_LEFT_HAND) || (sp==SKIN_LEFT_FOREARM) || (sp==SKIN_LEFT_UPPER_ARM) ) )
@@ -1334,8 +1413,8 @@ void reactCtrlThread::sendiCubGuiObject(const string object_type)
             obj.addDouble(0.0);
         
             // color
-            obj.addInt(255);
             obj.addInt(125);
+            obj.addInt(255);
             obj.addInt(125);
         
             // transparency
@@ -1361,9 +1440,9 @@ void reactCtrlThread::sendiCubGuiObject(const string object_type)
             obj.addDouble(0.0);
         
             // color
+            obj.addInt(0);
             obj.addInt(255);
-            obj.addInt(125);
-            obj.addInt(125);
+            obj.addInt(0);
         
             // transparency
             obj.addDouble(0.7);

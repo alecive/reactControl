@@ -62,7 +62,7 @@ class reactCtrlThread: public yarp::os::RateThread
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & , const string &_ ,
-                    int , bool , string , double , double , double , double , string , bool , bool , bool, bool , bool , bool , bool , particleThread * );
+                    int , bool , string , double , double , double , double , string , bool , bool , bool , bool , bool, bool , bool , bool , bool , particleThread * );
     // INIT
     virtual bool threadInit();
     // RUN
@@ -147,6 +147,10 @@ protected:
     string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk"
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
+    
+    bool gazeControl; //will follow target with gaze
+    bool stiffInteraction; //stiff vs. compliant interaction mode
+        
     bool hittingConstraints; //inequality constraints for safety of shoudler assembly and to prevent self-collisions torso-upper arm, upper-arm - forearm
     bool orientationControl; //if orientation should be controlled as well
     bool visualizeTargetInSim;  // will use the yarp rpc /icubSim/world to visualize the target
@@ -169,18 +173,25 @@ protected:
     // Driver for "classical" interfaces
     PolyDriver       ddA;
     PolyDriver       ddT;
-
+    PolyDriver       ddG; // gaze  controller  driver
+    
     // "Classical" interfaces for the arm
     IEncoders            *iencsA;
     IVelocityControl2     *ivelA;
     IPositionDirect       *iposDirA;
     IControlMode2         *imodA;
+    IInteractionMode     *iintmodeA;
+    IImpedanceControl    *iimpA;
     IControlLimits        *ilimA;
     yarp::sig::Vector     *encsA;
     iCub::iKin::iCubArm    *arm;
     iCub::iKin::iKinChain  *armChain;
     int jntsA;
-
+    
+    VectorOf<InteractionModeEnum> interactionModesOrig;
+    VectorOf<InteractionModeEnum> interactionModesNew;
+    VectorOf<int> jointsToSetInteractionA;
+    
     // "Classical" interfaces for the torso
     IEncoders            *iencsT;
     IVelocityControl2     *ivelT;
@@ -189,6 +200,11 @@ protected:
     IControlLimits        *ilimT;
     yarp::sig::Vector     *encsT;
     int jntsT;
+    
+    // Gaze interface
+    IGazeControl    *igaze;
+    int contextGaze;
+
     
     size_t chainActiveDOF;
     //parallel virtual arm and chain on which ipopt will be working in the positionDirect mode case
