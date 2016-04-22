@@ -1,12 +1,14 @@
 #react-control
 
-This is a repo created with the purpose of providing the iCub with a framework for performing a reaching behavior with whole-body obstacle avoidance. It will be deeply linked with the [peripersonal-space repository](https://github.com/robotology/peripersonal-space), but for now it is a completely independent module.
+This repository contains a controller for the iCub for performing reaching with simultaneous reactive whole-body obstacle avoidance. The module thus encapsulates the functionality of an inverse kinematics solver and the actual controller that generates the commands to reach a position in Cartesian space. The obstacles - perceived visually or through the iCub's sensitive skin - are incorporated on the run as additional constraints.
 
-**The name is really bad, so if you find a better name I will be glad to update the code accordingly!** For the sake of historic reference, `reactController` comes from the fact that this is a purely iterative control that reacts to changes in the environment (i.e. obstacles to avoid).
+The reaching controller is standalone in the `reactController` module here, but to acquire the information about the visual/tactile obstacles, it relies on communication with modules from the [peripersonal-space repository](https://github.com/robotology/peripersonal-space).
 
 ## Structure of the repository
 
-Up to now (29-10-2015) there is only one module, called `reactController`.
+The core module is the `reactController`.
+
+There are other modules in the repository which have so far an internal/development character. They are `jointVelCtrlIdentSimple`, `reactController-sim`, `reactController-sim-enhanced` under `modules` and there is another internal piece of code in `tests` (which implements the same controller formulation for the optimizer with the simplest possible infrastructure needed to run on the robot). 
 
 ### Documentation of the `reactController`
 
@@ -14,13 +16,18 @@ Up to now (29-10-2015) there is only one module, called `reactController`.
     yarp
     iKin
     skinDynLib
+    ctrlLib
 
-#### Features:
+#### Principles of operation:
 
- * *Online:* trajectories are computed at runtime.
- * *Reactive:* trajectories are updated as the environment changes or is discovered by the robot sensors.
- * *Comprehensive:* there is one single task to solve, rather than 2 different tasks (end-effector vs. whole-body).
- * *Better than the state of the art:* trajectories are computed by taking into account the whole-body thanks to the skin and the peripersonal-space.
+This modules parallels the functionality of the iCub [Cartesian interface] (http://wiki.icub.org/brain/icub_cartesian_interface.html), but both the solver and controller are encapsulated in the single problem formulation. It is an *Iterative Inverse Kinematics Solver + Controller*: the optimization step (i.e. `IPOPT`) will take care of everything in a single step: there is *no decoupling* between Inverse Kinematics and Control. The solution to the task is given in the *joint velocity space* (rather than joint configuration space), that are sent directly to the robot. Importantly, there is no distinction between end-effector and whole-body: the obstacles affect every body part in the same way - by limiting the joint velocities
 
-It is an *Iterative Inverse Kinematics Solver + Controller*: the optimization step (i.e. `IPOPT`) will take care of everything in a single step: there is *no decoupling* between Inverse Kinematics and Control. The solution to the task is given in the *joint velocity space* (rather than joint configuration space), that are sent directly to the robot. Importantly, there is no distinction between end-effector and whole-body: the obstacles affect every body part in the same way - by limiting the joint velocities.
+## Authors
+
+ * [Alessandro Roncone (@alecive)](https://github.com/alecive)
+ * [Matej Hoffmann (@matejhof)](https://github.com/matejhof)
+ * [Ugo Pattacini (@pattacini)](https://github.com/pattacini)
+
+
+
 
