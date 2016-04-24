@@ -2,7 +2,7 @@
 # Author: Alessandro Roncone <ugo.pattacini@iit.it>
 # CopyPolicy: Released under the terms of the GNU GPL v2.0.
 
-project(reactController-sim-enhanced)
+project(reactController-sim)
 
 find_package(IPOPT REQUIRED)
 

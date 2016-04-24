@@ -1,14 +1,17 @@
 function animate(filein,varargin)
-% Author: Ugo Pattacini
+% Author: Ugo Pattacini, Matej Hoffmann
 
 global P;
 global t t0;
-global xd xo q ctrlp;
-global hax hg1 hg2 hg3;
+global xd xr xo q ctrlp;
+global hax hg1 hg2 hg3 hg4;
 global save_movie save_pics writer tm;
+global plot_asynchronously;
 
 save_movie=false;
 save_pics=false;
+plot_asynchronously = false; % in this mode, the timer will not be used, allowing to step the visualization
+
 if nargin>1
     mode=varargin{1};
     if strcmpi(mode,'save-movie')
@@ -20,10 +23,11 @@ end
 
 data=importdata(filein);
 t=data(:,1);
-xd=data(:,2:7);
-xo=data(:,8:11);
-q=data(:,22:22+10-1);
-ctrlp=data(:,22+10:end);
+xd=data(:,2:4); % target
+xo=data(:,5:8); % obstacle
+xr=data(:,9:11); % end-effector target
+q=data(:,22:22+10-1); % joint angles
+ctrlp=data(:,52:end); % ctrl points
 
 P{1}.A =0.032;      P{1}.D =0;        P{1}.alpha =pi/2;  P{1}.offset =0;
 P{2}.A =0;          P{2}.D =-0.0055;  P{2}.alpha =pi/2;  P{2}.offset =-pi/2;
@@ -56,15 +60,14 @@ quiver3(hax,0,0,0,0,0,1,scale,'Color','b','Linewidth',2);
 hg1=[];
 hg2=[];
 hg3=[];
+hg4=[];
 
 set(hfig,'CloseRequestFcn',@Quit);
 
-Ts=0.1;
-tm=timer('Period',Ts,'ExecutionMode','fixedRate',...
-         'TimerFcn',@PlotQuantities);
-    
 if save_movie
-    writer=VideoWriter('movie','MPEG-4');
+    %writer=VideoWriter('movie','MPEG-4');
+    writer=VideoWriter('movie','Motion JPEG AVI');
+    %writer=VideoWriter('movie','Uncompressed AVI');
     writer.FrameRate=10;
     open(writer);
 end
@@ -73,6 +76,21 @@ if save_pics
     [~]=rmdir('./pics','s');
     mkdir('./pics');
 end
+
+
+if plot_asynchronously
+    [m,n]=size(data);
+    for i=1:m
+       PlotQuantitiesAsync(data(i,1)); 
+       pause;
+    end
+else
+    Ts=0.1;
+    tm=timer('Period',Ts,'ExecutionMode','fixedRate',...
+         'TimerFcn',@PlotQuantities);
+end
+     
+
 
 t0=cputime;
 start(tm);
@@ -139,7 +157,9 @@ arm=plot3(hax,[x{1}(1) x{2}(1) x{3}(1) x{4}(1) x{5}(1) x{6}(1) x{7}(1) x{8}(1) x
               [x{1}(3) x{2}(3) x{3}(3) x{4}(3) x{5}(3) x{6}(3) x{7}(3) x{8}(3) x{9}(3) x{10}(3) x{11}(3)],...
               'Color','k','LineWidth',3);
           
-lim=axis(hax); scale=max(abs(lim))*0.1;
+lim=axis(hax);
+scale=max(abs(lim))*0.1;
+     
 ax(1)=quiver3(hax,x{end}(1),x{end}(2),x{end}(3),...
               axpoint{1}(1),axpoint{1}(2),axpoint{1}(3),scale,...
               'Color','r','Linewidth',2);
@@ -165,8 +185,8 @@ end
 function PlotQuantities(obj,event,string_arg) %#ok<INUSD>
 
 global t t0;
-global xd xo q ctrlp;
-global hax hg1 hg2 hg3;
+global xd xo xr q ctrlp;
+global hax hg1 hg2 hg3 hg4;
 global save_movie save_pics writer tm;
 
 dt=cputime-t0;
@@ -189,33 +209,23 @@ if ~isempty(hg3)
     delete(hg3)
 end
 
+
+if ~isempty(hg4)
+    delete(hg4)
+end
+
 [x,axpoint]=fkin(q(i,:));
-hg1=drawArm(x,axpoint,ctrlp(i,:));
-
-ax(1)=plot3(hax,xd(i,1),xd(i,2),xd(i,3),'go','LineWidth',3);
-
-ang=norm(xd(i,4:6));
-axang=[xd(i,4:6)/ang ang];
-rotm=axang2rotm(axang);
-
-lim=axis(hax); scale=max(abs(lim))*0.1;
-ax(2)=quiver3(hax,xd(i,1),xd(i,2),xd(i,3),...
-              rotm(1,1),rotm(2,1),rotm(3,1),scale,...
-              'Color','r','Linewidth',2);
-ax(3)=quiver3(hax,xd(i,1),xd(i,2),xd(i,3),...
-              rotm(1,2),rotm(2,2),rotm(3,2),scale,...
-              'Color','g','Linewidth',2);
-ax(4)=quiver3(hax,xd(i,1),xd(i,2),xd(i,3),...
-              rotm(1,3),rotm(2,3),rotm(3,3),scale,...
-              'Color','b','Linewidth',2);
-hg2=hggroup;
-set(ax,'Parent',hg2);
+hg1=drawArm(x,axpoint,ctrlp(i,:)); % draws the whole "arm" - in fact whole chain from root to end-eff
+hg2=plot3(hax,xr(i,1),xr(i,2),xr(i,3),'go','LineWidth',5); % plots the enf-eff target
 
 n=10;
 [x,y,z]=sphere(n); r=xo(i,4);
 c(:,:,1)=ones(n); c(:,:,2)=zeros(n); c(:,:,3)=zeros(n);
-hg3=surf(hax,xo(i,1)+r*x,xo(i,2)+r*y,xo(i,3)+r*z,c,'EdgeColor','none');
+hg3=surf(hax,xo(i,1)+r*x,xo(i,2)+r*y,xo(i,3)+r*z,c,'EdgeColor','none'); % plots the end-eff target
 alpha(hg3,0.2);
+
+hg4=plot3(hax,xd(i,1),xd(i,2),xd(i,3),'go','LineWidth',10); % plots the actual target
+
 drawnow;
 
 if save_movie
@@ -234,6 +244,68 @@ if save_pics
     catch
     end
 end
+
+%--------------------------------------------------------------------------
+function PlotQuantitiesAsync(current_t) 
+
+global t t0;
+global xd xo xr q ctrlp;
+global hax hg1 hg2 hg3 hg4;
+global save_movie save_pics writer tm;
+
+i=find(t>=current_t,1);
+
+if isempty(i)
+   return;
+end
+  
+if ~isempty(hg1)
+    delete(hg1)
+end
+
+if ~isempty(hg2)
+    delete(hg2)
+end
+
+if ~isempty(hg3)
+    delete(hg3)
+end
+
+if ~isempty(hg4)
+    delete(hg4)
+end
+
+[x,axpoint]=fkin(q(i,:));
+hg1=drawArm(x,axpoint,ctrlp(i,:)); % draws the whole "arm" - in fact whole chain from root to end-eff
+hg2=plot3(hax,xr(i,1),xr(i,2),xr(i,3),'go','LineWidth',3); % plots the end-eff target
+
+n=10;
+[x,y,z]=sphere(n); r=xo(i,4);
+c(:,:,1)=ones(n); c(:,:,2)=zeros(n); c(:,:,3)=zeros(n);
+hg3=surf(hax,xo(i,1)+r*x,xo(i,2)+r*y,xo(i,3)+r*z,c,'EdgeColor','none');
+alpha(hg3,0.2);
+
+hg4=plot3(hax,xd(i,1),xd(i,2),xd(i,3),'go','LineWidth',10); % plots the actual target
+
+drawnow;
+
+if save_movie
+    try
+        frame=getframe(hax);
+        writeVideo(writer,frame);
+    catch
+    end
+end
+
+if save_pics
+    try
+        frame=getframe(hax);
+        img=frame2im(frame);
+        imwrite(img,sprintf('./pics/img_%.8d.png',i));
+    catch
+    end
+end
+
 
 
 %--------------------------------------------------------------------------
