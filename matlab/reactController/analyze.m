@@ -15,6 +15,8 @@ chosen_time_column = 6; % 4 for sender, 6 for receiver
 %path_prefix = 'input/';
 %path_prefix = 'icubSimTests/test_20160404a/';
 path_prefix = 'multipleControlPoints_icubSim/data2/';
+%path_prefix = 'icubSimTests/circleUgosTestCode_a/';
+%path_prefix = 'icubSimTests/circleUgosTestCode_c_orientation_dt0.04/';
 %path_prefix = 'icubExperiments/moveWithIpoptWithoutAcceptHeuristicsOldTolerance_works/';
 path_prefix_dumper = '';
 
