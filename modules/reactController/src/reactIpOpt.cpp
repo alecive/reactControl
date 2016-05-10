@@ -151,6 +151,7 @@
 
         hitting_constraints=true;
         orientation_control=true;
+        additional_control_points_flag = false;
         dt=0.01;
     }
 
@@ -193,12 +194,19 @@
     }
 
     /****************************************************************/
+    void set_additional_control_points(std::vector<controlPoint_t> & _additional_control_points)
+    {
+        additional_control_points_flag = true;
+        additional_control_points = _additional_control_points;
+    }
+    
+    /****************************************************************/
     void ControllerNLP::set_dt(const double dt)
     {
         yAssert(dt>0.0);
         this->dt=dt;
     }
-
+        
     /****************************************************************/
     void ControllerNLP::set_v0InDegPerSecond(const Vector &v0)
     {
@@ -217,6 +225,44 @@
         Matrix J0=chain.GeoJacobian();
         J0_xyz=J0.submatrix(0,2,0,chain.getDOF()-1);
         J0_ang=J0.submatrix(3,5,0,chain.getDOF()-1);
+        
+        if (additional_control_points_flag)
+        {
+            additional_control_points_tol = 0.02; 
+            if (additional_control_points.size() == 0)
+            {
+                yWarning("[ControllerNLP::init()]: additional_control_points_flag is on but additional_control_points.size is 0.");
+                additional_control_points_flag = false;
+                extra_ctrl_points_nr = 0;                
+            }
+            else
+            { 
+                if (additional_control_points.size() == 1)
+                {
+                    extra_ctrl_points_nr = 1;
+                }
+                else  //additional_control_points.size() > 1
+                {
+                    extra_ctrl_points_nr = 1;
+                    yWarning("[ControllerNLP::init()]: currently only one additional control point - elbow - is supported; requested %d control points.",additional_control_points.size());
+                }
+                for (std::vector<controlPoint_t>::const iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
+                {
+                    if((*it).type == "elbow")
+                    {
+                        Matrix H=chain.getH(chain.getDOF()-4-1);
+                        (*it).p = H.getCol(3).subVector(0,2);
+                        Matrix J = chain.GeoJacobian(chain.getDOF()-4-1);
+                        (*it).J_xyz = J.submatrix(0,2,0,chain.getDOF()-4-1);
+                    }
+                    else
+                        yWarning("[ControllerNLP::get_nlp_info]: other control points type than elbow are not supported (this was %s).",(*it).type.c_str());
+                    }
+            }
+        
+        }
+        else
+            extra_ctrl_points_nr = 0;
 
         computeBounds();
     }
@@ -243,6 +289,19 @@
 
         // reaching in position
         m=1; nnz_jac_g=n;
+        
+        if(additional_control_points_flag)
+        {
+            for (std::vector<controlPoint_t>::const iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
+            {
+                if((*it).type == "elbow")
+                {
+                    m+=1; nnz_jac_g += (n-4); //taking out 2 wrist and 2 elbow joints  
+                }
+                else
+                    yWarning("[ControllerNLP::get_nlp_info]: other control points type than elbow are not supported (this was %s).",(*it).type.c_str());
+            }
+        }
 
         if (hitting_constraints)
         {
@@ -273,26 +332,34 @@
 
         // reaching in position
         g_l[0]=g_u[0]=0.0;
+        
+        if(additional_control_points_flag)
+        {
+            for(Ipopt::Index j=1; j<=extra_ctrl_points_nr; j++){
+                g_l[j]=-additional_control_points_tol / 2.0;
+                g_u[j]= additional_control_points_tol / 2.0;
+            }
+        }
 
         if (hitting_constraints)
         {
             // shoulder's cables length
-            g_l[1]=-347.00*CTRL_DEG2RAD;
-            g_u[1]=std::numeric_limits<double>::max();
-            g_l[2]=-366.57*CTRL_DEG2RAD;
-            g_u[2]=112.42*CTRL_DEG2RAD;
-            g_l[3]=-66.60*CTRL_DEG2RAD;
-            g_u[3]=213.30*CTRL_DEG2RAD;
+            g_l[1+extra_ctrl_points_nr]=-347.00*CTRL_DEG2RAD;
+            g_u[1+extra_ctrl_points_nr]=std::numeric_limits<double>::max();
+            g_l[2+extra_ctrl_points_nr]=-366.57*CTRL_DEG2RAD;
+            g_u[2+extra_ctrl_points_nr]=112.42*CTRL_DEG2RAD;
+            g_l[3+extra_ctrl_points_nr]=-66.60*CTRL_DEG2RAD;
+            g_u[3+extra_ctrl_points_nr]=213.30*CTRL_DEG2RAD;
 
             // avoid hitting torso
-            g_l[4]=shou_n;
-            g_u[4]=std::numeric_limits<double>::max();
+            g_l[4+extra_ctrl_points_nr]=shou_n;
+            g_u[4+extra_ctrl_points_nr]=std::numeric_limits<double>::max();
 
             // avoid hitting forearm
-            g_l[5]=-std::numeric_limits<double>::max();
-            g_u[5]=elb_n;
-            g_l[6]=-elb_n;
-            g_u[6]=std::numeric_limits<double>::max();
+            g_l[5+extra_ctrl_points_nr]=-std::numeric_limits<double>::max();
+            g_u[5+extra_ctrl_points_nr]=elb_n;
+            g_l[6+extra_ctrl_points_nr]=-elb_n;
+            g_u[6+extra_ctrl_points_nr]=std::numeric_limits<double>::max();
         }
 
         return true;
@@ -326,6 +393,8 @@
             err_ang=dcm2axis(Hr*He.transposed());
             err_ang*=err_ang[3];
             err_ang.pop_back();
+            
+            TODO HERE DO THE EXTRA CONTROL POINTS
 
             Matrix L=-0.5*(skew_nr*skew(He.getCol(0))+
                            skew_sr*skew(He.getCol(1))+
@@ -362,6 +431,8 @@
         // reaching in position
         g[0]=norm2(err_xyz);
 
+        TODO HERE DO THE EXTRA CONTROL POINTS
+        
         if (hitting_constraints)
         {
             // shoulder's cables length
@@ -396,6 +467,8 @@
                 idx++;
             }
 
+             TODO HERE DO THE EXTRA CONTROL POINTS
+            
             if (hitting_constraints)
             {
                 // shoulder's cables length
@@ -434,6 +507,9 @@
                 idx++;
             }
 
+            TODO HERE DO THE EXTRA CONTROL POINTS
+            
+            
             if (hitting_constraints)
             {
                 // shoulder's cables length

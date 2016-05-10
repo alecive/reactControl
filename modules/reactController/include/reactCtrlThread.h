@@ -56,6 +56,7 @@ using namespace yarp::dev;
 
 using namespace std;
 
+
 class reactCtrlThread: public yarp::os::RateThread
 {
     
@@ -85,6 +86,9 @@ public:
     // Sets a moving target along a circular trajectory in the y and z axes, relative to the current end-effector position
     bool setNewCircularTarget(const double _radius,const double _frequency);
 
+    //Will be reading reaching targets from a port
+    bool setStreamingTarget();
+    
     // Sets the tolerance
     bool setTol(const double );
 
@@ -144,6 +148,9 @@ protected:
     double globalTol;
     // Max velocity set for the joints
     double vMax;
+    bool streamingTarget;
+    motionPlan nextStreamedTargets;
+    std::vector<controlPoint_t> additionalControlPoints; 
     string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk"
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o

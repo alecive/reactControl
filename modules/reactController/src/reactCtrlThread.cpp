@@ -27,6 +27,7 @@
 #include <iCub/ctrl/math.h>
 
 #include "reactCtrlThread.h"
+#include <../../icub-main/src/libraries/icubmod/imu3DM_GX3/dataTypes.h>
 
 
 using namespace yarp::sig;
@@ -264,6 +265,9 @@ bool reactCtrlThread::threadInit()
     else
         minJerkTarget = NULL;
   
+    streamingTarget = false;
+    nextStreamedTargets = new motionPlan();
+    additionalControlPoints.clear();
     movingTargetCircle = false;
     radius = 0.0; frequency = 0.0;
     circleCenter.resize(3,0.0);
@@ -390,10 +394,52 @@ void reactCtrlThread::run()
     //yarp::sig::Matrix J1_temp=chain_temp.GeoJacobian();
     //yDebug("GeoJacobian: \n %s \n",J1_temp.toString(3,3).c_str());    
     
-       
+    if (streamingTarget){    //read "trajectory" - in this special case only set of positions for possibly multiple control points
+        additionalControlPoints.clear();
+        nextStreamedTargets.receivePlan();
+        vector<waypointTrajectory>& waypointTraj nextStreamedTargets.getListTrajectory();
+        for (std::vector<waypointTrajectory>::const iterator it = waypointTraj.begin() ; it != waypointTraj.end(); ++it)
+        {
+            if ( ((*it).controlPointName == "end-effector") || ((*it).controlPointName == "elbow"))
+            {
+                if ((*it).numberDimension >= 3)
+                {
+                    if ((*it).numberDimension > 3)
+                        yWarning("[reactCtrlThread::run()] %d dimensions specified for control point %s - only first three (pos) will be used.",(*it).numberDimension,(*it).controlPointName);
+                    if ((*it).numberWaypoints >= 1){
+                         if ((*it).numberWaypoints > 1)
+                            yWarning("[reactCtrlThread::run()] %d waypoints specified for control point %s - only first one will be used.",(*it).numberWaypoints,(*it).controlPointName);
+                         if ((*it).controlPointName == "end-effector"){
+                            x_d = (*it).waypoints.front();
+                            printMessage(0,"[reactCtrlThread::run()] setting end-eff position from streaming to %s.\n",x_d.toString().c_str());
+                         }
+                         else{ //elbow
+                             controlPoint_t controlPoint;
+                             controlPoint.type = "elbow";
+                             controlPoint.x_desired = (*it).waypoints.front();
+                             printMessage(0,"[reactCtrlThread::run()] Pushing desired elbow position from streaming to %s.\n",controlPoint.x_desired.toString().c_str());
+                             additionalControlPoints.push_back(controlPoint);
+                         }
+                    }
+                    else
+                        yWarning("[reactCtrlThread::run()] %d waypoints for control point %s < 1 - ignoring.",(*it).numberWaypoints,(*it).controlPoint);
+                   
+                }
+                else //((*it).numberDimension < 3)
+                    yWarning("[reactCtrlThread::run()] %d dimensions specified for control point %s < 3 - ignoring.",(*it).numberDimension,(*it).controlPoint);
+                   
+                        
+            }
+            else
+            {
+                yWarning("[reactCtrlThread::run()] Don't know how to handle control point of type %s.",(*it).controlPoint);
+            }
+        }
+          
+    }
+
     collisionPoints.clear();
-    
-      
+          
     /* For now, let's experiment with some fixed points on the forearm skin, emulating the vectors coming from margin of safety, 
      to test the performance of the algorithm
     Let's try 3 triangle midpoints on the upper patch on the forearm, taking positions from CAD, 
@@ -607,27 +653,34 @@ void reactCtrlThread::threadRelease()
     
     collisionPoints.clear();    
     
+    if(nextStreamedTargets != NULL){
+        yDebug("deleting nextStreamedTargets..");
+        delete nextStreamedTargets;
+        nextStreamedTargets = NULL;    
+    }
+    
+    additionalControlPoints.clear();
     if(minJerkTarget != NULL){
-        yDebug("deleting minJerkTarget.");
+        yDebug("deleting minJerkTarget..");
         delete minJerkTarget;
         minJerkTarget = NULL;    
     }
   
     if(virtualArm != NULL){
-        yDebug("deleting virtualArm");
+        yDebug("deleting virtualArm..");
         delete virtualArm;
         virtualArm = NULL;   
         virtualArmChain = NULL;    
     }
          
     if(I != NULL){
-        yDebug("deleting integrator I");
+        yDebug("deleting integrator I..");
         delete I;
         I = NULL;    
     }
        
     if (visualizeIniCubGui)
-        yInfo("Resetting objects in iCubGui");
+        yInfo("Resetting objects in iCubGui..");
         if (outPortiCubGui.getOutputCount()>0)
         {
             Bottle b;
@@ -757,6 +810,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
 {
     if (_x_d.size()==3)
     {
+        streamingTarget = false;
         movingTargetCircle = _movingCircle;
         q_dot.zero();
         updateArmChain(); //updates chain, q and x_t
@@ -841,6 +895,10 @@ bool reactCtrlThread::setNewCircularTarget(const double _radius,const double _fr
     return true;
 }
 
+bool reactCtrlThread::setStreamingTarget()
+{
+    streamingTarget = true;
+}
 
 bool reactCtrlThread::stopControl()
 {

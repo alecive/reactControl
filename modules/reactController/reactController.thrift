@@ -47,6 +47,12 @@ service reactController_IDL
   */
   bool set_relative_circular_xd(1:double _radius, 2: double _frequency)
   
+  /**
+  * Starts a thread that will be reading the reaching targets from a port.
+  * @return true/false on success/failure.
+  **/
+  bool set_streaming_xd();
+  
   
   /**
   * Sets tolerance.

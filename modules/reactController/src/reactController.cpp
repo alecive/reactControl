@@ -208,6 +208,13 @@ public:
             }
     }
     
+    bool set_streaming_xd()
+    {
+        yInfo("");
+        yInfo("[reactController] will be reading reaching targets from a port.");
+        return rctCtrlThrd->setStreamingTarget();   
+    }
+    
     bool set_tol(const double _tol)
     {
         return rctCtrlThrd->setTol(_tol);

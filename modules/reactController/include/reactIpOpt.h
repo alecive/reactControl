@@ -42,7 +42,12 @@ using namespace yarp::math;
 using namespace iCub::ctrl;
 using namespace iCub::iKin;
 
-
+struct controlPoint_t{
+        string type; //e.g. "elbow"
+        yarp::sig::Vector x_desired; //desired Cartesian position (x,y,z) in Root FoR 
+        yarp::sig::Vector p; //position of the control point depending on current state of chain
+        yarp::sig::Matrix J_xyz; //Jacobian for position depending on current state of chain
+};
 
 /****************************************************************/
 class ControllerNLP : public Ipopt::TNLP
@@ -50,7 +55,8 @@ class ControllerNLP : public Ipopt::TNLP
     iKinChain &chain;
     bool hitting_constraints;
     bool orientation_control;
-
+    bool additional_control_points_flag;
+        
     Vector xr,pr;
     Matrix Hr,skew_nr,skew_sr,skew_ar;
     Matrix q_lim,v_lim;    
@@ -60,6 +66,10 @@ class ControllerNLP : public Ipopt::TNLP
     Matrix bounds;
     double dt;
 
+    std::vector<controlPoint_t> & additional_control_points;
+    int extra_ctrl_points_nr;
+    double additional_control_points_tol;
+    
     double shou_m,shou_n;
     double elb_m,elb_n;
 
@@ -84,6 +94,7 @@ class ControllerNLP : public Ipopt::TNLP
     void set_v_limInDegPerSecond(const Matrix &v_lim);
     void set_hitting_constraints(const bool _hitting_constraints);
     void set_orientation_control(const bool _orientation_control);
+    void set_additional_control_points(std::vector<controlPoint_t> & _additional_control_points);
     void set_dt(const double dt);
     void set_v0InDegPerSecond(const Vector &v0);
     void init();
