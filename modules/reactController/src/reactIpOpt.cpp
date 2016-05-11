@@ -155,6 +155,11 @@
         dt=0.01;
     }
 
+    virtual ~ControllerNLP()
+    {
+        additional_control_points.clear();       
+    }
+    
     /****************************************************************/
     void ControllerNLP::set_xr(const Vector &xr)
     {
@@ -194,7 +199,7 @@
     }
 
     /****************************************************************/
-    void set_additional_control_points(std::vector<controlPoint_t> & _additional_control_points)
+    void set_additional_control_points(std::vector<controlPoint_t> _additional_control_points)
     {
         additional_control_points_flag = true;
         additional_control_points = _additional_control_points;
@@ -251,9 +256,9 @@
                     if((*it).type == "elbow")
                     {
                         Matrix H=chain.getH(chain.getDOF()-4-1);
-                        (*it).p = H.getCol(3).subVector(0,2);
+                        (*it).p0= H.getCol(3).subVector(0,2);
                         Matrix J = chain.GeoJacobian(chain.getDOF()-4-1);
-                        (*it).J_xyz = J.submatrix(0,2,0,chain.getDOF()-4-1);
+                        (*it).J0_xyz = J.submatrix(0,2,0,chain.getDOF()-4-1);
                     }
                     else
                         yWarning("[ControllerNLP::get_nlp_info]: other control points type than elbow are not supported (this was %s).",(*it).type.c_str());
@@ -393,14 +398,30 @@
             err_ang=dcm2axis(Hr*He.transposed());
             err_ang*=err_ang[3];
             err_ang.pop_back();
-            
-            TODO HERE DO THE EXTRA CONTROL POINTS
-
+                    
             Matrix L=-0.5*(skew_nr*skew(He.getCol(0))+
                            skew_sr*skew(He.getCol(1))+
                            skew_ar*skew(He.getCol(2)));
             Derr_ang=-dt*(L*J0_ang);
+            
+            if (additional_control_points_flag)
+            {
+                for (std::vector<controlPoint_t>::const iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
+                {
+                    if((*it).type == "elbow")
+                    {
+                        Vector pe_elbow = (*it).p0 + dt*((*it).J0_xyz * v.subVector(0,v0.length()-4));
+                        err_xyz_elbow = (*it).x_desired - pe_elbow;
+                    }
+                    else
+                        yWarning("[ControllerNLP::computeQuantities]: other control points type than elbow are not supported (this was %s).",(*it).type.c_str());
+                }
+            }
+        
         }
+            
+            
+        
     }
 
     /****************************************************************/
@@ -431,21 +452,23 @@
         // reaching in position
         g[0]=norm2(err_xyz);
 
-        TODO HERE DO THE EXTRA CONTROL POINTS
-        
+        if (additional_control_points_flag)
+        {
+            g[1] = norm2(err_xyz_elbow); //this is hard-coded for the elbow as the only extra control point 
+        }
         if (hitting_constraints)
         {
             // shoulder's cables length
-            g[1]=1.71*(q0[3+0]+dt*x[3+0]-(q0[3+1]+dt*x[3+1]));
-            g[2]=1.71*(q0[3+0]+dt*x[3+0]-(q0[3+1]+dt*x[3+1])-(q0[3+2]+dt*x[3+2]));
-            g[3]=q0[3+1]+dt*x[3+1]+q0[3+2]+dt*x[3+2];
+            g[1+extra_ctrl_points_nr]=1.71*(q0[3+0]+dt*x[3+0]-(q0[3+1]+dt*x[3+1]));
+            g[2+extra_ctrl_points_nr]=1.71*(q0[3+0]+dt*x[3+0]-(q0[3+1]+dt*x[3+1])-(q0[3+2]+dt*x[3+2]));
+            g[3+extra_ctrl_points_nr]=q0[3+1]+dt*x[3+1]+q0[3+2]+dt*x[3+2];
 
             // avoid hitting torso
-            g[4]=q0[3+1]+dt*x[3+1]-shou_m*(q0[3+2]+dt*x[3+2]);
+            g[4+extra_ctrl_points_nr]=q0[3+1]+dt*x[3+1]-shou_m*(q0[3+2]+dt*x[3+2]);
 
             // avoid hitting forearm
-            g[5]=-elb_m*(q0[3+3+0]+dt*x[3+3+0])+q0[3+3+1]+dt*x[3+3+1];
-            g[6]=elb_m*(q0[3+3+0]+dt*x[3+3+0])+q0[3+3+1]+dt*x[3+3+1];
+            g[5+extra_ctrl_points_nr]=-elb_m*(q0[3+3+0]+dt*x[3+3+0])+q0[3+3+1]+dt*x[3+3+1];
+            g[6+extra_ctrl_points_nr]=elb_m*(q0[3+3+0]+dt*x[3+3+0])+q0[3+3+1]+dt*x[3+3+1];
         }
 
         return true;
@@ -467,31 +490,47 @@
                 idx++;
             }
 
-             TODO HERE DO THE EXTRA CONTROL POINTS
+            if (additional_control_points_flag)
+            {
+                for (std::vector<controlPoint_t>::const iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
+                {
+                    if((*it).type == "elbow")
+                    {
+                         // reaching in position
+                        for (Ipopt::Index j=0; j<(n-4); j++)
+                        {
+                            iRow[idx]=1; jCol[idx]=j;
+                            idx++;
+                        }
+                    }
+                    else
+                        yWarning("[ControllerNLP::eval_jac_g]: other control points type than elbow are not supported (this was %s).",(*it).type.c_str());
+                }                
+            }
             
             if (hitting_constraints)
             {
                 // shoulder's cables length
-                iRow[idx]=1; jCol[idx]=3+0; idx++;
-                iRow[idx]=1; jCol[idx]=3+1; idx++;
+                iRow[idx]=1+extra_ctrl_points_nr; jCol[idx]=3+0; idx++;
+                iRow[idx]=1+extra_ctrl_points_nr; jCol[idx]=3+1; idx++;
 
-                iRow[idx]=2; jCol[idx]=3+0; idx++;
-                iRow[idx]=2; jCol[idx]=3+1; idx++;
-                iRow[idx]=2; jCol[idx]=3+2; idx++;
+                iRow[idx]=2+extra_ctrl_points_nr; jCol[idx]=3+0; idx++;
+                iRow[idx]=2+extra_ctrl_points_nr; jCol[idx]=3+1; idx++;
+                iRow[idx]=2+extra_ctrl_points_nr; jCol[idx]=3+2; idx++;
 
-                iRow[idx]=3; jCol[idx]=3+1; idx++;
-                iRow[idx]=3; jCol[idx]=3+2; idx++;
+                iRow[idx]=3+extra_ctrl_points_nr; jCol[idx]=3+1; idx++;
+                iRow[idx]=3+extra_ctrl_points_nr; jCol[idx]=3+2; idx++;
 
                 // avoid hitting torso
-                iRow[idx]=4; jCol[idx]=3+1; idx++;
-                iRow[idx]=4; jCol[idx]=3+2; idx++;
+                iRow[idx]=4+extra_ctrl_points_nr; jCol[idx]=3+1; idx++;
+                iRow[idx]=4+extra_ctrl_points_nr; jCol[idx]=3+2; idx++;
 
                 // avoid hitting forearm
-                iRow[idx]=5; jCol[idx]=3+3+0; idx++;
-                iRow[idx]=5; jCol[idx]=3+3+1; idx++;
+                iRow[idx]=5+extra_ctrl_points_nr; jCol[idx]=3+3+0; idx++;
+                iRow[idx]=5+extra_ctrl_points_nr; jCol[idx]=3+3+1; idx++;
 
-                iRow[idx]=6; jCol[idx]=3+3+0; idx++;
-                iRow[idx]=6; jCol[idx]=3+3+1; idx++;
+                iRow[idx]=6+extra_ctrl_points_nr; jCol[idx]=3+3+0; idx++;
+                iRow[idx]=6+extra_ctrl_points_nr; jCol[idx]=3+3+1; idx++;
             }
         }
         else
@@ -507,7 +546,23 @@
                 idx++;
             }
 
-            TODO HERE DO THE EXTRA CONTROL POINTS
+            if (additional_control_points_flag)
+            {
+                for (std::vector<controlPoint_t>::const iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
+                {
+                    if((*it).type == "elbow")
+                    {
+                         // reaching in position
+                        for (Ipopt::Index j=0; j<(n-4); j++)
+                        {
+                            values[idx]=2.0*dt*dot(err_xyz_elbow,(*it).J0_xyz.getCol(j));
+                            idx++;
+                        }
+                    }
+                    else
+                        yWarning("[ControllerNLP::eval_jac_g]: other control points type than elbow are not supported (this was %s).",(*it).type.c_str());
+                }                
+            }
             
             
             if (hitting_constraints)

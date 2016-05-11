@@ -45,8 +45,8 @@ using namespace iCub::iKin;
 struct controlPoint_t{
         string type; //e.g. "elbow"
         yarp::sig::Vector x_desired; //desired Cartesian position (x,y,z) in Root FoR 
-        yarp::sig::Vector p; //position of the control point depending on current state of chain
-        yarp::sig::Matrix J_xyz; //Jacobian for position depending on current state of chain
+        yarp::sig::Vector p0; //position of the control point depending on current state of chain
+        yarp::sig::Matrix J0_xyz; //Jacobian for position depending on current state of chain
 };
 
 /****************************************************************/
@@ -66,10 +66,11 @@ class ControllerNLP : public Ipopt::TNLP
     Matrix bounds;
     double dt;
 
-    std::vector<controlPoint_t> & additional_control_points;
+    std::vector<controlPoint_t> additional_control_points;
     int extra_ctrl_points_nr;
     double additional_control_points_tol;
-    
+    Vector err_xyz_elbow; 
+        
     double shou_m,shou_n;
     double elb_m,elb_n;
 
@@ -90,6 +91,7 @@ class ControllerNLP : public Ipopt::TNLP
 
     public:
     ControllerNLP(iKinChain &chain_);
+    virtual ~ControllerNLP();
     void set_xr(const Vector &xr);
     void set_v_limInDegPerSecond(const Matrix &v_lim);
     void set_hitting_constraints(const bool _hitting_constraints);
