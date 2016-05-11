@@ -39,6 +39,7 @@
 #include <iCub/ctrl/minJerkCtrl.h>
 #include <iCub/ctrl/pids.h>
 #include <iCub/ctrl/filters.h>
+#include <iCub/motionPlan/motionPlan.h>
 
 #include <iostream>
 #include <fstream>
@@ -52,6 +53,7 @@
 #include "particleThread.h"
 #include "avoidanceHandler.h"
 
+
 using namespace yarp::dev;
 
 using namespace std;
@@ -63,7 +65,8 @@ class reactCtrlThread: public yarp::os::RateThread
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & , const string &_ ,
-                    int , bool , string , double , double , double , double , string , bool , bool , bool , bool , bool, bool , bool , bool , bool , particleThread * );
+                    int , bool , string , double , double , double , double , string , 
+                    bool , bool , bool , bool , bool, bool , bool , bool , bool , bool , particleThread * );
     // INIT
     virtual bool threadInit();
     // RUN
@@ -148,9 +151,6 @@ protected:
     double globalTol;
     // Max velocity set for the joints
     double vMax;
-    bool streamingTarget;
-    motionPlan nextStreamedTargets;
-    std::vector<controlPoint_t> additionalControlPoints; 
     string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk"
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
@@ -160,6 +160,7 @@ protected:
         
     bool hittingConstraints; //inequality constraints for safety of shoudler assembly and to prevent self-collisions torso-upper arm, upper-arm - forearm
     bool orientationControl; //if orientation should be controlled as well
+    bool additionalControlPoints; //if there are additional control points - Cartesian targets for others parts of the robot body - e.g. elbow
     bool visualizeTargetInSim;  // will use the yarp rpc /icubSim/world to visualize the target
     // will use the yarp rpc /icubSim/world to visualize the particle (trajectory - intermediate targets)
     bool visualizeParticleInSim; 
@@ -211,7 +212,6 @@ protected:
     // Gaze interface
     IGazeControl    *igaze;
     int contextGaze;
-
     
     size_t chainActiveDOF;
     //parallel virtual arm and chain on which ipopt will be working in the positionDirect mode case
@@ -228,12 +228,16 @@ protected:
     yarp::sig::Vector o_n;  // Desired next end-effector orientation
     yarp::sig::Vector o_d;  // Vector that stores the new orientation
 
-
     bool movingTargetCircle;
     double radius;
     double frequency;
     yarp::sig::Vector circleCenter;
 
+    bool streamingTarget;
+    iCub::motionPlan::motionPlan *nextStreamedTargets;
+    std::vector<ControlPoint> additionalControlPointsVector; 
+  
+    
     //N.B. All angles in this thread are in degrees
     yarp::sig::Vector qA; //current values of arm joints (should be 7)
     yarp::sig::Vector qT; //current values of torso joints (3, in the order expected for iKin: yaw, roll, pitch)

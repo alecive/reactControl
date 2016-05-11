@@ -112,6 +112,7 @@ private:
     
     bool hittingConstraints; //inequality constraints for safety of shoudler assembly and to prevent self-collisions torso-upper arm, upper-arm - forearm  
     bool orientationControl; //if orientation should be controlled as well
+    bool additionalControlPoints; //if there are additional control points - Cartesian targets for others parts of the robot body - e.g. elbow
     
     bool ipOptMemoryOn; // whether ipopt should account for the real motor model
     bool ipOptFilterOn; 
@@ -152,6 +153,7 @@ public:
         referenceGen = "uniformParticle";
         hittingConstraints = true;
         orientationControl = true;
+        additionalControlPoints = false;
         ipOptMemoryOn = false;
         ipOptFilterOn = false;
         //ipOptFilter_tc = 0.25;
@@ -577,6 +579,22 @@ public:
                 yInfo("[reactController] Could not find orientationControl flag (on/off) in the config file; using %d as default",orientationControl);
             }  
             
+            //*********** orientation control *************************************************/
+            if (rf.check("additionalControlPoints"))
+            {
+                if(rf.find("additionalControlPoints").asString()=="on"){
+                    additionalControlPoints = true;
+                    yInfo("[reactController] additionalControlPoints flag set to on.");
+                }
+                else{
+                    additionalControlPoints = false;
+                    yInfo("[reactController] additionalControlPoints flag set to off.");
+                }
+            }
+            else
+            {
+                yInfo("[reactController] Could not find additionalControlPoints flag (on/off) in the config file; using %d as default",additionalControlPoints);
+            }  
             
             //********************** ipopt using memory - motor model ***********************
             if (rf.check("ipOptMemory"))
@@ -726,7 +744,7 @@ public:
                                           globalTol, vMax, tol, referenceGen, 
                                           tactileCollisionPointsOn,visualCollisionPointsOn,
                                           gazeControl,stiffInteraction,
-                                          hittingConstraints, orientationControl,
+                                          hittingConstraints, orientationControl, additionalControlPoints,
                                           visualizeTargetInSim, visualizeParticleInSim,
                                           visualizeCollisionPointsInSim, prtclThrd);
         if (!rctCtrlThrd->start())

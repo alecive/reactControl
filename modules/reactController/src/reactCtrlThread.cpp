@@ -27,14 +27,13 @@
 #include <iCub/ctrl/math.h>
 
 #include "reactCtrlThread.h"
-#include <../../icub-main/src/libraries/icubmod/imu3DM_GX3/dataTypes.h>
-
 
 using namespace yarp::sig;
 using namespace yarp::os;
 using namespace yarp::math;
 using namespace iCub::ctrl;
 using namespace iCub::skinDynLib;
+using namespace iCub::motionPlan;
 
 #define TACTILE_INPUT_GAIN 1.5
 #define VISUAL_INPUT_GAIN 0.5
@@ -56,6 +55,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  bool _tactileCollisionPointsOn, bool _visualCollisionPointsOn,
                                  bool _gazeControl, bool _stiffInteraction,
                                  bool _hittingConstraints, bool _orientationControl,
+                                 bool _additionaControlPoints, 
                                  bool _visualizeTargetInSim, bool _visualizeParticleInSim, bool _visualizeCollisionPointsInSim,
                                  particleThread *_pT) :
                                  RateThread(_rate), name(_name), robot(_robot), part(_part),
@@ -65,6 +65,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  tactileCollisionPointsOn(_tactileCollisionPointsOn), visualCollisionPointsOn(_visualCollisionPointsOn),
                                  gazeControl(_gazeControl), stiffInteraction(_stiffInteraction),
                                  hittingConstraints(_hittingConstraints),orientationControl(_orientationControl),
+                                 additionalControlPoints(_additionaControlPoints),
                                  visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
                                  visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim)
 {
@@ -266,8 +267,8 @@ bool reactCtrlThread::threadInit()
         minJerkTarget = NULL;
   
     streamingTarget = false;
-    nextStreamedTargets = new motionPlan();
-    additionalControlPoints.clear();
+    nextStreamedTargets = new iCub::motionPlan::motionPlan();
+    additionalControlPointsVector.clear();
     movingTargetCircle = false;
     radius = 0.0; frequency = 0.0;
     circleCenter.resize(3,0.0);
@@ -372,7 +373,6 @@ bool reactCtrlThread::threadInit()
         collisionPointsSimReservoirPos(0)=0.3;
         collisionPointsSimReservoirPos(1)=0.03;
         collisionPointsSimReservoirPos(2)=0.0;
-    
     }    
     firstTarget = true;
     printMessage(5,"[reactCtrlThread] threadInit() finished.\n");
@@ -394,45 +394,48 @@ void reactCtrlThread::run()
     //yarp::sig::Matrix J1_temp=chain_temp.GeoJacobian();
     //yDebug("GeoJacobian: \n %s \n",J1_temp.toString(3,3).c_str());    
     
-    if (streamingTarget){    //read "trajectory" - in this special case only set of positions for possibly multiple control points
-        additionalControlPoints.clear();
-        nextStreamedTargets.receivePlan();
-        vector<waypointTrajectory>& waypointTraj nextStreamedTargets.getListTrajectory();
-        for (std::vector<waypointTrajectory>::const iterator it = waypointTraj.begin() ; it != waypointTraj.end(); ++it)
+    if (streamingTarget)    //read "trajectory" - in this special case only set of positions for possibly multiple control points
+    {
+        additionalControlPointsVector.clear();
+        if (nextStreamedTargets.gotNewMsg())
         {
-            if ( ((*it).controlPointName == "end-effector") || ((*it).controlPointName == "elbow"))
+            nextStreamedTargets.setNewMsg(false);
+            deque<waypointTrajectory> &waypointTraj = nextStreamedTargets.getListTrajectory();
+            for (std::vector<waypointTrajectory>::const_iterator it = waypointTraj.begin() ; it != waypointTraj.end(); ++it)
             {
-                if ((*it).numberDimension >= 3)
+                if ( ((*it).getCtrlPointName() == "end-effector") || ((*it).getCtrlPointName() == "elbow"))
                 {
-                    if ((*it).numberDimension > 3)
-                        yWarning("[reactCtrlThread::run()] %d dimensions specified for control point %s - only first three (pos) will be used.",(*it).numberDimension,(*it).controlPointName);
-                    if ((*it).numberWaypoints >= 1){
-                         if ((*it).numberWaypoints > 1)
-                            yWarning("[reactCtrlThread::run()] %d waypoints specified for control point %s - only first one will be used.",(*it).numberWaypoints,(*it).controlPointName);
-                         if ((*it).controlPointName == "end-effector"){
-                            x_d = (*it).waypoints.front();
-                            printMessage(0,"[reactCtrlThread::run()] setting end-eff position from streaming to %s.\n",x_d.toString().c_str());
-                         }
-                         else{ //elbow
-                             controlPoint_t controlPoint;
-                             controlPoint.type = "elbow";
-                             controlPoint.x_desired = (*it).waypoints.front();
-                             printMessage(0,"[reactCtrlThread::run()] Pushing desired elbow position from streaming to %s.\n",controlPoint.x_desired.toString().c_str());
-                             additionalControlPoints.push_back(controlPoint);
-                         }
+                    if ((*it).getDimension() >= 3)
+                    {
+                        if ((*it).getDimension() > 3)
+                            yWarning("[reactCtrlThread::run()] %d dimensions specified for control point %s - only first three (pos) will be used.",(*it).getDimension(),(*it).getCtrlPointName());
+                        if ((*it).numberWaypoints >= 1)
+                        {
+                            if ((*it).getNbWaypoints() > 1)
+                                yWarning("[reactCtrlThread::run()] %d waypoints specified for control point %s - only first one will be used.",(*it).getNbWaypoints(),(*it).controlPointName);
+                            if ((*it).controlPointName == "end-effector")
+                            {
+                                x_d = (*it).waypoints.front();
+                                printMessage(0,"[reactCtrlThread::run()] setting end-eff position from streaming to %s.\n",x_d.toString().c_str());
+                            }
+                            else{ //elbow
+                                controlPoint_t controlPoint;
+                                controlPoint.type = "elbow";
+                                controlPoint.x_desired = (*it).waypoints.front();
+                                printMessage(0,"[reactCtrlThread::run()] Pushing desired elbow position from streaming to %s.\n",controlPoint.x_desired.toString().c_str());
+                                additionalControlPointsVector.push_back(controlPoint);
+                            }
+                        }
+                        else
+                            yWarning("[reactCtrlThread::run()] %d waypoints for control point %s < 1 - ignoring.",(*it).numberWaypoints,(*it).controlPoint);
+                    
                     }
-                    else
-                        yWarning("[reactCtrlThread::run()] %d waypoints for control point %s < 1 - ignoring.",(*it).numberWaypoints,(*it).controlPoint);
-                   
+                    else //((*it).numberDimension < 3)
+                        yWarning("[reactCtrlThread::run()] %d dimensions specified for control point %s < 3 - ignoring.",(*it).numberDimension,(*it).controlPoint);
                 }
-                else //((*it).numberDimension < 3)
-                    yWarning("[reactCtrlThread::run()] %d dimensions specified for control point %s < 3 - ignoring.",(*it).numberDimension,(*it).controlPoint);
-                   
-                        
-            }
-            else
-            {
-                yWarning("[reactCtrlThread::run()] Don't know how to handle control point of type %s.",(*it).controlPoint);
+                else
+                    yWarning("[reactCtrlThread::run()] Don't know how to handle control point of type %s.",(*it).controlPoint);
+                
             }
         }
           
@@ -659,7 +662,7 @@ void reactCtrlThread::threadRelease()
         nextStreamedTargets = NULL;    
     }
     
-    additionalControlPoints.clear();
+    additionalControlPointsVector.clear();
     if(minJerkTarget != NULL){
         yDebug("deleting minJerkTarget..");
         delete minJerkTarget;
@@ -963,11 +966,12 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
 
    Ipopt::SmartPtr<ControllerNLP> nlp;
    if (controlMode == "positionDirect") //in this mode, ipopt will use the qIntegrated values to update its copy of chain
-        nlp=new ControllerNLP(*virtualArmChain);
+        nlp=new ControllerNLP(*virtualArmChain,additionalControlPointsVector);
    else
-        nlp=new ControllerNLP(*(arm->asChain()));
+        nlp=new ControllerNLP(*(arm->asChain()),additionalControlPointsVector);
    nlp->set_hitting_constraints(hittingConstraints);
    nlp->set_orientation_control(orientationControl);
+   nlp->set_additional_control_points(additionalControlPoints);
    nlp->set_dt(dT);
    nlp->set_xr(xr);
    nlp->set_v_limInDegPerSecond(vLimAdapted);

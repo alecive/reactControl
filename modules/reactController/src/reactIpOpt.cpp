@@ -16,7 +16,7 @@
  * Public License for more details.
 */
 
-#include "reactIpOpt.h";
+#include "reactIpOpt.h"
 
 
     /****************************************************************/
@@ -126,7 +126,8 @@
 
 //public:
     /****************************************************************/
-    ControllerNLP::ControllerNLP(iKinChain &chain_) : chain(chain_)
+    ControllerNLP::ControllerNLP(iKinChain &chain_, std::vector<ControlPoint> &additional_control_points_) : 
+    chain(chain_), additional_control_points(additional_control_points_)
     {
         xr.resize(6,0.0);
         set_xr(xr);
@@ -152,10 +153,11 @@
         hitting_constraints=true;
         orientation_control=true;
         additional_control_points_flag = false;
+        
         dt=0.01;
     }
 
-    virtual ~ControllerNLP()
+    ControllerNLP::~ControllerNLP()
     {
         additional_control_points.clear();       
     }
@@ -199,10 +201,9 @@
     }
 
     /****************************************************************/
-    void set_additional_control_points(std::vector<controlPoint_t> _additional_control_points)
+    void ControllerNLP::set_additional_control_points(const bool _additional_control_points_flag)
     {
-        additional_control_points_flag = true;
-        additional_control_points = _additional_control_points;
+        additional_control_points_flag = _additional_control_points_flag;
     }
     
     /****************************************************************/
@@ -249,14 +250,14 @@
                 else  //additional_control_points.size() > 1
                 {
                     extra_ctrl_points_nr = 1;
-                    yWarning("[ControllerNLP::init()]: currently only one additional control point - elbow - is supported; requested %d control points.",additional_control_points.size());
+                    yWarning("[ControllerNLP::init()]: currently only one additional control point - elbow - is supported; requested %lu control points.",additional_control_points.size());
                 }
-                for (std::vector<controlPoint_t>::const iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
+                for (std::vector<ControlPoint>::iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
                 {
                     if((*it).type == "elbow")
                     {
                         Matrix H=chain.getH(chain.getDOF()-4-1);
-                        (*it).p0= H.getCol(3).subVector(0,2);
+                        (*it).p0 = H.getCol(3).subVector(0,2);
                         Matrix J = chain.GeoJacobian(chain.getDOF()-4-1);
                         (*it).J0_xyz = J.submatrix(0,2,0,chain.getDOF()-4-1);
                     }
@@ -297,7 +298,7 @@
         
         if(additional_control_points_flag)
         {
-            for (std::vector<controlPoint_t>::const iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
+            for (std::vector<ControlPoint>::const_iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
             {
                 if((*it).type == "elbow")
                 {
@@ -406,7 +407,7 @@
             
             if (additional_control_points_flag)
             {
-                for (std::vector<controlPoint_t>::const iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
+                for (std::vector<ControlPoint>::const_iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
                 {
                     if((*it).type == "elbow")
                     {
@@ -492,7 +493,7 @@
 
             if (additional_control_points_flag)
             {
-                for (std::vector<controlPoint_t>::const iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
+                for (std::vector<ControlPoint>::const_iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
                 {
                     if((*it).type == "elbow")
                     {
@@ -548,7 +549,7 @@
 
             if (additional_control_points_flag)
             {
-                for (std::vector<controlPoint_t>::const iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
+                for (std::vector<ControlPoint>::const_iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
                 {
                     if((*it).type == "elbow")
                     {
