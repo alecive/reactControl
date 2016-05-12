@@ -314,6 +314,9 @@ bool reactCtrlThread::threadInit()
     aggregPPSeventsInPort.open("/"+name+"/pps_events_aggreg:i");
     aggregSkinEventsInPort.open("/"+name+"/skin_events_aggreg:i");
     
+    nextStreamedTargets->useCallback();
+    nextStreamedTargets->open("/"+name+"/streamedWholeBodyTargets:i");
+       
     outPort.open("/"+name +"/data:o"); //for dumping
     if (visualizeIniCubGui)
          outPortiCubGui.open(("/"+name+"/gui:o").c_str());
@@ -392,7 +395,7 @@ void reactCtrlThread::run()
     //yarp::sig::Matrix J1_temp=chain_temp.GeoJacobian();
     //yDebug("GeoJacobian: \n %s \n",J1_temp.toString(3,3).c_str());    
     
-    if (streamingTarget)    //read "trajectory" - in this special case only set of positions for possibly multiple control points
+    if (streamingTarget)    //read "trajectory" - in this special case, it is only set of next target positions for possibly multiple control points
     {
         additionalControlPointsVector.clear();
         if (nextStreamedTargets->gotNewMsg())
@@ -401,7 +404,7 @@ void reactCtrlThread::run()
             deque<waypointTrajectory> &waypointTraj = nextStreamedTargets->getListTrajectory();
             for (std::deque<waypointTrajectory>::iterator it = waypointTraj.begin() ; it != waypointTraj.end(); ++it)
             {
-                if ( ((*it).getCtrlPointName() == "end-effector") || ((*it).getCtrlPointName() == "elbow"))
+                if ( ((*it).getCtrlPointName() == "End-Effector") || ((*it).getCtrlPointName() == "Elbow"))
                 {
                     if ((*it).getDimension() >= 3)
                     {
@@ -411,14 +414,14 @@ void reactCtrlThread::run()
                         {
                             if ((*it).getNbWaypoint() > 1)
                                 yWarning("[reactCtrlThread::run()] %d waypoints specified for control point %s - only first one will be used.",(*it).getNbWaypoint(),(*it).getCtrlPointName().c_str());
-                            if ((*it).getCtrlPointName().c_str() == "end-effector")
+                            if ((*it).getCtrlPointName().c_str() == "End-Effector")
                             {
                                 x_d = (*it).getWaypoints().front();
                                 printMessage(0,"[reactCtrlThread::run()] setting end-eff position from streaming to %s.\n",x_d.toString().c_str());
                             }
                             else{ //elbow
                                 ControlPoint *controlPoint = new ControlPoint();
-                                controlPoint->type = "elbow";
+                                controlPoint->type = "Elbow";
                                 controlPoint->x_desired = (*it).getWaypoints().front();
                                 printMessage(0,"[reactCtrlThread::run()] Pushing desired elbow position from streaming to %s.\n",
                                              controlPoint->x_desired.toString().c_str());
@@ -900,6 +903,7 @@ bool reactCtrlThread::setNewCircularTarget(const double _radius,const double _fr
 bool reactCtrlThread::setStreamingTarget()
 {
     streamingTarget = true;
+    return true;
 }
 
 bool reactCtrlThread::stopControl()

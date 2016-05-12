@@ -250,11 +250,11 @@
                 else  //additional_control_points.size() > 1
                 {
                     extra_ctrl_points_nr = 1;
-                    yWarning("[ControllerNLP::init()]: currently only one additional control point - elbow - is supported; requested %lu control points.",additional_control_points.size());
+                    yWarning("[ControllerNLP::init()]: currently only one additional control point - Elbow - is supported; requested %lu control points.",additional_control_points.size());
                 }
                 for (std::vector<ControlPoint>::iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
                 {
-                    if((*it).type == "elbow")
+                    if((*it).type == "Elbow")
                     {
                         Matrix H=chain.getH(chain.getDOF()-4-1);
                         (*it).p0 = H.getCol(3).subVector(0,2);
@@ -262,7 +262,7 @@
                         (*it).J0_xyz = J.submatrix(0,2,0,chain.getDOF()-4-1);
                     }
                     else
-                        yWarning("[ControllerNLP::get_nlp_info]: other control points type than elbow are not supported (this was %s).",(*it).type.c_str());
+                        yWarning("[ControllerNLP::get_nlp_info]: other control points type than Elbow are not supported (this was %s).",(*it).type.c_str());
                     }
             }
         
@@ -300,12 +300,12 @@
         {
             for (std::vector<ControlPoint>::const_iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
             {
-                if((*it).type == "elbow")
+                if((*it).type == "Elbow")
                 {
                     m+=1; nnz_jac_g += (n-4); //taking out 2 wrist and 2 elbow joints  
                 }
                 else
-                    yWarning("[ControllerNLP::get_nlp_info]: other control points type than elbow are not supported (this was %s).",(*it).type.c_str());
+                    yWarning("[ControllerNLP::get_nlp_info]: other control points type than Elbow are not supported (this was %s).",(*it).type.c_str());
             }
         }
 
@@ -409,13 +409,13 @@
             {
                 for (std::vector<ControlPoint>::const_iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
                 {
-                    if((*it).type == "elbow")
+                    if((*it).type == "Elbow")
                     {
                         Vector pe_elbow = (*it).p0 + dt*((*it).J0_xyz * v.subVector(0,v0.length()-4));
                         err_xyz_elbow = (*it).x_desired - pe_elbow;
                     }
                     else
-                        yWarning("[ControllerNLP::computeQuantities]: other control points type than elbow are not supported (this was %s).",(*it).type.c_str());
+                        yWarning("[ControllerNLP::computeQuantities]: other control points type than Elbow are not supported (this was %s).",(*it).type.c_str());
                 }
             }
         
@@ -495,7 +495,7 @@
             {
                 for (std::vector<ControlPoint>::const_iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
                 {
-                    if((*it).type == "elbow")
+                    if((*it).type == "Elbow")
                     {
                          // reaching in position
                         for (Ipopt::Index j=0; j<(n-4); j++)
@@ -505,7 +505,7 @@
                         }
                     }
                     else
-                        yWarning("[ControllerNLP::eval_jac_g]: other control points type than elbow are not supported (this was %s).",(*it).type.c_str());
+                        yWarning("[ControllerNLP::eval_jac_g]: other control points type than Elbow are not supported (this was %s).",(*it).type.c_str());
                 }                
             }
             
@@ -551,7 +551,7 @@
             {
                 for (std::vector<ControlPoint>::const_iterator it = additional_control_points.begin() ; it != additional_control_points.end(); ++it)
                 {
-                    if((*it).type == "elbow")
+                    if((*it).type == "Elbow")
                     {
                          // reaching in position
                         for (Ipopt::Index j=0; j<(n-4); j++)
@@ -561,7 +561,7 @@
                         }
                     }
                     else
-                        yWarning("[ControllerNLP::eval_jac_g]: other control points type than elbow are not supported (this was %s).",(*it).type.c_str());
+                        yWarning("[ControllerNLP::eval_jac_g]: other control points type than Elbow are not supported (this was %s).",(*it).type.c_str());
                 }                
             }
             
