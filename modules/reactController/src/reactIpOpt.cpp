@@ -342,8 +342,8 @@
         if(additional_control_points_flag)
         {
             for(Ipopt::Index j=1; j<=extra_ctrl_points_nr; j++){
-                g_l[j]=-additional_control_points_tol / 2.0;
-                g_u[j]= additional_control_points_tol / 2.0;
+                g_l[j]=0.0;
+                g_u[j]= additional_control_points_tol;
             }
         }
 
