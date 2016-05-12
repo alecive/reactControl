@@ -234,7 +234,7 @@
         
         if (additional_control_points_flag)
         {
-            additional_control_points_tol = 0.02; 
+            additional_control_points_tol = 0.0001; //the bounds will be for the norm2 of the error, so 0.0001 corresponds to 0.01 m error 
             if (additional_control_points.size() == 0)
             {
                 yWarning("[ControllerNLP::init()]: additional_control_points_flag is on but additional_control_points.size is 0.");

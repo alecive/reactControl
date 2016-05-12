@@ -414,16 +414,16 @@ void reactCtrlThread::run()
                         {
                             if ((*it).getNbWaypoint() > 1)
                                 yWarning("[reactCtrlThread::run()] %d waypoints specified for control point %s - only first one will be used.",(*it).getNbWaypoint(),(*it).getCtrlPointName().c_str());
-                            if ((*it).getCtrlPointName().c_str() == "End-Effector")
+                            if ((*it).getCtrlPointName() == "End-Effector")
                             {
-                                x_d = (*it).getWaypoints().front();
-                                printMessage(0,"[reactCtrlThread::run()] setting end-eff position from streaming to %s.\n",x_d.toString().c_str());
+                                setNewTarget((*it).getWaypoints().front(),false);
+                                printMessage(0,"[reactCtrlThread::run()] setting end-eff position from streaming: %s.\n",(*it).getWaypoints().front().toString().c_str());
                             }
                             else{ //elbow
                                 ControlPoint *controlPoint = new ControlPoint();
                                 controlPoint->type = "Elbow";
                                 controlPoint->x_desired = (*it).getWaypoints().front();
-                                printMessage(0,"[reactCtrlThread::run()] Pushing desired elbow position from streaming to %s.\n",
+                                printMessage(0,"[reactCtrlThread::run()] Pushing desired elbow position from streaming: %s.\n",
                                              controlPoint->x_desired.toString().c_str());
                                 additionalControlPointsVector.push_back(*controlPoint);
                             }
@@ -815,7 +815,6 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
 {
     if (_x_d.size()==3)
     {
-        streamingTarget = false;
         movingTargetCircle = _movingCircle;
         q_dot.zero();
         updateArmChain(); //updates chain, q and x_t
@@ -883,6 +882,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
 
 bool reactCtrlThread::setNewRelativeTarget(const Vector& _rel_x_d)
 {
+    streamingTarget = false;
     if(_rel_x_d == Vector(3,0.0)) return false;
     updateArmChain(); //updates chain, q and x_t
     Vector _x_d = x_t + _rel_x_d;
@@ -891,6 +891,7 @@ bool reactCtrlThread::setNewRelativeTarget(const Vector& _rel_x_d)
 
 bool reactCtrlThread::setNewCircularTarget(const double _radius,const double _frequency)
 {
+    streamingTarget = false;
     radius = _radius;
     frequency = _frequency;
     updateArmChain(); //updates chain, q and x_t
