@@ -337,7 +337,7 @@
         }
 
         // reaching in position
-        g_l[0]=g_u[0]=0.0;
+        g_l[0]=g_u[0]= 0.0;
         
         if(additional_control_points_flag)
         {
@@ -411,9 +411,9 @@
                 {
                     if((*it).type == "Elbow")
                     {
-                        yInfo("[ControllerNLP::computeQuantities]: will compute solved elbow position as: (%s) + %f * \n %s * \n (%s)",(*it).p0.toString().c_str(),dt,(*it).J0_xyz.toString().c_str(), v.subVector(0,v0.length()-4-1).toString().c_str());
+                        //yInfo("[ControllerNLP::computeQuantities]: will compute solved elbow position as: (%s) + %f * \n %s * \n (%s)",(*it).p0.toString().c_str(),dt,(*it).J0_xyz.toString().c_str(), v.subVector(0,v0.length()-4-1).toString().c_str());
                         Vector pe_elbow = (*it).p0 + dt* ((*it).J0_xyz * v.subVector(0,v0.length()-4-1));
-                        yInfo("[ControllerNLP::computeQuantities]: will compute error in solved elbow position as: (%s) - (%s)",(*it).x_desired.toString().c_str(),pe_elbow.toString().c_str()); 
+                        yInfo("[ControllerNLP::computeQuantities]: will compute error in solved elbow position as: (desired - computed) =  (%s) - (%s)",(*it).x_desired.toString(3,3).c_str(),pe_elbow.toString(3,3).c_str()); 
                         err_xyz_elbow = (*it).x_desired - pe_elbow;
                     }
                     else

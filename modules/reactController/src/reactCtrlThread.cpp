@@ -398,11 +398,11 @@ void reactCtrlThread::run()
     
     if (streamingTarget)    //read "trajectory" - in this special case, it is only set of next target positions for possibly multiple control points
     {
-        additionalControlPointsVector.clear();
         if (nextStreamedTargets->gotNewMsg())
         {
             nextStreamedTargets->setNewMsg(false);
             deque<waypointTrajectory> &waypointTraj = nextStreamedTargets->getListTrajectory();
+            additionalControlPointsVector.clear();
             for (std::deque<waypointTrajectory>::iterator it = waypointTraj.begin() ; it != waypointTraj.end(); ++it)
             {
                 if ( ((*it).getCtrlPointName() == "End-Effector") || ((*it).getCtrlPointName() == "Elbow"))
@@ -420,7 +420,7 @@ void reactCtrlThread::run()
                                 //setNewTarget((*it).getWaypoints().front(),false);
                                 vector<Vector> waypoints = (*it).getWaypoints(); //temporary
                                 setNewTarget(*(++(waypoints.begin())),false); //temporary
-                                printMessage(0,"[reactCtrlThread::run()] setting end-eff position from streaming: %s.\n",x_d.toString().c_str());
+                                printMessage(0,"[reactCtrlThread::run()] setting end-eff position from streaming: (%s).\n",x_d.toString(3,3).c_str());
                             }
                             else{ //elbow
                                 ControlPoint *controlPoint = new ControlPoint();
@@ -428,8 +428,8 @@ void reactCtrlThread::run()
                                 //controlPoint->x_desired = (*it).getWaypoints().front();
                                 vector<Vector> waypoints2 = (*it).getWaypoints(); //temporary
                                 controlPoint->x_desired = *(++(waypoints2.begin())); //temporary
-                                printMessage(0,"[reactCtrlThread::run()] Pushing desired elbow position from streaming: %s.\n",
-                                             controlPoint->x_desired.toString().c_str());
+                                printMessage(0,"[reactCtrlThread::run()] Pushing desired elbow position from streaming: (%s).\n",
+                                             controlPoint->x_desired.toString(3,3).c_str());
                                 additionalControlPointsVector.push_back(*controlPoint);
                             }
                         }
