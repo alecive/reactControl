@@ -234,7 +234,7 @@ protected:
     yarp::sig::Vector circleCenter;
 
     bool streamingTarget;
-    iCub::motionPlan::motionPlan *nextStreamedTargets;
+    motionPlan *nextStreamedTargets;
     std::vector<ControlPoint> additionalControlPointsVector; 
   
     

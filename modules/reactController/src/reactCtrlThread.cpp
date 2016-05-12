@@ -33,7 +33,7 @@ using namespace yarp::os;
 using namespace yarp::math;
 using namespace iCub::ctrl;
 using namespace iCub::skinDynLib;
-using namespace iCub::motionPlan;
+//using namespace iCub::motionPlan;
 
 #define TACTILE_INPUT_GAIN 1.5
 #define VISUAL_INPUT_GAIN 0.5
@@ -267,7 +267,7 @@ bool reactCtrlThread::threadInit()
         minJerkTarget = NULL;
   
     streamingTarget = false;
-    nextStreamedTargets = new iCub::motionPlan::motionPlan();
+    nextStreamedTargets = new motionPlan();
     additionalControlPointsVector.clear();
     movingTargetCircle = false;
     radius = 0.0; frequency = 0.0;
@@ -293,8 +293,6 @@ bool reactCtrlThread::threadInit()
     o_t.resize(3,0.0);  o_t(1)=-0.707*M_PI;     o_t(2)=+0.707*M_PI;
     o_n.resize(3,0.0);  o_n(1)=-0.707*M_PI;     o_n(2)=+0.707*M_PI;
     o_d.resize(3,0.0);  o_d(1)=-0.707*M_PI;     o_d(2)=+0.707*M_PI;
-
-
 
     if(controlMode == "positionDirect"){
         virtualArm = new iCubArm(*arm);  //Creates a new Limb from an already existing Limb object - but they will be too independent limbs from now on
@@ -397,44 +395,45 @@ void reactCtrlThread::run()
     if (streamingTarget)    //read "trajectory" - in this special case only set of positions for possibly multiple control points
     {
         additionalControlPointsVector.clear();
-        if (nextStreamedTargets.gotNewMsg())
+        if (nextStreamedTargets->gotNewMsg())
         {
-            nextStreamedTargets.setNewMsg(false);
-            deque<waypointTrajectory> &waypointTraj = nextStreamedTargets.getListTrajectory();
-            for (std::vector<waypointTrajectory>::const_iterator it = waypointTraj.begin() ; it != waypointTraj.end(); ++it)
+            nextStreamedTargets->setNewMsg(false);
+            deque<waypointTrajectory> &waypointTraj = nextStreamedTargets->getListTrajectory();
+            for (std::deque<waypointTrajectory>::iterator it = waypointTraj.begin() ; it != waypointTraj.end(); ++it)
             {
                 if ( ((*it).getCtrlPointName() == "end-effector") || ((*it).getCtrlPointName() == "elbow"))
                 {
                     if ((*it).getDimension() >= 3)
                     {
                         if ((*it).getDimension() > 3)
-                            yWarning("[reactCtrlThread::run()] %d dimensions specified for control point %s - only first three (pos) will be used.",(*it).getDimension(),(*it).getCtrlPointName());
-                        if ((*it).numberWaypoints >= 1)
+                            yWarning("[reactCtrlThread::run()] %d dimensions specified for control point %s - only first three (pos) will be used.",(*it).getDimension(),(*it).getCtrlPointName().c_str());
+                        if ((*it).getNbWaypoint() >= 1)
                         {
-                            if ((*it).getNbWaypoints() > 1)
-                                yWarning("[reactCtrlThread::run()] %d waypoints specified for control point %s - only first one will be used.",(*it).getNbWaypoints(),(*it).controlPointName);
-                            if ((*it).controlPointName == "end-effector")
+                            if ((*it).getNbWaypoint() > 1)
+                                yWarning("[reactCtrlThread::run()] %d waypoints specified for control point %s - only first one will be used.",(*it).getNbWaypoint(),(*it).getCtrlPointName().c_str());
+                            if ((*it).getCtrlPointName().c_str() == "end-effector")
                             {
-                                x_d = (*it).waypoints.front();
+                                x_d = (*it).getWaypoints().front();
                                 printMessage(0,"[reactCtrlThread::run()] setting end-eff position from streaming to %s.\n",x_d.toString().c_str());
                             }
                             else{ //elbow
-                                controlPoint_t controlPoint;
-                                controlPoint.type = "elbow";
-                                controlPoint.x_desired = (*it).waypoints.front();
-                                printMessage(0,"[reactCtrlThread::run()] Pushing desired elbow position from streaming to %s.\n",controlPoint.x_desired.toString().c_str());
-                                additionalControlPointsVector.push_back(controlPoint);
+                                ControlPoint *controlPoint = new ControlPoint();
+                                controlPoint->type = "elbow";
+                                controlPoint->x_desired = (*it).getWaypoints().front();
+                                printMessage(0,"[reactCtrlThread::run()] Pushing desired elbow position from streaming to %s.\n",
+                                             controlPoint->x_desired.toString().c_str());
+                                additionalControlPointsVector.push_back(*controlPoint);
                             }
                         }
                         else
-                            yWarning("[reactCtrlThread::run()] %d waypoints for control point %s < 1 - ignoring.",(*it).numberWaypoints,(*it).controlPoint);
+                            yWarning("[reactCtrlThread::run()] %d waypoints for control point %s < 1 - ignoring.",(*it).getNbWaypoint(),(*it).getCtrlPointName().c_str());
                     
                     }
                     else //((*it).numberDimension < 3)
-                        yWarning("[reactCtrlThread::run()] %d dimensions specified for control point %s < 3 - ignoring.",(*it).numberDimension,(*it).controlPoint);
+                        yWarning("[reactCtrlThread::run()] %d dimensions specified for control point %s < 3 - ignoring.",(*it).getDimension(),(*it).getCtrlPointName().c_str());
                 }
                 else
-                    yWarning("[reactCtrlThread::run()] Don't know how to handle control point of type %s.",(*it).controlPoint);
+                    yWarning("[reactCtrlThread::run()] Don't know how to handle control point of type %s.",(*it).getCtrlPointName().c_str());
                 
             }
         }
@@ -1054,7 +1053,7 @@ void reactCtrlThread::printJointsBounds()
     {
         min=chain(i).getMin()*CTRL_RAD2DEG;
         max=chain(i).getMax()*CTRL_RAD2DEG;
-        yDebug("[jointsBounds (deg)] i: %i\tmin: %g\tmax %g",i,min,max);
+        yDebug("[jointsBounds (deg)] i: %lu\tmin: %g\tmax %g",i,min,max);
     }
 }
 
