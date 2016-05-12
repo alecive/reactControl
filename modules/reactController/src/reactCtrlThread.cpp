@@ -126,12 +126,13 @@ bool reactCtrlThread::threadInit()
         vLimAdapted(r,1)=vMax;
     }
     if (useTorso){ 
+        ;
         // disable torso pitch
-        vLimNominal(0,0)=vLimNominal(0,1)=0.0;  
-        vLimAdapted(0,0)=vLimAdapted(0,1)=0.0;  
+        //vLimNominal(0,0)=vLimNominal(0,1)=0.0;  
+        //vLimAdapted(0,0)=vLimAdapted(0,1)=0.0;  
         // disable torso roll
-        vLimNominal(1,0)=vLimNominal(1,1)=0.0;  
-        vLimAdapted(1,0)=vLimAdapted(1,1)=0.0;  
+        //vLimNominal(1,0)=vLimNominal(1,1)=0.0;  
+        //vLimAdapted(1,0)=vLimAdapted(1,1)=0.0;  
     }     
          
     //H.resize(4,4);
