@@ -416,13 +416,17 @@ void reactCtrlThread::run()
                                 yWarning("[reactCtrlThread::run()] %d waypoints specified for control point %s - only first one will be used.",(*it).getNbWaypoint(),(*it).getCtrlPointName().c_str());
                             if ((*it).getCtrlPointName() == "End-Effector")
                             {
-                                setNewTarget((*it).getWaypoints().front(),false);
-                                printMessage(0,"[reactCtrlThread::run()] setting end-eff position from streaming: %s.\n",(*it).getWaypoints().front().toString().c_str());
+                                //setNewTarget((*it).getWaypoints().front(),false);
+                                vector<Vector> waypoints = (*it).getWaypoints(); //temporary
+                                setNewTarget(*(++(waypoints.begin())),false); //temporary
+                                printMessage(0,"[reactCtrlThread::run()] setting end-eff position from streaming: %s.\n",x_d.toString().c_str());
                             }
                             else{ //elbow
                                 ControlPoint *controlPoint = new ControlPoint();
                                 controlPoint->type = "Elbow";
-                                controlPoint->x_desired = (*it).getWaypoints().front();
+                                //controlPoint->x_desired = (*it).getWaypoints().front();
+                                vector<Vector> waypoints2 = (*it).getWaypoints(); //temporary
+                                controlPoint->x_desired = *(++(waypoints2.begin())); //temporary
                                 printMessage(0,"[reactCtrlThread::run()] Pushing desired elbow position from streaming: %s.\n",
                                              controlPoint->x_desired.toString().c_str());
                                 additionalControlPointsVector.push_back(*controlPoint);

@@ -234,7 +234,7 @@
         
         if (additional_control_points_flag)
         {
-            additional_control_points_tol = 0.0001; //the bounds will be for the norm2 of the error, so 0.0001 corresponds to 0.01 m error 
+            additional_control_points_tol = 0.0; //0.0001; //the bounds will be for the norm2 of the error, so 0.0001 corresponds to 0.01 m error 
             if (additional_control_points.size() == 0)
             {
                 yWarning("[ControllerNLP::init()]: additional_control_points_flag is on but additional_control_points.size is 0.");
@@ -411,7 +411,9 @@
                 {
                     if((*it).type == "Elbow")
                     {
-                        Vector pe_elbow = (*it).p0 + dt*((*it).J0_xyz * v.subVector(0,v0.length()-4));
+                        yInfo("[ControllerNLP::computeQuantities]: will compute solved elbow position as: (%s) + %f * \n %s * \n (%s)",(*it).p0.toString().c_str(),dt,(*it).J0_xyz.toString().c_str(), v.subVector(0,v0.length()-4-1).toString().c_str());
+                        Vector pe_elbow = (*it).p0 + dt* ((*it).J0_xyz * v.subVector(0,v0.length()-4-1));
+                        yInfo("[ControllerNLP::computeQuantities]: will compute error in solved elbow position as: (%s) - (%s)",(*it).x_desired.toString().c_str(),pe_elbow.toString().c_str()); 
                         err_xyz_elbow = (*it).x_desired - pe_elbow;
                     }
                     else
