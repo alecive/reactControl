@@ -760,7 +760,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
         movingTargetCircle = _movingCircle;
         q_dot.zero();
         updateArmChain(); //updates chain, q and x_t
-        virtualArmChain->setAng(q); //with new target, we make the two chains identical at the start
+        virtualArmChain->setAng(q*CTRL_DEG2RAD); //with new target, we make the two chains identical at the start
         if(controlMode == "positionDirect")
            I->reset(q);   
         x_0=x_t;
