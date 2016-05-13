@@ -20,6 +20,8 @@
 #ifndef __REACTIPOPT_H__
 #define __REACTIPOPT_H__
 
+#include <sstream>
+
 #include <IpTNLP.hpp>
 #include <IpIpoptApplication.hpp>
 
@@ -57,6 +59,15 @@ class ControlPoint
             p0.resize(3); p0.zero();
             p0(0) = -0.1;
             //for J0_xyz we don't know the size yet - depending on the control point
+        }
+        
+        string toString()
+        {
+            std::stringstream sstm;
+            sstm<< "ControlPoint, type: "<<type<<", x_desired: ("<<x_desired.toString(3,3)<<"), p0: ("<<p0.toString(3,3)<<"), J0_xyz: "<<endl<<
+            J0_xyz.toString(3,3)<<endl;
+            
+            return sstm.str();
         }
 };
 

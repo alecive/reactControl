@@ -270,6 +270,7 @@ bool reactCtrlThread::threadInit()
     streamingTarget = false;
     nextStreamedTargets = new motionPlan();
     additionalControlPointsVector.clear();
+       
     movingTargetCircle = false;
     radius = 0.0; frequency = 0.0;
     circleCenter.resize(3,0.0);
@@ -396,15 +397,23 @@ void reactCtrlThread::run()
     //yarp::sig::Matrix J1_temp=chain_temp.GeoJacobian();
     //yDebug("GeoJacobian: \n %s \n",J1_temp.toString(3,3).c_str());    
     
+    //printMessage(0,"[reactCtrlThread::run()] streamingTarget: %d \n",streamingTarget);
+    //for (std::vector<ControlPoint>::iterator it = additionalControlPointsVector.begin() ; it != additionalControlPointsVector.end(); ++it)
+    //{
+      //  printMessage(0,(*it).toString().c_str());
+    //}
     if (streamingTarget)    //read "trajectory" - in this special case, it is only set of next target positions for possibly multiple control points
     {
+        
         if (nextStreamedTargets->gotNewMsg())
         {
+            printf("[reactCtrlThread::run()] Streaming target - new message arrived.\n");
             nextStreamedTargets->setNewMsg(false);
             deque<waypointTrajectory> &waypointTraj = nextStreamedTargets->getListTrajectory();
             additionalControlPointsVector.clear();
             for (std::deque<waypointTrajectory>::iterator it = waypointTraj.begin() ; it != waypointTraj.end(); ++it)
             {
+                
                 if ( ((*it).getCtrlPointName() == "End-Effector") || ((*it).getCtrlPointName() == "Elbow"))
                 {
                     if ((*it).getDimension() >= 3)
@@ -426,8 +435,14 @@ void reactCtrlThread::run()
                                 ControlPoint *controlPoint = new ControlPoint();
                                 controlPoint->type = "Elbow";
                                 //controlPoint->x_desired = (*it).getWaypoints().front();
-                                vector<Vector> waypoints2 = (*it).getWaypoints(); //temporary
-                                controlPoint->x_desired = *(++(waypoints2.begin())); //temporary
+                                //vector<Vector> waypoints2 = (*it).getWaypoints(); //temporary
+                                //controlPoint->x_desired = *(++(waypoints2.begin())); //temporary
+                                 //temporary
+                                Vector elbow_des_pos(3,0.0);
+                                //elbow_des_pos(0)=-0.1; elbow_des_pos(1)= -0.1; elbow_des_pos(2)= 0.0;
+                                elbow_des_pos(0)=-0.027; elbow_des_pos(1)= -0.243; elbow_des_pos(2)= 0.195;
+                                controlPoint->x_desired = elbow_des_pos; //temporary
+                                //printf("testing: setting fixed elbow target to (%s) \n",controlPoint->x_desired.toString(3,3).c_str());
                                 printMessage(0,"[reactCtrlThread::run()] Pushing desired elbow position from streaming: (%s).\n",
                                              controlPoint->x_desired.toString(3,3).c_str());
                                 additionalControlPointsVector.push_back(*controlPoint);
@@ -444,7 +459,14 @@ void reactCtrlThread::run()
                     yWarning("[reactCtrlThread::run()] Don't know how to handle control point of type %s.",(*it).getCtrlPointName().c_str());
                 
             }
+            printf("Filled up additionalControlPointsVector: \n");
+            for (std::vector<ControlPoint>::iterator it = additionalControlPointsVector.begin() ; it != additionalControlPointsVector.end(); ++it)
+            {
+               printMessage(0,(*it).toString().c_str());
+            }
+   
         }
+                         
           
     }
 
@@ -548,12 +570,13 @@ void reactCtrlThread::run()
                 vLimAdapted=avhdl->getVLIM(vLimNominal);
                 delete avhdl; avhdl = NULL; //TODO this is not efficient, in the future find a way to reset the handler, not recreate
             }
-                  
+            
+         
             //printMessage(2,"[reactCtrlThread::run()]: Will call solveIK.\n");
             double t_1=yarp::os::Time::now();
             q_dot = solveIK(ipoptExitCode);
             timeToSolveProblem_s  = yarp::os::Time::now()-t_1;
-               
+                                
            if (ipoptExitCode==Ipopt::Solve_Succeeded || ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
             {
                 if (ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
@@ -826,6 +849,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
         virtualArmChain->setAng(q*CTRL_DEG2RAD); //with new target, we make the two chains identical at the start
         if(controlMode == "positionDirect")
            I->reset(q);   
+                
         x_0=x_t;
         x_n=x_0;
         x_d=_x_d;
@@ -973,6 +997,15 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
    app->Options()->SetIntegerValue("print_level",verbosity?5:0);
    app->Initialize();
 
+   /*Matrix H5real=(*(arm->asChain())).getH(5);
+   Vector elbow_pos_real = H5real.getCol(3).subVector(0,2);
+   //printf("[reactCtrlThread::solveIK]: real chain getH(%d) - elbow: \n %s \n",*(arm->asChain()).getDOF()-4-1,H5real.toString(3,3).c_str());
+   printf("[reactCtrlThread::solveIK]: real p0 - elbow: (%s)\n",elbow_pos_real.toString(3,3).c_str());
+   Matrix H5virtual=(*virtualArmChain).getH(5);
+   Vector elbow_pos_virtual = H5virtual.getCol(3).subVector(0,2);
+   //printf("[reactCtrlThread::solveIK]: real chain getH(%d) - elbow: \n %s \n",*(arm->asChain()).getDOF()-4-1,H5real.toString(3,3).c_str());
+   printf("[reactCtrlThread::solveIK]: virtual p0 - elbow: (%s)\n",elbow_pos_virtual.toString(3,3).c_str());    */                 
+   
    Ipopt::SmartPtr<ControllerNLP> nlp;
    if (controlMode == "positionDirect") //in this mode, ipopt will use the qIntegrated values to update its copy of chain
         nlp=new ControllerNLP(*virtualArmChain,additionalControlPointsVector);
@@ -992,7 +1025,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
    res=nlp->get_resultInDegPerSecond();
    
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
-    if(verbosity >= 1){
+    if(verbosity >= 0){ //temporary
         printf("x_n: %s\tx_d: %s\tdT %g\n",x_n.toString(3,3).c_str(),x_d.toString(3,3).c_str(),dT);
         printf("x_0: %s\tx_t: %s\n",       x_0.toString(3,3).c_str(),x_t.toString(3,3).c_str());
         printf("norm(x_n-x_t): %g\tnorm(x_d-x_n): %g\tnorm(x_d-x_t): %g\n",
