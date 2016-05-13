@@ -238,7 +238,7 @@
         
         if (additional_control_points_flag)
         {
-            additional_control_points_tol = 0.001; //0.0001; //the bounds will be for the norm2 of the error, so 0.0001 corresponds to 0.01 m error 
+            additional_control_points_tol = 0.0001; //0.0001; //the bounds will be for the norm2 of the error, so 0.0001 corresponds to 0.01 m error 
             if (additional_control_points.size() == 0)
             {
                 yWarning("[ControllerNLP::init()]: additional_control_points_flag is on but additional_control_points.size is 0.");
@@ -370,7 +370,7 @@
 
         // reaching in position
         g_l[0]=0.0;
-        g_u[0]=10.0; //temporary  // 0.0;
+        g_u[0]=0.0; //10.0; //temporary  // 0.0;
         
         if(additional_control_points_flag)
         {
@@ -571,9 +571,9 @@
                 iRow[idx]=6+extra_ctrl_points_nr; jCol[idx]=3+3+1; idx++;
             }
             
-            printf("[ControllerNLP::eval_jac_g] \n");
-            for(int k=0; k<idx; k++)
-                printf("    iRow[%d]=%d jCol[%d]=%d \n",k,iRow[k],k,jCol[k]);
+            //printf("[ControllerNLP::eval_jac_g] \n");
+            //for(int k=0; k<idx; k++)
+              //  printf("    iRow[%d]=%d jCol[%d]=%d \n",k,iRow[k],k,jCol[k]);
             
         }
         else
@@ -632,9 +632,9 @@
                 values[idx++]=elb_m*dt;
                 values[idx++]=dt;
             }
-            printf("[ControllerNLP::eval_jac_g]\n");
-            for(int k=0; k<idx; k++)
-                printf("    values[%d]=%f \n",k,values[k]);
+            //printf("[ControllerNLP::eval_jac_g]\n");
+            //for(int k=0; k<idx; k++)
+              //  printf("    values[%d]=%f \n",k,values[k]);
             
             
         }

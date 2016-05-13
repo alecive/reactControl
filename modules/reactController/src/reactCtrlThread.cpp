@@ -426,22 +426,22 @@ void reactCtrlThread::run()
                                 yWarning("[reactCtrlThread::run()] %d waypoints specified for control point %s - only first one will be used.",(*it).getNbWaypoint(),(*it).getCtrlPointName().c_str());
                             if ((*it).getCtrlPointName() == "End-Effector")
                             {
-                                //setNewTarget((*it).getWaypoints().front(),false);
-                                vector<Vector> waypoints = (*it).getWaypoints(); //temporary
-                                setNewTarget(*(++(waypoints.begin())),false); //temporary
+                                setNewTarget((*it).getWaypoints().front(),false);
+                                //vector<Vector> waypoints = (*it).getWaypoints(); //temporary
+                                //setNewTarget(*(++(waypoints.begin())),false); //temporary
                                 printMessage(0,"[reactCtrlThread::run()] setting end-eff position from streaming: (%s).\n",x_d.toString(3,3).c_str());
                             }
                             else{ //elbow
                                 ControlPoint *controlPoint = new ControlPoint();
                                 controlPoint->type = "Elbow";
-                                //controlPoint->x_desired = (*it).getWaypoints().front();
+                                controlPoint->x_desired = (*it).getWaypoints().front();
                                 //vector<Vector> waypoints2 = (*it).getWaypoints(); //temporary
                                 //controlPoint->x_desired = *(++(waypoints2.begin())); //temporary
                                  //temporary
-                                Vector elbow_des_pos(3,0.0);
+                                //Vector elbow_des_pos(3,0.0);
                                 //elbow_des_pos(0)=-0.1; elbow_des_pos(1)= -0.1; elbow_des_pos(2)= 0.0;
-                                elbow_des_pos(0)=-0.027; elbow_des_pos(1)= -0.243; elbow_des_pos(2)= 0.195;
-                                controlPoint->x_desired = elbow_des_pos; //temporary
+                                //elbow_des_pos(0)=-0.027; elbow_des_pos(1)= -0.243; elbow_des_pos(2)= 0.195;
+                                //controlPoint->x_desired = elbow_des_pos; //temporary
                                 //printf("testing: setting fixed elbow target to (%s) \n",controlPoint->x_desired.toString(3,3).c_str());
                                 printMessage(0,"[reactCtrlThread::run()] Pushing desired elbow position from streaming: (%s).\n",
                                              controlPoint->x_desired.toString(3,3).c_str());
@@ -1025,7 +1025,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
    res=nlp->get_resultInDegPerSecond();
    
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
-    if(verbosity >= 0){ //temporary
+    if(verbosity >= 1){ 
         printf("x_n: %s\tx_d: %s\tdT %g\n",x_n.toString(3,3).c_str(),x_d.toString(3,3).c_str(),dT);
         printf("x_0: %s\tx_t: %s\n",       x_0.toString(3,3).c_str(),x_t.toString(3,3).c_str());
         printf("norm(x_n-x_t): %g\tnorm(x_d-x_n): %g\tnorm(x_d-x_t): %g\n",
