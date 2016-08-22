@@ -108,7 +108,8 @@ private:
     double  globalTol;  // global tolerance of the task. The controller exits if norm(x_d-x)<globalTol
     double       vMax;  // max velocity set for the joints
     
-    string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk" 
+    string referenceGen; // either "uniformParticle" (constant velocity with particleThread) or "minJerk" 
+    //or "none" (will directly apply the target - used especially in the mode when targets are streamed)  
     
     bool hittingConstraints; //inequality constraints for safety of shoudler assembly and to prevent self-collisions torso-upper arm, upper-arm - forearm  
     bool orientationControl; //if orientation should be controlled as well
@@ -144,13 +145,13 @@ public:
         disableTorso = false;
         gazeControl = false;
         stiffInteraction = true;
-        controlMode = "velocity";        
+        controlMode = "positionDirect";        
         trajSpeed    =   0.1;
         tol          =  1e-5;
         globalTol    =  1e-2;
-        vMax         =  30.0;
+        vMax         =  20.0;
         
-        referenceGen = "uniformParticle";
+        referenceGen = "minJerk";
         hittingConstraints = true;
         orientationControl = true;
         additionalControlPoints = false;
@@ -158,8 +159,8 @@ public:
         ipOptFilterOn = false;
         //ipOptFilter_tc = 0.25;
         
-        tactileCollisionPointsOn = false;
-        visualCollisionPointsOn = false;
+        tactileCollisionPointsOn = true;
+        visualCollisionPointsOn = true;
         
         boundSmoothnessFlag = false;
         //boundSmoothnessValue = 30; // 30 deg/s change in a time step is huge - would have no effect 
@@ -486,10 +487,10 @@ public:
            if (rf.check("referenceGen"))
             {
                 referenceGen = rf.find("referenceGen").asString();
-                if(referenceGen!="uniformParticle" && referenceGen!="minJerk")
+                if((referenceGen!="uniformParticle") && (referenceGen!="minJerk") && (referenceGen!="none"))
                 {
-                    referenceGen="uniformParticle";
-                    yWarning("[reactController] referenceGen was not in the admissible values (uniformParticle / minJerk). Using %s as default.",referenceGen.c_str());
+                    referenceGen="minJerk";
+                    yWarning("[reactController] referenceGen was not in the admissible values (uniformParticle / minJerk / none). Using %s as default.",referenceGen.c_str());
                 }
                 else 
                     yInfo("[reactController] referenceGen to use is: %s", referenceGen.c_str());

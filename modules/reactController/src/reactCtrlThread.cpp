@@ -409,29 +409,41 @@ void reactCtrlThread::run()
         {
             printf("[reactCtrlThread::run()] Streaming target - new message arrived.\n");
             nextStreamedTargets->setNewMsg(false);
-            deque<waypointTrajectory> &waypointTraj = nextStreamedTargets->getListTrajectory();
+            deque<waypointTrajectory> waypointTraj = nextStreamedTargets->getListTrajectory();
             additionalControlPointsVector.clear();
             for (std::deque<waypointTrajectory>::iterator it = waypointTraj.begin() ; it != waypointTraj.end(); ++it)
             {
-                
+                yInfo("[reactCtrlThread::run()] (*it).getCtrlPointName() = %s\n", (*it).getCtrlPointName().c_str()); //for debugging
                 if ( ((*it).getCtrlPointName() == "End-Effector") || ((*it).getCtrlPointName() == "Elbow"))
                 {
+                    yInfo("[reactCtrlThread::run()] check getCtrlPointName()"); //for debugging
                     if ((*it).getDimension() >= 3)
                     {
+                        yInfo("[reactCtrlThread::run()] check getDimension()"); //for debugging
                         if ((*it).getDimension() > 3)
                             yWarning("[reactCtrlThread::run()] %d dimensions specified for control point %s - only first three (pos) will be used.",(*it).getDimension(),(*it).getCtrlPointName().c_str());
                         if ((*it).getNbWaypoint() >= 1)
                         {
+                            yInfo("[reactCtrlThread::run()] check getNbWaypoint()");    //for debugging
                             if ((*it).getNbWaypoint() > 1)
                                 yWarning("[reactCtrlThread::run()] %d waypoints specified for control point %s - only first one will be used.",(*it).getNbWaypoint(),(*it).getCtrlPointName().c_str());
                             if ((*it).getCtrlPointName() == "End-Effector")
                             {
-                                setNewTarget((*it).getWaypoints().front(),false);
+                                yInfo("[reactCtrlThread::run()] check getCtrlPointName()== End-Effector");  //for debugging
+                                Vector x_temp = (*it).getWaypoints().front();
+                                printf("\tReceived x_temp = %s\n",x_temp.toString(3,3).c_str());
+                                if (x_temp.size() == (*it).getDimension())
+                                    setNewTarget((*it).getWaypoints().front(),false);
+                                else
+                                    yWarning("[reactCtrlThread::run()] problem with obtaining waypoint\n");
+
+
                                 //vector<Vector> waypoints = (*it).getWaypoints(); //temporary
                                 //setNewTarget(*(++(waypoints.begin())),false); //temporary
                                 printMessage(0,"[reactCtrlThread::run()] setting end-eff position from streaming: (%s).\n",x_d.toString(3,3).c_str());
                             }
-                            else{ //elbow
+                            else if ((*it).getCtrlPointName() == "Elbow")
+                            { //elbow
                                 ControlPoint *controlPoint = new ControlPoint();
                                 controlPoint->type = "Elbow";
                                 controlPoint->x_desired = (*it).getWaypoints().front();
@@ -550,15 +562,24 @@ void reactCtrlThread::run()
                 //refGenMinJerk->computeNextValues(x_t,x_d); 
                 x_n = minJerkTarget->getPos();
             }
+
+            else if(referenceGen == "none")
+            {
+                //yInfo("no reference gen mode\n");
+                x_n = x_d;
+            }
  
             if(visualizeParticleIniCubGui){
                 sendiCubGuiObject("particle");
             }
     
-            if(visualizeParticleInSim){
-                Vector x_n_sim(3,0.0);
-                convertPosFromRootToSimFoR(x_n,x_n_sim);
-                moveSphere(2,x_n_sim); //sphere created as second (particle) will keep the index 2  
+            if (referenceGen != "none")
+            {
+                if(visualizeParticleInSim){
+                    Vector x_n_sim(3,0.0);
+                    convertPosFromRootToSimFoR(x_n,x_n_sim);
+                    moveSphere(2,x_n_sim); //sphere created as second (particle) will keep the index 2
+                }
             }
             
             if(gazeControl)
@@ -880,7 +901,12 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
             //calculate the time to reach from the distance to target and desired velocity - this was wrong somehow
             //double T = sqrt( (x_d(0)-x_0(0))*(x_d(0)-x_0(0)) + (x_d(1)-x_0(1))*(x_d(1)-x_0(1)) + (x_d(2)-x_0(2))*(x_d(2)-x_0(2)) )  / trajSpeed; 
             minJerkTarget->setT(T);
-       }
+        }
+        /*else if (referenceGen == "none")
+        {
+            ;
+        } */
+
         
         yInfo("[reactCtrlThread] got new target: x_0: %s",x_0.toString(3,3).c_str());
         yInfo("[reactCtrlThread]                 x_d: %s",x_d.toString(3,3).c_str());
