@@ -349,6 +349,10 @@ bool reactCtrlThread::threadInit()
         fout_param<<"1 ";
     else 
         fout_param<<"0 ";
+    if(additionalControlPoints)
+        fout_param<<"1 ";
+    else
+        fout_param<<"0 ";
     fout_param<<endl;
     
     yInfo("Written to param file and closing..");    
@@ -404,7 +408,6 @@ void reactCtrlThread::run()
     //}
     if (streamingTarget)    //read "trajectory" - in this special case, it is only set of next target positions for possibly multiple control points
     {
-        
         if (nextStreamedTargets->gotNewMsg())
         {
             printf("[reactCtrlThread::run()] Streaming target - new message arrived.\n");
@@ -436,13 +439,11 @@ void reactCtrlThread::run()
                                     setNewTarget((*it).getWaypoints().front(),false);
                                 else
                                     yWarning("[reactCtrlThread::run()] problem with obtaining waypoint\n");
-
-
                                 //vector<Vector> waypoints = (*it).getWaypoints(); //temporary
                                 //setNewTarget(*(++(waypoints.begin())),false); //temporary
                                 printMessage(0,"[reactCtrlThread::run()] setting end-eff position from streaming: (%s).\n",x_d.toString(3,3).c_str());
                             }
-                            else if ((*it).getCtrlPointName() == "Elbow")
+                            else if (((*it).getCtrlPointName() == "Elbow") && additionalControlPoints)
                             { //elbow
                                 ControlPoint *controlPoint = new ControlPoint();
                                 controlPoint->type = "Elbow";
@@ -471,15 +472,15 @@ void reactCtrlThread::run()
                     yWarning("[reactCtrlThread::run()] Don't know how to handle control point of type %s.",(*it).getCtrlPointName().c_str());
                 
             }
-            printf("Filled up additionalControlPointsVector: \n");
+            yInfo("Filled up additionalControlPointsVector: \n");
             for (std::vector<ControlPoint>::iterator it = additionalControlPointsVector.begin() ; it != additionalControlPointsVector.end(); ++it)
             {
                printMessage(0,(*it).toString().c_str());
             }
-   
+            if(additionalControlPoints && (additionalControlPointsVector.size() != 1))
+                yWarning("[reactCtrlThread::run():] additionalControlPoints is ON, expecting one for elbow, but additionalControlPointsVector.size() is %lu.\n",additionalControlPointsVector.size());
+            
         }
-                         
-          
     }
 
     collisionPoints.clear();
@@ -1058,7 +1059,6 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
                     norm(x_n-x_t), norm(x_d-x_n), norm(x_d-x_t));
         printf("Result (solved velocities (deg/s)): %s\n",res.toString(3,3).c_str());
     }
-     
    
     return res;
 }
@@ -1089,6 +1089,7 @@ void reactCtrlThread::updateArmChain()
     //H=arm->getH();
     //x_t=H.subcol(0,3,3);
     x_t = arm->EndEffPosition();
+    o_t = arm->EndEffPose().subVector(3,5);
 }
 
 bool reactCtrlThread::alignJointsBounds()
@@ -1486,28 +1487,42 @@ void reactCtrlThread::sendData()
 
             //col 1
             b.addInt(chainActiveDOF);
+            //position
             //cols 2-4: the desired final target (for end-effector)
             vectorIntoBottle(x_d,b);
             // 5:7 the end effector position in which the robot currently is
             vectorIntoBottle(x_t,b);
-            // 8:10 the current desired target given by the particle (for end-effector)
+            // 8:10 the current desired target given by the reference generation (particle / minJerk) (for end-effector)
             vectorIntoBottle(x_n,b);
-            //variable - if torso on: 11:20: joint velocities as solution to control and sent to robot 
+            
+            //orientation
+            //cols 11-13: the desired final orientation (for end-effector)
+            vectorIntoBottle(o_d,b);
+            // 14:16 the end effector orientation in which the robot currently is
+            vectorIntoBottle(o_t,b);
+            // 17:19 the current desired orientation given by referenceGen (currently not supported - equal to o_d)
+            vectorIntoBottle(o_n,b);
+                        
+            //variable - if torso on: 20:29: joint velocities as solution to control and sent to robot 
             vectorIntoBottle(q_dot,b); 
-            //variable - if torso on: 21:30: actual joint positions 
+            //variable - if torso on: 30:39: actual joint positions 
             vectorIntoBottle(q,b); 
-            //variable - if torso on: 31:50; joint vel limits as input to ipopt, after avoidanceHandler,
+            //variable - if torso on: 40:59; joint vel limits as input to ipopt, after avoidanceHandler,
             matrixIntoBottle(vLimAdapted,b); // assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
             b.addInt(ipoptExitCode);
             b.addDouble(timeToSolveProblem_s);
             if (controlMode == "positionDirect")
+                //joint pos from virtual chain IPopt is operating onl variable - if torso on: 60:69
                 vectorIntoBottle(qIntegrated,b);
-            
-            // the delta_x, that is the 3D vector that ipopt commands to 
-            //    the robot in order for x_t to reach x_n
-            //yarp::os::Bottle &b_delta_x=out.addList();
-            //iCub::skinDynLib::vectorIntoBottle(computeDeltaX(),b_delta_x);
-                         
+            if(additionalControlPoints && (!additionalControlPointsVector.empty()))
+            {
+               //we assume there will be only one - elbow - now
+               //desired elbow position; variable - if torso on and positionDirect: 70:72 ;
+               vectorIntoBottle( (*additionalControlPointsVector.begin()).x_desired , b); 
+               //actual elbow position on real chain; variable - if torso on and positionDirect: 73:75 ;
+               vectorIntoBottle( (*(arm->asChain())).getH((*(arm->asChain())).getDOF()-4-1).getCol(3).subVector(0,2) , b);
+            }
+                                      
             outPort.setEnvelope(ts);
             outPort.write(b);
         }
