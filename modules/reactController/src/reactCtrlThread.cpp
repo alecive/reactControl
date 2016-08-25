@@ -642,7 +642,7 @@ void reactCtrlThread::run()
                     controlSuccess = true;
             }
             
-            updateArmChain();
+            updateArmChain(); //N.B. This is the secod call within run(); may give more precise data for the logging; may also cost time
             //Vector xee_pos_virtual_after=virtualArmChain->EndEffPosition();
             //yInfo()<<"   t after opt and control [s] = "<<yarp::os::Time::now() -t_0;
             //yInfo()<<"   xee_pos_virtual after updating virtual chain [m] = "<<xee_pos_virtual_after.toString(3,3);         
