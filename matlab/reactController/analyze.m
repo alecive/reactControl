@@ -3,19 +3,20 @@ clear;
 
 visualize_time_stats = true;
 visualize_target = true;
+visualize_elbow_target = true;
 visualize_all_joint_pos = true;
 visualize_all_joint_vel = true;
 visualize_single_joint_in_detail = true;
 visualize_ineq_constr = true;
 visualize_ipopt_stats = true;
-save_figs = true;
+save_figs = false;
 chosen_time_column = 6; % 4 for sender, 6 for receiver 
 
 %path_prefix = 'input/';
 %path_prefix = 'icubSimTests/test_20160404a/';
-path_prefix = 'icubSimTests/test_20160408b_ugoCode/';
+path_prefix = 'multipleControlPoints_icubSim/data1/';
 %path_prefix = 'icubExperiments/moveWithIpoptWithoutAcceptHeuristicsOldTolerance_works/';
-path_prefix_dumper = 'data/';
+path_prefix_dumper = '';
 
 
 if save_figs
@@ -26,7 +27,8 @@ end
 % joint vel limits for every DOF, then ...
 %  fout_param<<trajTime<<" "<<trajSpeed<<" "<<tol<<" "<<globalTol<<" "<<getRate()/1000.0<<" "<<boundSmoothnessFlag<<" "<<boundSmoothnessValue;
 %if(controlMode == "velocity") fout_param<<"1 "; else if(controlMode == "positionDirect")    fout_param<<"2 ";
-% for 10 DOF case: 1:nDOF, 2-21 joint pos min/max, 22-41 joint vel limits, 42 traj time, 43 traj speed (deg/s), 44: tol, 45: globalTol, 46: rate is s, 47: bound_smoothness flag,
+% for 10 DOF case: 1:nDOF, 2-21 joint pos min/max, 22-41 joint vel limits, 42 traj time, 43 traj speed (deg/s), 44: tol, 
+%45: globalTol, 46: rate is s, 47: bound_smoothness flag,
 % 48: bound smoothness value, 49: controlMode, 50: ipOptMemory 0~off, 1~on
 % 7 DOF case: 1:nDOF, 2-15 joint pos min/max, 16-29 joint vel limits, 30 traj time, 31 traj speed (deg/s), 32: tol, 33: globalTol, 34: rate is s, 35: bound_smoothness flag,
 % 36: bound smoothness value, 37: controlMode, 38: ipOptMemory 0~off, 1~on
@@ -39,14 +41,22 @@ NR_EXTRA_TIME_COLUMNS = 4; % these will be created so that there is time startin
 %1: packetID, 2: sender time stamp, 3:receiver time stamp, 
 % 4: time from 0, sender; 5: increments of 4; 6: time from 0 receiver; 7: increments in 6 
 %8: nActiveDOF in chain
-% 9:11 desired final target (for end-effector), 12:14 current end effector position 
-% 15-17 current desired target given by particle (for end-effector)
-%variable - if torso on: 18:27: if torso off: 18:24 ; joint velocities as solution from ipopt and sent to robot 
-%variable - if torso on: 28:37: if torso off: 25:31 ; joint positions as solution to control and sent to robot 
-%variable - if torso on: 38:57; if torso off: 32:38;  joint vel limits as input to ipopt, after avoidanceHandler
+% 9:11 desired final target position (for end-effector),
+% 12:14 current end effector position 
+% 15:17 current desired target position given by particle (for end-effector)
+% 18:20 desired final target orientation (for end-effector),
+% 21:23 current end effector orientation 
+% 24:26 current desired target orientation given by referenceGen (currently not supported - equal to desired final - o_d)
+%variable - if torso on: 27:36: if torso off: 27:33 ; joint velocities as solution from ipopt and sent to robot 
+%variable - if torso on: 37:46: if torso off: 34:40 ; joint positions as solution to control and sent to robot 
+%variable - if torso on: 47:66; if torso off: 41:54;  joint vel limits as input to ipopt, after avoidanceHandler
 %assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
-% variable - if torso on: 58: if torso off: 46; ipopt exit code (Solve_Succeeded=0)
-% variable - if torso on: 59: if torso off: 47; time taken to solve problem (s) ~ ipopt + avoidance handler
+% variable - if torso on: 67; if torso off: 55; ipopt exit code (Solve_Succeeded=0)
+% variable - if torso on: 68; if torso off: 56; time taken to solve problem (s) ~ ipopt + avoidance handler
+% variable - if positionDirect & torso on: 69:78; if torso off: 57:63;  joint pos from
+% virtual chain ipopt is operating on
+% variable - if positionDirect & torso on: 79:81; target elbow position 
+% variable - if positionDirect & torso on: 82:84; actual elbow position (real chain) 
 
 d_orig=importdata([path_prefix path_prefix_dumper 'reactCtrl/data.log']);
 
@@ -62,19 +72,17 @@ target_x.column = 9;
 target_y.column = 10;
 target_z.column = 11;
     
-targetEE_x.column = 15;
-targetEE_y.column = 16;
-targetEE_z.column = 17;
-    
 EE_x.column = 12;
 EE_y.column = 13;
 EE_z.column = 14;
-    
+
+targetEE_x.column = 15;
+targetEE_y.column = 16;
+targetEE_z.column = 17;
 
 %controlMode = 'velocity';
 %controlMode = 'positionDirect'; % should be picked up automatically from
 %the param file
-
 
 if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 arm
     chainActiveDOF = 10
@@ -87,9 +95,9 @@ if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 
     for i=1:chainActiveDOF
         joint_info(i).pos_limit_min = d_params(2*i); joint_info(i).pos_limit_max = d_params(2*i+1);
         joint_info(i).vel_limit_min = d_params(20+2*i); joint_info(i).vel_limit_max = d_params(20+2*i+1);
-        joint_info(i).vel_column = 13+i+NR_EXTRA_TIME_COLUMNS; joint_info(i).pos_column = 23+i+NR_EXTRA_TIME_COLUMNS; 
-        joint_info(i).vel_limit_min_avoid_column = 32+2*i+NR_EXTRA_TIME_COLUMNS; joint_info(i).vel_limit_max_avoid_column = 32+2*i+1+NR_EXTRA_TIME_COLUMNS;
-        joint_info(i).integrated_pos_column = 55+i+NR_EXTRA_TIME_COLUMNS; 
+        joint_info(i).vel_column = 22+i+NR_EXTRA_TIME_COLUMNS; joint_info(i).pos_column = 32+i+NR_EXTRA_TIME_COLUMNS; 
+        joint_info(i).vel_limit_min_avoid_column = 41+2*i+NR_EXTRA_TIME_COLUMNS; joint_info(i).vel_limit_max_avoid_column = 41+2*i+1+NR_EXTRA_TIME_COLUMNS;
+        joint_info(i).integrated_pos_column = 64+i+NR_EXTRA_TIME_COLUMNS; 
     end
     
     if (length(d_params) == 41) % old format before outputting extra params (prior to 13.2.2016)
@@ -119,16 +127,45 @@ if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 
         elseif(d_params(49) == 2)
             controlMode = 'positionDirect'    
         end
-     end    
-     if(size(d_orig,2) >= 55)
-       ipoptExitCode_col = 58; % setting the cols already for the new d, after adding extra time xols
-       timeToSolve_s_col = 59;
-     end
+        if (length(d_params) >= 53)
+            if(d_params(53) == 1)
+                interactionMode = 'stiff'
+            elseif(d_params(53) == 0)
+                interactionMode = 'compliant'    
+            end
+        end
+        if (length(d_params) >= 54)
+            if(d_params(54) == 1)
+                additionalControlPointsFlag = true
+            elseif(d_params(54) == 0)
+                additionalControlPointsFlag = false    
+            end
+        end
+    end   
+         
+   ipoptExitCode_col = 67; % setting the cols already for the new d, after adding extra time cols
+   timeToSolve_s_col = 68;
      
-     
-    if ( (strcmp(controlMode,'positionDirect')) && (size(d_orig,2) <  65) )
-        error('It seems that integrated positions were not logged.'); 
+    if (strcmp(controlMode,'positionDirect')) 
+        if (size(d_orig,2) <  74) 
+            error('It seems that integrated positions were not logged.'); 
+        end
+        target_elbow_x.column = 79;
+        target_elbow_y.column = 80;
+        target_elbow_z.column = 81;
+        elbow_x.column = 82;
+        elbow_y.column = 83;
+        elbow_z.column = 84;
+    else 
+        target_elbow_x.column = 69;
+        target_elbow_y.column = 70;
+        target_elbow_z.column = 71;
+        elbow_x.column = 72;
+        elbow_y.column = 73;
+        elbow_z.column = 74;
     end
+    
+   
         
 elseif((d_params(1) == 7) && (d_orig(1,4) == 7) ) % 7 DOF situation - arm
     chainActiveDOF = 7
@@ -141,14 +178,13 @@ elseif((d_params(1) == 7) && (d_orig(1,4) == 7) ) % 7 DOF situation - arm
     for i=1:chainActiveDOF
         joint_info(i).pos_limit_min = d_params(2*i); joint_info(i).pos_limit_max = d_params(2*i+1);
         joint_info(i).vel_limit_min = d_params(14+2*i); joint_info(i).vel_limit_max = d_params(14+2*i+1);
-        joint_info(i).vel_column = 13+i+NR_EXTRA_TIME_COLUMNS; joint_info(i).pos_column = 20+i+NR_EXTRA_TIME_COLUMNS; 
-        joint_info(i).vel_limit_min_avoid_column = 26+2*i+NR_EXTRA_TIME_COLUMNS; joint_info(i).vel_limit_max_avoid_column = 26+2*i+1+NR_EXTRA_TIME_COLUMNS;
-        joint_info(i).integrated_pos_column = 43+i+NR_EXTRA_TIME_COLUMNS; 
+        joint_info(i).vel_column = 22+i+NR_EXTRA_TIME_COLUMNS; joint_info(i).pos_column = 29+i+NR_EXTRA_TIME_COLUMNS; 
+        joint_info(i).vel_limit_min_avoid_column = 35+2*i+NR_EXTRA_TIME_COLUMNS; joint_info(i).vel_limit_max_avoid_column = 35+2*i+1+NR_EXTRA_TIME_COLUMNS;
+        joint_info(i).integrated_pos_column = 52+i+NR_EXTRA_TIME_COLUMNS; 
     end
     
     % 7 DOF case: 1:nDOF, 2-15 joint pos min/max, 16-29 joint vel limits, 30 traj time, 31 traj speed (deg/s), 32: tol, 33: globalTol, 34: rate is s, 35: bound_smoothness flag,
     % 36: bound smoothness value, 37: controlMode, 38: ipOptMemory 0~off, 1~on
-
     if (length(d_params) >= 38) 
         dT = d_params(34)
         if (d_params(35) ==1)
@@ -176,18 +212,20 @@ elseif((d_params(1) == 7) && (d_orig(1,4) == 7) ) % 7 DOF situation - arm
            end
         end
          
+       % TODO set interaction mode and additionalControl points here
+        
        
     else
         error('Unexpected param.log length for 7 DOF chain');
     end
    
-    ipoptExitCode_col = 46; % setting the cols already for the new d, after adding extra time xols
-    timeToSolve_s_col = 47;
+    ipoptExitCode_col = 55; % setting the cols already for the new d, after adding extra time cols
+    timeToSolve_s_col = 56;
     
-    if ( (strcmp(controlMode,'positionDirect')) && (size(d_orig,2) <  50) )
+    if ( (strcmp(controlMode,'positionDirect')) && (size(d_orig,2) <  59) )
         error('It seems that intergrated positions were not logged.'); 
     end
-    
+    % TODO add elbow pos plotting here
      
 else
    error('This script is currently not supporting other than 10 DOF and 7 DOF chains'); 
@@ -408,6 +446,14 @@ if visualize_target
        saveas(f22,'output/TargetReferenceEndeffectorDistances.fig');
     end
 
+end
+
+%% reference vs. desired elbow control point
+
+if visualize_elbow_target
+    ; 
+    % TODO copy from above and adapt to elbow target vs. actual pos.
+    
 end
 
 %% joint values vs. joint limits
