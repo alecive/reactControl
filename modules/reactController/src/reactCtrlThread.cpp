@@ -484,10 +484,11 @@ void reactCtrlThread::run()
     }
     else{
        //temporary - we set the desired elbow pos manually in order to test without the planner module
+       additionalControlPointsVector.clear();
        ControlPoint *controlPoint = new ControlPoint();
        controlPoint->type = "Elbow";
        Vector elbow_des_pos(3,0.0);
-       elbow_des_pos(0)=-0.1; elbow_des_pos(1)= -0.1; elbow_des_pos(2)= 0.0;
+       elbow_des_pos(0)=-0.076; elbow_des_pos(1)= -0.17; elbow_des_pos(2)= 0.066;
        //elbow_des_pos(0)=-0.027; elbow_des_pos(1)= -0.243; elbow_des_pos(2)= 0.195;
        controlPoint->x_desired = elbow_des_pos; 
        //printf("testing: setting fixed elbow target to (%s) \n",controlPoint->x_desired.toString(3,3).c_str());
@@ -561,6 +562,8 @@ void reactCtrlThread::run()
             }
             if (visualizeTargetIniCubGui){
                 sendiCubGuiObject("target");
+                if(additionalControlPoints)
+                  sendiCubGuiObject("additionalTargets");
             }
             if (referenceGen == "uniformParticle"){
                 if ( (norm(x_n-x_0) > norm(x_d-x_0)) || movingTargetCircle) //if the particle is farther than the final target, we reset the particle - it will stay with the target; or if target is moving
@@ -1549,7 +1552,8 @@ void reactCtrlThread::sendiCubGuiObject(const string object_type)
     if (outPortiCubGui.getOutputCount()>0)
     {
         Bottle obj;
-        if (object_type == "particle"){
+        if (object_type == "particle")
+        {
             obj.addString("object");
             obj.addString("particle");
      
@@ -1576,7 +1580,8 @@ void reactCtrlThread::sendiCubGuiObject(const string object_type)
             // transparency
             obj.addDouble(0.9);
         }
-        else if(object_type == "target"){
+        else if(object_type == "target")
+        {
             obj.addString("object");
             obj.addString("target");
      
@@ -1602,10 +1607,40 @@ void reactCtrlThread::sendiCubGuiObject(const string object_type)
         
             // transparency
             obj.addDouble(0.7);
-            
         }
-       
-        outPortiCubGui.write(obj);
+        else if(object_type == "additionalTargets")
+        {        
+            int i=1;
+            for (std::vector<ControlPoint>::const_iterator it = additionalControlPointsVector.begin() ; it != additionalControlPointsVector.end(); ++it)
+            {
+                obj.addString("object");
+                obj.addString("extra-target");
+     
+                // size 
+                obj.addDouble(30.0);
+                obj.addDouble(30.0);
+                obj.addDouble(30.0);
+        
+                // positions - iCubGui works in mm
+                obj.addDouble(1000*(*it).x_desired(0));
+                obj.addDouble(1000*(*it).x_desired(1));
+                obj.addDouble(1000*(*it).x_desired(2));
+        
+                // orientation
+                obj.addDouble(0.0);
+                obj.addDouble(0.0);
+                obj.addDouble(0.0);
+        
+                // color
+                obj.addInt(0);
+                obj.addInt(255);
+                obj.addInt(0);
+        
+                // transparency
+                obj.addDouble(0.7);
+           }
+       }
+       outPortiCubGui.write(obj);
         
     }
 }

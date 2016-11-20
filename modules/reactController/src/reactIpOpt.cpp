@@ -267,8 +267,8 @@
                         */
                         Matrix H5=chain.getH(chain.getDOF()-4-1);
                         (*it).p0 = H5.getCol(3).subVector(0,2);
-                        printf("[ControllerNLP::init()]: getH(%d) - elbow: \n %s \n",chain.getDOF()-4-1,H5.toString(3,3).c_str());
-                        printf("[ControllerNLP::init()]: p0 - elbow: (%s)\n",(*it).p0.toString(3,3).c_str());
+                        //printf("[ControllerNLP::init()]: getH(%d) - elbow: \n %s \n",chain.getDOF()-4-1,H5.toString(3,3).c_str());
+                        //printf("[ControllerNLP::init()]: p0 - elbow: (%s)\n",(*it).p0.toString(3,3).c_str());
                         /*
                         Matrix H6=chain.getH(chain.getDOF()-3-1);
                         Vector p6 = H6.getCol(3).subVector(0,2);
@@ -291,7 +291,7 @@
                         //printf("[ControllerNLP::init()]: current elbow position in ipopt chain: (%s)",(*it).p0.toString(3,3).c_str());
                         Matrix J = chain.GeoJacobian(chain.getDOF()-4-1);
                         (*it).J0_xyz = J.submatrix(0,2,0,chain.getDOF()-4-1);
-                        printf("[ControllerNLP::init()]: elbow J0_xyz: \n %s \n",(*it).J0_xyz.toString().c_str());
+                        //printf("[ControllerNLP::init()]: elbow J0_xyz: \n %s \n",(*it).J0_xyz.toString().c_str());
                     }
                     else
                         yWarning("[ControllerNLP::get_nlp_info]: other control points type than Elbow are not supported (this was %s).",(*it).type.c_str());
@@ -444,9 +444,9 @@
                 {
                     if((*it).type == "Elbow")
                     {
-                        //yInfo("[ControllerNLP::computeQuantities]: will compute solved elbow position as: (%s) + %f * \n %s * \n (%s)",(*it).p0.toString().c_str(),dt,(*it).J0_xyz.toString().c_str(), v.subVector(0,v0.length()-4-1).toString().c_str());
+                       // yInfo("[ControllerNLP::computeQuantities]: will compute solved elbow position as: (%s) + %f * \n %s * \n (%s)",(*it).p0.toString(3,3).c_str(),dt,(*it).J0_xyz.toString(3,3).c_str(), v.subVector(0,v0.length()-4-1).toString(3,3).c_str());
                         Vector pe_elbow = (*it).p0 + dt* ((*it).J0_xyz * v.subVector(0,v0.length()-4-1));
-                       // yInfo("[ControllerNLP::computeQuantities]: will compute error in solved elbow position as: (desired - computed) =  (%s) - (%s)",(*it).x_desired.toString(3,3).c_str(),pe_elbow.toString(3,3).c_str()); 
+                        //yInfo("[ControllerNLP::computeQuantities]: will compute error in solved elbow position as: (desired - computed) =  (%s) - (%s)",(*it).x_desired.toString(3,3).c_str(),pe_elbow.toString(3,3).c_str()); 
                         err_xyz_elbow = (*it).x_desired - pe_elbow;
                         //yInfo("[ControllerNLP::computeQuantities]: Compute error in solved elbow position: (%s)",err_xyz_elbow.toString(3,3).c_str()); 
                         

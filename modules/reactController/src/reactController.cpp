@@ -125,6 +125,8 @@ private:
     bool boundSmoothnessFlag; //for ipopt - whether changes in velocity commands need to be smooth
     //double boundSmoothnessValue; //actual allowed change in every joint velocity commands in deg/s from one time step to the next. Note: this is not adapted to the thread rate set by the rctCtrlRate param
     
+    //setting visualization in iCub simulator; the visualizations in iCubGui constitute an independent pipeline
+    // (currently the iCubGui ones are on and cannot be toggled on/off from the outside)
     bool visualizeTargetInSim; // will use the yarp rpc /icubSim/world to visualize the target
     bool visualizeParticleInSim; // will use the yarp rpc /icubSim/world to visualize the particle (trajectory - intermediate targets)
     bool visualizeCollisionPointsInSim; // will visualize the (potential) collision points in iCub simulator 
