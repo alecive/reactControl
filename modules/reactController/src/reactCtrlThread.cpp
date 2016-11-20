@@ -482,6 +482,17 @@ void reactCtrlThread::run()
             
         }
     }
+    else{
+       //temporary - we set the desired elbow pos manually in order to test without the planner module
+       ControlPoint *controlPoint = new ControlPoint();
+       controlPoint->type = "Elbow";
+       Vector elbow_des_pos(3,0.0);
+       elbow_des_pos(0)=-0.1; elbow_des_pos(1)= -0.1; elbow_des_pos(2)= 0.0;
+       //elbow_des_pos(0)=-0.027; elbow_des_pos(1)= -0.243; elbow_des_pos(2)= 0.195;
+       controlPoint->x_desired = elbow_des_pos; 
+       //printf("testing: setting fixed elbow target to (%s) \n",controlPoint->x_desired.toString(3,3).c_str());
+       additionalControlPointsVector.push_back(*controlPoint);
+    }
 
     collisionPoints.clear();
           
