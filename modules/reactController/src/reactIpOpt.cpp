@@ -230,15 +230,16 @@
 
         //printf("[ControllerNLP::init()]: getH() - end-effector: \n %s\n",H0.toString(3,3).c_str());
         //printf("[ControllerNLP::init()]: p0 - end-effector: (%s)\n",p0.toString(3,3).c_str());
-                      
-        
+          
         Matrix J0=chain.GeoJacobian();
         J0_xyz=J0.submatrix(0,2,0,chain.getDOF()-1);
         J0_ang=J0.submatrix(3,5,0,chain.getDOF()-1);
         
         if (additional_control_points_flag)
         {
-            additional_control_points_tol = 0.0001; //0.0001; //the bounds will be for the norm2 of the error, so 0.0001 corresponds to 0.01 m error 
+            additional_control_points_tol = 0.0001; //norm2 is used in the g function, so this is the Eucl. distance error squared - actual distance is sqrt(additional_control_points_tol);
+            //e.g., 0.0001 corresponds to 0.01 m error in actual Euclidean distance 
+            //N.B. for the end-effector, tolerance is 0
             if (additional_control_points.size() == 0)
             {
                 yWarning("[ControllerNLP::init()]: additional_control_points_flag is on but additional_control_points.size is 0.");
@@ -268,7 +269,7 @@
                         Matrix H5=chain.getH(chain.getDOF()-4-1);
                         (*it).p0 = H5.getCol(3).subVector(0,2);
                         //printf("[ControllerNLP::init()]: getH(%d) - elbow: \n %s \n",chain.getDOF()-4-1,H5.toString(3,3).c_str());
-                        //printf("[ControllerNLP::init()]: p0 - elbow: (%s)\n",(*it).p0.toString(3,3).c_str());
+                        //yInfo("[ControllerNLP::init()]: p0 - current pos - elbow: (%s)\n",(*it).p0.toString(3,3).c_str());
                         /*
                         Matrix H6=chain.getH(chain.getDOF()-3-1);
                         Vector p6 = H6.getCol(3).subVector(0,2);
@@ -288,10 +289,10 @@
                         printf("[ControllerNLP::init()]: p9: (%s)\n",p9.toString(3,3).c_str());
                         */
                         
-                        //printf("[ControllerNLP::init()]: current elbow position in ipopt chain: (%s)",(*it).p0.toString(3,3).c_str());
+                        //yInfo("[ControllerNLP::init()]: current elbow position (p0) in ipopt chain: (%s)",(*it).p0.toString(3,3).c_str());
                         Matrix J = chain.GeoJacobian(chain.getDOF()-4-1);
                         (*it).J0_xyz = J.submatrix(0,2,0,chain.getDOF()-4-1);
-                        //printf("[ControllerNLP::init()]: elbow J0_xyz: \n %s \n",(*it).J0_xyz.toString().c_str());
+                        //yInfo("[ControllerNLP::init()]: elbow J0_xyz: \n %s \n",(*it).J0_xyz.toString().c_str());
                     }
                     else
                         yWarning("[ControllerNLP::get_nlp_info]: other control points type than Elbow are not supported (this was %s).",(*it).type.c_str());
@@ -368,9 +369,9 @@
             x_u[i]=bounds(i,1);            
         }
 
-        // reaching in position
+        // reaching in position - upper and lower bounds on the error (Euclidean square norm)
         g_l[0]=0.0;
-        g_u[0]=0.0; //10.0; //temporary  // 0.0;
+        g_u[0]=0.0; 
         
         if(additional_control_points_flag)
         {
@@ -444,12 +445,10 @@
                 {
                     if((*it).type == "Elbow")
                     {
-                       // yInfo("[ControllerNLP::computeQuantities]: will compute solved elbow position as: (%s) + %f * \n %s * \n (%s)",(*it).p0.toString(3,3).c_str(),dt,(*it).J0_xyz.toString(3,3).c_str(), v.subVector(0,v0.length()-4-1).toString(3,3).c_str());
+                        //yInfo("[ControllerNLP::computeQuantities]: will compute solved elbow position as: (%s) + %f * \n %s * \n (%s)",(*it).p0.toString(3,3).c_str(),dt,(*it).J0_xyz.toString(3,3).c_str(), v.subVector(0,v0.length()-4-1).toString(3,3).c_str());
                         Vector pe_elbow = (*it).p0 + dt* ((*it).J0_xyz * v.subVector(0,v0.length()-4-1));
-                        //yInfo("[ControllerNLP::computeQuantities]: will compute error in solved elbow position as: (desired - computed) =  (%s) - (%s)",(*it).x_desired.toString(3,3).c_str(),pe_elbow.toString(3,3).c_str()); 
                         err_xyz_elbow = (*it).x_desired - pe_elbow;
-                        //yInfo("[ControllerNLP::computeQuantities]: Compute error in solved elbow position: (%s)",err_xyz_elbow.toString(3,3).c_str()); 
-                        
+                        //yInfo("[ControllerNLP::computeQuantities]: Compute error in solved elbow position: (%s) = (desired - computed) =  (%s) - (%s)",err_xyz_elbow.toString(3,3).c_str(),(*it).x_desired.toString(3,3).c_str(),pe_elbow.toString(3,3).c_str()); 
                     }
                     else
                         yWarning("[ControllerNLP::computeQuantities]: other control points type than Elbow are not supported (this was %s).",(*it).type.c_str());
@@ -457,9 +456,6 @@
             }
         
         }
-            
-            
-        
     }
 
     /****************************************************************/
@@ -487,12 +483,14 @@
     {
         computeQuantities(x,new_x);
 
-        // reaching in position
+        // reaching in position - end-effector
         g[0]=norm2(err_xyz);
 
         if (additional_control_points_flag)
         {
+            //yInfo("ControllerNLP::eval_g(): additional_control_points_flag on, extra_ctrl_points_nr: %d",extra_ctrl_points_nr);
             g[1] = norm2(err_xyz_elbow); //this is hard-coded for the elbow as the only extra control point 
+            //yInfo("\t g[0]: %.5f, g[1]: %.5f",g[0],g[1]);
         }
         if (hitting_constraints)
         {
@@ -521,10 +519,10 @@
         {
             Ipopt::Index idx=0;
 
-            // reaching in position
+            // reaching in position - end-effector
             for (Ipopt::Index i=0; i<n; i++)
             {
-                iRow[i]=0; jCol[i]=i;
+                iRow[idx]=0; jCol[idx]=i;
                 idx++;
             }
 
@@ -534,7 +532,7 @@
                 {
                     if((*it).type == "Elbow")
                     {
-                         // reaching in position
+                         // reaching in position - elbow control point
                         for (Ipopt::Index j=0; j<(n-4); j++)
                         {
                             iRow[idx]=1; jCol[idx]=j;
@@ -571,9 +569,9 @@
                 iRow[idx]=6+extra_ctrl_points_nr; jCol[idx]=3+3+1; idx++;
             }
             
-            //printf("[ControllerNLP::eval_jac_g] \n");
-            //for(int k=0; k<idx; k++)
-              //  printf("    iRow[%d]=%d jCol[%d]=%d \n",k,iRow[k],k,jCol[k]);
+//             yInfo("[ControllerNLP::eval_jac_g] \n");
+//             for(int k=0; k<idx; k++)
+//                 yInfo("    iRow[%d]=%d jCol[%d]=%d \n",k,iRow[k],k,jCol[k]);
             
         }
         else
@@ -585,7 +583,7 @@
             // reaching in position
             for (Ipopt::Index i=0; i<n; i++)
             {
-                values[i]=-2.0*dt*dot(err_xyz,J0_xyz.getCol(i));
+                values[idx]=-2.0*dt*dot(err_xyz,J0_xyz.getCol(i));
                 idx++;
             }
 
@@ -595,10 +593,10 @@
                 {
                     if((*it).type == "Elbow")
                     {
-                         // reaching in position
+                         // reaching in position - elbow control point
                         for (Ipopt::Index j=0; j<(n-4); j++)
                         {
-                            values[idx]=2.0*dt*dot(err_xyz_elbow,(*it).J0_xyz.getCol(j));
+                            values[idx]=-2.0*dt*dot(err_xyz_elbow,(*it).J0_xyz.getCol(j));
                             idx++;
                         }
                     }
@@ -632,9 +630,9 @@
                 values[idx++]=elb_m*dt;
                 values[idx++]=dt;
             }
-            //printf("[ControllerNLP::eval_jac_g]\n");
-            //for(int k=0; k<idx; k++)
-              //  printf("    values[%d]=%f \n",k,values[k]);
+//             yInfo("[ControllerNLP::eval_jac_g]\n");
+//             for(int k=0; k<idx; k++)
+//                 yInfo("    values[%d]=%f \n",k,values[k]);
             
             
         }

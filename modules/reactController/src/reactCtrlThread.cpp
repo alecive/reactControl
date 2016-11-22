@@ -483,16 +483,17 @@ void reactCtrlThread::run()
         }
     }
     else{
+        ;
        //temporary - we set the desired elbow pos manually in order to test without the planner module
-       additionalControlPointsVector.clear();
-       ControlPoint *controlPoint = new ControlPoint();
-       controlPoint->type = "Elbow";
-       Vector elbow_des_pos(3,0.0);
-       elbow_des_pos(0)=-0.076; elbow_des_pos(1)= -0.17; elbow_des_pos(2)= 0.066;
-       //elbow_des_pos(0)=-0.027; elbow_des_pos(1)= -0.243; elbow_des_pos(2)= 0.195;
-       controlPoint->x_desired = elbow_des_pos; 
-       //printf("testing: setting fixed elbow target to (%s) \n",controlPoint->x_desired.toString(3,3).c_str());
-       additionalControlPointsVector.push_back(*controlPoint);
+//        additionalControlPointsVector.clear();
+//        ControlPoint *controlPoint = new ControlPoint();
+//        controlPoint->type = "Elbow";
+//        Vector elbow_des_pos(3,0.0);
+//        elbow_des_pos(0)=-0.114; elbow_des_pos(1)= -0.176; elbow_des_pos(2)= 0.08;
+//        //elbow_des_pos(0)=-0.027; elbow_des_pos(1)= -0.243; elbow_des_pos(2)= 0.195;
+//        controlPoint->x_desired = elbow_des_pos; 
+//        //printf("testing: setting fixed elbow target to (%s) \n",controlPoint->x_desired.toString(3,3).c_str());
+//        additionalControlPointsVector.push_back(*controlPoint);
     }
 
     collisionPoints.clear();
@@ -610,10 +611,10 @@ void reactCtrlThread::run()
          
             //printMessage(2,"[reactCtrlThread::run()]: Will call solveIK.\n");
             double t_1=yarp::os::Time::now();
-            q_dot = solveIK(ipoptExitCode);
+            q_dot = solveIK(ipoptExitCode); //this is the key function call where the reaching opt problem is solved 
             timeToSolveProblem_s  = yarp::os::Time::now()-t_1;
                                 
-           if (ipoptExitCode==Ipopt::Solve_Succeeded || ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
+            if (ipoptExitCode==Ipopt::Solve_Succeeded || ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
             {
                 if (ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
                     yWarning("[reactCtrlThread] Ipopt cpu time was higher than the rate of the thread!");
@@ -656,7 +657,7 @@ void reactCtrlThread::run()
                     controlSuccess = true;
             }
             
-            updateArmChain(); //N.B. This is the secod call within run(); may give more precise data for the logging; may also cost time
+            updateArmChain(); //N.B. This is the second call within run(); may give more precise data for the logging; may also cost time
             //Vector xee_pos_virtual_after=virtualArmChain->EndEffPosition();
             //yInfo()<<"   t after opt and control [s] = "<<yarp::os::Time::now() -t_0;
             //yInfo()<<"   xee_pos_virtual after updating virtual chain [m] = "<<xee_pos_virtual_after.toString(3,3);         
@@ -667,8 +668,7 @@ void reactCtrlThread::run()
             //yInfo()<<"   e_pos_real after opt step and control [m] = "<<norm(x_n-x_t);
             //yInfo()<<"   e_pos_virtual after opt step and control [m] = "<<norm(x_n-xee_pos_virtual_after);
             //yInfo()<<"";
-    
-            
+          
             break;
         }
         case STATE_IDLE:
@@ -1071,6 +1071,12 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
         printf("x_0: %s\tx_t: %s\n",       x_0.toString(3,3).c_str(),x_t.toString(3,3).c_str());
         printf("norm(x_n-x_t): %g\tnorm(x_d-x_n): %g\tnorm(x_d-x_t): %g\n",
                     norm(x_n-x_t), norm(x_d-x_n), norm(x_d-x_t));
+        if(additionalControlPoints)
+        {
+            //additionalControlPointsVector.front(); //let's print the first one - assume it's the elbow for now
+            printf("elbow_x_n == elbow_x_d: %s\telbow_x_t: %s\n", additionalControlPointsVector.front().x_desired.toString(3,3).c_str(), additionalControlPointsVector.front().p0.toString(3,3).c_str());
+            printf("norm elbow pos error: %g\n",norm(additionalControlPointsVector.front().x_desired - additionalControlPointsVector.front().p0));
+        }
         printf("Result (solved velocities (deg/s)): %s\n",res.toString(3,3).c_str());
     }
    
