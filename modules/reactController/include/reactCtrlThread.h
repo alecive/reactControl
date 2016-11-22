@@ -1,8 +1,8 @@
 /* 
  * Copyright: (C) 2015 iCub Facility - Istituto Italiano di Tecnologia
- * Author: Alessandro Roncone <alessandro.roncone@iit.it>
+ * Authors: Matej Hoffmann <matej.hoffmann@iit.it>, Alessandro Roncone <alessandro.roncone@yale.edu>
  * website: www.robotcub.org
- * author website: http://alecive.github.io
+ * author websites: https://sites.google.com/site/matejhof, http://alecive.github.io
  * 
  * Permission is granted to copy, distribute, and/or modify this program
  * under the terms of the GNU General Public License, version 2 or any

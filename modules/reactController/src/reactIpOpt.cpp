@@ -1,6 +1,7 @@
 /* 
  * Copyright: (C) 2015 iCub Facility - Istituto Italiano di Tecnologia
- * Author: Ugo Pattacini, Matej Hoffmann, Alessandro Roncone; <name.surname@iit.it>
+ * Authors: Ugo Pattacini <ugo.pattacini@iit.it>, Matej Hoffmann <matej.hoffmann@iit.it>, 
+ * Alessandro Roncone <alessandro.roncone@yale.edu>
  * website: www.robotcub.org
  * 
  * Permission is granted to copy, distribute, and/or modify this program
