@@ -24,6 +24,7 @@ yarp_add_idl(IDL_GEN_FILES ${PROJECT_NAME}.thrift)
 source_group("IDL Files" FILES ${idl_files})
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include
+                    ${motionPlan_INCLUDE_DIRS}
                     ${IPOPT_INCLUDE_DIRS}
                     ${YARP_INCLUDE_DIRS}                    
                     ${ICUB_INCLUDE_DIRS})

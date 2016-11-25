@@ -25,6 +25,9 @@ icubcontrib_set_default_prefix()
 add_definitions(${YARP_DEFINES})   # add yarp definitions - this contains also -D_REENTRANT
 include(YarpInstallationHelpers)   # pick up yarp's cmake scripts
 
+## then lib
+add_subdirectory(lib)
+
 ## then modules
 add_subdirectory(modules)
 
