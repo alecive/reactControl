@@ -1,7 +1,5 @@
 #include <iCub/motionPlan/motionPlan.h>
 
-//using namespace waypointTrajectory;
-
 template <typename T>
 string NumberToString ( T Number )
 {

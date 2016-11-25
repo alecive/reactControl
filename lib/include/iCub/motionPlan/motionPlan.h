@@ -14,13 +14,6 @@ using namespace std;
 using namespace yarp::sig;
 using namespace yarp::os;
 
-//namespace iCub {
-//   namespace motionPlan {
-//       class motionPlan;
-//       class waypointTrajectory;
-//    }
-//}
-
 /**
  * @brief The waypointTrajectory class contains some useful information of a generated motion path to be easily sent through different modules
  */
@@ -197,19 +190,5 @@ public:
 
 
 };
-
-//class motionPlan : public Portable
-//{
-//private:
-//    vector<waypointTrajectory> listTrajectory;
-//public:
-//    motionPlan();
-
-//    void addTrajectory(const waypointTrajectory &ctrlPtTrajectory);
-
-//    virtual bool read(ConnectionReader &connection);
-
-//    virtual bool write(ConnectionWriter &connection);
-//};
 
 #endif // MOTIONPLAN_H
