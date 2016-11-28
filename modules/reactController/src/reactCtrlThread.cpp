@@ -546,7 +546,7 @@ void reactCtrlThread::run()
         {
             if ((norm(x_t-x_d) < globalTol)) //we keep solving until we reach the desired target
             {
-                yDebug(0,"[reactCtrlThread] norm(x_t-x_d) %g\tglobalTol %g\n",norm(x_t-x_d),globalTol);
+                yDebug("[reactCtrlThread] norm(x_t-x_d) %g\tglobalTol %g",norm(x_t-x_d),globalTol);
                 state=STATE_IDLE;
                 if (!stopControlHelper())
                     yError("[reactCtrlThread] Unable to properly stop the control of the arm!");
