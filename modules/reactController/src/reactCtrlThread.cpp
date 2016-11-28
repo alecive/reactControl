@@ -581,7 +581,7 @@ void reactCtrlThread::run()
 
             else if(referenceGen == "none")
             {
-                //yInfo("no reference gen mode\n");
+                yInfo("no reference gen mode\n");
                 x_n = x_d;
             }
  
