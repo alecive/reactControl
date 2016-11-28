@@ -6,7 +6,6 @@ project(reactController)
 
 find_package(IPOPT REQUIRED)
 find_package(reaching-with-avoidance)
-find_package(kinectWrapper)
 
 include(YarpIDL)
 
@@ -26,7 +25,6 @@ yarp_add_idl(IDL_GEN_FILES ${PROJECT_NAME}.thrift)
 source_group("IDL Files" FILES ${idl_files})
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include
-                    ${kinectWrapper_INCLUDE_DIRS}
                     ${reaching-with-avoidance_INCLUDE_DIRS}
                     ${IPOPT_INCLUDE_DIRS}
                     ${YARP_INCLUDE_DIRS}                    
@@ -34,6 +32,6 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include
 
 add_definitions(-D_USE_MATH_DEFINES)
 add_executable(${PROJECT_NAME} ${header_files} ${source_files} ${IDL_GEN_FILES} ${idl_files})
-target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES} ctrlLib iKin skinDynLib  ${reaching-with-avoidance_LIBRARIES} ${kinectWrapper_LIBRARIES} ${IPOPT_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES} ctrlLib iKin skinDynLib  ${reaching-with-avoidance_LIBRARIES} ${IPOPT_LIBRARIES})
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 
