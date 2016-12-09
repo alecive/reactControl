@@ -14,7 +14,7 @@ chosen_time_column = 6; % 4 for sender, 6 for receiver
 
 %path_prefix = 'input/';
 %path_prefix = 'icubSimTests/test_20160404a/';
-path_prefix = 'multipleControlPoints_icubSim/data1/';
+path_prefix = 'multipleControlPoints_icubSim/data2/';
 %path_prefix = 'icubExperiments/moveWithIpoptWithoutAcceptHeuristicsOldTolerance_works/';
 path_prefix_dumper = '';
 
@@ -296,10 +296,10 @@ if visualize_time_stats
 
 end
 
-%% reference vs. end-effector
+%% reference vs. real position end-effector and elbow
 if visualize_target
 
-    f1 = figure(1); clf(f1); set(f1,'Color','white','Name','Target, reference, end-effector in space');  
+    f1 = figure(1); clf(f1); set(f1,'Color','white','Name','Target, reference, end-effector (and elbow) in space');  
     hold on; axis equal; view([-130 30]); grid;
     xlabel('x [m]');
     ylabel('y [m]');
@@ -308,12 +308,21 @@ if visualize_target
     plot3(d(:,target_x.column),d(:,target_y.column),d(:,target_z.column),'r*','LineWidth',4); % plots the desired target trajectory
     %plot3(d(end,5),d(end,6),d(end,7),'r*','LineWidth',10); % plots the desired target final pos
 
-    plot3(d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column),'go','LineWidth',2); % plots the end-eff targets as given by particle
-    plot3(d(end,targetEE_x.column),d(end,targetEE_y.column),d(end,targetEE_z.column),'go','LineWidth',4); % plots the end-eff target final pos
+    plot3(d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column),'go','LineWidth',2); % plots the end-eff targets as given by reference
+    plot3(d(end,targetEE_x.column),d(end,targetEE_y.column),d(end,targetEE_z.column),'go','LineWidth',4); % plots the end-eff reference final pos
 
     plot3(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),'k.','LineWidth',3); % plots the end-eff trajectory
     plot3(d(end,EE_x.column),d(end,EE_y.column),d(end,EE_z.column),'kx','LineWidth',6); % plots the end-eff final pos
 
+    if visualize_elbow_target % for elbow - target and reference are currently identical (9.12.2016) 
+         plot3(d(:,target_elbow_x.column),d(:,target_elbow_y.column),d(:,target_elbow_z.column),'r*','LineWidth',4); % plots the desired elbow target trajectory
+         plot3(d(:,target_elbow_x.column),d(:,target_elbow_y.column),d(:,target_elbow_z.column),'go','LineWidth',2); % plots the elbow targets as given by reference
+         plot3(d(end,target_elbow_x.column),d(end,target_elbow_y.column),d(end,target_elbow_z.column),'go','LineWidth',4); % plots the elbow reference final pos
+         plot3(d(:,elbow_x.column),d(:,elbow_y.column),d(:,elbow_z.column),'k.','LineWidth',3); % plots the elbow real trajectory
+         plot3(d(end,elbow_x.column),d(end,elbow_y.column),d(end,elbow_z.column),'kx','LineWidth',6); % plots the elbow final pos plot3(d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column),'go','LineWidth',2); % plots the end-eff targets as given by reference
+         plot3(d(end,targetEE_x.column),d(end,targetEE_y.column),d(end,targetEE_z.column),'go','LineWidth',4); % plots the end-eff target final pos
+    end    
+       
     hold off;
 
     f11 = figure(11); clf(f11); set(f11,'Color','white','Name','Target, reference, end-effector in time and space');  
@@ -333,9 +342,9 @@ if visualize_target
                 plot(t,100*d(:,targetEE_y.column),'go','MarkerSize',3);
                 plot(t,100*d(:,EE_y.column),'k.','MarkerSize',4);
                 ylabel('position (cm)');
-            hold off;
- 
-       subplot(3,1,3);
+            hold off;  
+       
+        subplot(3,1,3);
             hold on;
             title('z coordinate');
                 plot(t,100*d(:,target_z.column),'r*','MarkerSize',5);
@@ -344,7 +353,37 @@ if visualize_target
                 ylabel('position (cm)');
             hold off;
      
-
+    if visualize_elbow_target
+       f12 = figure(12); clf(f12);
+       set(f12,'Color','white','Name','Target and elbow pos in time and space');  
+        subplot(3,1,1);
+            hold on;
+            title('x coordinate');
+                plot(t,100*d(:,target_elbow_x.column),'r*','MarkerSize',5);
+                plot(t,100*d(:,target_elbow_x.column),'go','MarkerSize',3);
+                plot(t,100*d(:,elbow_x.column),'k.','MarkerSize',4);
+                ylabel('position (cm)');
+            hold off;
+         
+        subplot(3,1,2);
+            hold on;
+            title('y coordinate');
+                plot(t,100*d(:,target_elbow_y.column),'r*','MarkerSize',5);
+                plot(t,100*d(:,target_elbow_y.column),'go','MarkerSize',3);
+                plot(t,100*d(:,elbow_y.column),'k.','MarkerSize',4);
+                ylabel('position (cm)');
+            hold off; 
+            
+         subplot(3,1,3);
+            hold on;
+            title('z coordinate');
+                plot(t,100*d(:,target_elbow_z.column),'r*','MarkerSize',5);
+                plot(t,100*d(:,target_elbow_z.column),'go','MarkerSize',3);
+                plot(t,100*d(:,elbow_z.column),'k.','MarkerSize',4);
+                ylabel('position (cm)');
+            hold off;
+     
+    end
          
     
     
@@ -425,9 +464,8 @@ if visualize_target
             hold off;
     
     
-    f22 = figure(22); clf(f22); set(f22,'Color','white','Name','Distance ref vs. end-eff and target');      
+    f22 = figure(22); clf(f22); set(f22,'Color','white','Name','Distance end-eff vs. reference and target');      
    
-        title('Distance reference vs. end-effector')
         xlabel('time (s)');
         [ax,h1,h2] = plotyy(t,100*myEuclDist3d_matrix(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column)),...
             t,100*myEuclDist3d_matrix(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),d(:,target_x.column),d(:,target_y.column),d(:,target_z.column)));
@@ -436,25 +474,31 @@ if visualize_target
         legend('Distance end-eff to reference','Distance end-eff to final target'); % reference is the current target
         set(get(ax(1),'Ylabel'),'String','Distance (cm)'); 
         set(get(ax(2),'Ylabel'),'String','Distance (cm)');
+        
+    f23 = figure(23); clf(f23); set(f23,'Color','white','Name','Distance elbow vs. reference and target');      
+   
+        xlabel('time (s)');
+        [ax,h1,h2] = plotyy(t,100*myEuclDist3d_matrix(d(:,elbow_x.column),d(:,elbow_y.column),d(:,elbow_z.column),d(:,target_elbow_x.column),d(:,target_elbow_y.column),d(:,target_elbow_z.column)),...
+            t,100*myEuclDist3d_matrix(d(:,elbow_x.column),d(:,elbow_y.column),d(:,elbow_z.column),d(:,target_elbow_x.column),d(:,target_elbow_y.column),d(:,target_elbow_z.column)));
+        set(h1,'Marker','o','MarkerSize',10,'Color','b');
+        set(h2,'Marker','*','MarkerSize',10,'Color','g');
+        legend('Distance elbow to reference','Distance elbow to final target'); % reference is the current target
+        set(get(ax(1),'Ylabel'),'String','Distance (cm)'); 
+        set(get(ax(2),'Ylabel'),'String','Distance (cm)');    
 
 
     if save_figs
-       saveas(f1,'output/TargetReferenceEndeffectorTrajectories.fig');
+       saveas(f1,'output/TargetReferenceEndeffectorTrajectoriesInSpace.fig');
        saveas(f11,'output/TargetReferenceEndeffectorTrajectoriesInTime.fig');
+       saveas(f12,'output/TargetVsRealElbowTrajectoriesInTime.fig');
        saveas(f2,'output/End-effector reference detail.fig');
        saveas(f21,'output/End-effector position detail.fig');
        saveas(f22,'output/TargetReferenceEndeffectorDistances.fig');
+       saveas(f23,'output/TargetReferenceElbowDistances.fig');
     end
 
 end
 
-%% reference vs. desired elbow control point
-
-if visualize_elbow_target
-    ; 
-    % TODO copy from above and adapt to elbow target vs. actual pos.
-    
-end
 
 %% joint values vs. joint limits
 if visualize_all_joint_pos
