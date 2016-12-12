@@ -441,10 +441,15 @@ void reactCtrlThread::run()
                                     yWarning("[reactCtrlThread::run()] problem with obtaining waypoint\n");
                                 //vector<Vector> waypoints = (*it).getWaypoints(); //temporary
                                 //setNewTarget(*(++(waypoints.begin())),false); //temporary
-                                printMessage(0,"[reactCtrlThread::run()] setting end-eff position from streaming: (%s).\n",x_d.toString(3,3).c_str());
+                                printMessage(0,"[reactCtrlThread::run()] setting end-eff position from streaming: (%s).\n",
+                                             x_d.toString(3,3).c_str());
                             }
                             else if (((*it).getCtrlPointName() == "Elbow") && additionalControlPoints)
-                            { //elbow
+                            {   //elbow
+                                yInfo("[reactCtrlThread::run()] check getCtrlPointName()== Elbow");  //for debugging
+                                Vector x_temp = (*it).getWaypoints().front();
+                                printf("\tReceived x_temp = %s\n",x_temp.toString(3,3).c_str());
+
                                 ControlPoint *controlPoint = new ControlPoint();
                                 controlPoint->type = "Elbow";
                                 controlPoint->x_desired = (*it).getWaypoints().front();
@@ -581,7 +586,7 @@ void reactCtrlThread::run()
 
             else if(referenceGen == "none")
             {
-                yInfo("no reference gen mode\n");
+//                yInfo("no reference gen mode\n");
                 x_n = x_d;
             }
  
