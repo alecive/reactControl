@@ -416,23 +416,18 @@ void reactCtrlThread::run()
             additionalControlPointsVector.clear();
             for (std::deque<waypointTrajectory>::iterator it = waypointTraj.begin() ; it != waypointTraj.end(); ++it)
             {
-                yInfo("[reactCtrlThread::run()] (*it).getCtrlPointName() = %s\n", (*it).getCtrlPointName().c_str()); //for debugging
                 if ( ((*it).getCtrlPointName() == "End-Effector") || ((*it).getCtrlPointName() == "Elbow"))
                 {
-                    yInfo("[reactCtrlThread::run()] check getCtrlPointName()"); //for debugging
                     if ((*it).getDimension() >= 3)
                     {
-                        yInfo("[reactCtrlThread::run()] check getDimension()"); //for debugging
                         if ((*it).getDimension() > 3)
                             yWarning("[reactCtrlThread::run()] %d dimensions specified for control point %s - only first three (pos) will be used.",(*it).getDimension(),(*it).getCtrlPointName().c_str());
                         if ((*it).getNbWaypoint() >= 1)
                         {
-                            yInfo("[reactCtrlThread::run()] check getNbWaypoint()");    //for debugging
                             if ((*it).getNbWaypoint() > 1)
                                 yWarning("[reactCtrlThread::run()] %d waypoints specified for control point %s - only first one will be used.",(*it).getNbWaypoint(),(*it).getCtrlPointName().c_str());
                             if ((*it).getCtrlPointName() == "End-Effector")
                             {
-                                yInfo("[reactCtrlThread::run()] check getCtrlPointName()== End-Effector");  //for debugging
                                 Vector x_temp = (*it).getWaypoints().front();
                                 printf("\tReceived x_temp = %s\n",x_temp.toString(3,3).c_str());
                                 if (x_temp.size() == (*it).getDimension())
@@ -446,7 +441,6 @@ void reactCtrlThread::run()
                             }
                             else if (((*it).getCtrlPointName() == "Elbow") && additionalControlPoints)
                             {   //elbow
-                                yInfo("[reactCtrlThread::run()] check getCtrlPointName()== Elbow");  //for debugging
                                 Vector x_temp = (*it).getWaypoints().front();
                                 printf("\tReceived x_temp = %s\n",x_temp.toString(3,3).c_str());
 
@@ -484,7 +478,6 @@ void reactCtrlThread::run()
             }
             if(additionalControlPoints && (additionalControlPointsVector.size() != 1))
                 yWarning("[reactCtrlThread::run():] additionalControlPoints is ON, expecting one for elbow, but additionalControlPointsVector.size() is %lu.\n",additionalControlPointsVector.size());
-            
         }
     }
     else{
@@ -549,6 +542,7 @@ void reactCtrlThread::run()
             break;
         case STATE_REACH:
         {
+            yInfo("[reactCtrlThread] norm(x_t-x_d) = %g",norm(x_t-x_d));
             if ((norm(x_t-x_d) < globalTol)) //we keep solving until we reach the desired target
             {
                 yDebug("[reactCtrlThread] norm(x_t-x_d) %g\tglobalTol %g",norm(x_t-x_d),globalTol);
@@ -586,7 +580,6 @@ void reactCtrlThread::run()
 
             else if(referenceGen == "none")
             {
-//                yInfo("no reference gen mode\n");
                 x_n = x_d;
             }
  
@@ -786,9 +779,6 @@ void reactCtrlThread::threadRelease()
             portToSimWorld.interrupt();
             portToSimWorld.close();
         }
-   // yInfo("Closing files..");    
-     //   fout_param.close();
-
 }
 
 
@@ -922,11 +912,6 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
             //double T = sqrt( (x_d(0)-x_0(0))*(x_d(0)-x_0(0)) + (x_d(1)-x_0(1))*(x_d(1)-x_0(1)) + (x_d(2)-x_0(2))*(x_d(2)-x_0(2)) )  / trajSpeed; 
             minJerkTarget->setT(T);
         }
-        /*else if (referenceGen == "none")
-        {
-            ;
-        } */
-
         
         yInfo("[reactCtrlThread] got new target: x_0: %s",x_0.toString(3,3).c_str());
         yInfo("[reactCtrlThread]                 x_d: %s",x_d.toString(3,3).c_str());
