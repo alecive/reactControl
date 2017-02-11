@@ -267,7 +267,7 @@ bool reactCtrlThread::threadInit()
     else
         minJerkTarget = NULL;
   
-    streamingTarget = false;
+    streamingTarget = true;
     nextStreamedTargets = new motionPlan();
     additionalControlPointsVector.clear();
        
