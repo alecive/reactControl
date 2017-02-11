@@ -606,7 +606,7 @@ void reactCtrlThread::run()
                 delete avhdl; avhdl = NULL; //TODO this is not efficient, in the future find a way to reset the handler, not recreate
             }
             
-         
+            yDebug("vLimAdapted = %s",vLimAdapted.toString(3,3).c_str());
             //printMessage(2,"[reactCtrlThread::run()]: Will call solveIK.\n");
             double t_1=yarp::os::Time::now();
             q_dot = solveIK(ipoptExitCode); //this is the key function call where the reaching opt problem is solved 
@@ -835,6 +835,17 @@ bool reactCtrlThread::setVMax(const double _vMax)
     if (_vMax>=0.0)
     {
         vMax=_vMax;
+        for (size_t r=0; r<chainActiveDOF; r++)
+        {
+            vLimNominal(r,0)=-vMax;
+            vLimAdapted(r,0)=-vMax;
+            vLimNominal(r,1)=vMax;
+            vLimAdapted(r,1)=vMax;
+        }
+        if (useTorso){
+            vLimNominal(1,0)=vLimNominal(1,1)=0.0;
+            vLimAdapted(1,0)=vLimAdapted(1,1)=0.0;
+        }
         return true;
     }
     return false;
