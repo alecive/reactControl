@@ -424,7 +424,13 @@
             for (size_t i=0; i<v.length(); i++)
                 v[i]=x[i];
 
-            He.setSubmatrix(R0+dt*(skew(J0_ang*v)*R0),0,0);
+            Vector w=J0_ang*v;
+            double theta=norm(w);
+            if (theta>0.0)
+                w/=theta;
+            w.push_back(theta*dt);
+            He.setSubmatrix(axis2dcm(w).submatrix(0,2,0,2)*R0,0,0);
+            
             Vector pe=p0+dt*(J0_xyz*v);            
             He(0,3)=pe[0];
             He(1,3)=pe[1];
