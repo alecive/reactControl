@@ -268,7 +268,6 @@ bool reactCtrlThread::threadInit()
         minJerkTarget = NULL;
   
     streamingTarget = true;
-    nextStreamedTargets = new motionPlan();
     additionalControlPointsVector.clear();
        
     movingTargetCircle = false;
@@ -315,9 +314,8 @@ bool reactCtrlThread::threadInit()
     
     aggregPPSeventsInPort.open("/"+name+"/pps_events_aggreg:i");
     aggregSkinEventsInPort.open("/"+name+"/skin_events_aggreg:i");
-    
-    nextStreamedTargets->useCallback();
-    nextStreamedTargets->open("/"+name+"/streamedWholeBodyTargets:i");
+
+    streamedTargets.open("/"+name+"/streamedWholeBodyTargets:i");
        
     outPort.open("/"+name +"/data:o"); //for dumping
     if (visualizeIniCubGui)
@@ -408,76 +406,21 @@ void reactCtrlThread::run()
     //}
     if (streamingTarget)    //read "trajectory" - in this special case, it is only set of next target positions for possibly multiple control points
     {
-        if (nextStreamedTargets->gotNewMsg())
+        std::vector<Vector> x_planned;
+        if (readMotionPlan(x_planned))
         {
-            printf("[reactCtrlThread::run()] Streaming target - new message arrived.\n");
-            nextStreamedTargets->setNewMsg(false);
-            deque<waypointTrajectory> waypointTraj = nextStreamedTargets->getListTrajectory();
             additionalControlPointsVector.clear();
-            for (std::deque<waypointTrajectory>::iterator it = waypointTraj.begin() ; it != waypointTraj.end(); ++it)
+            if (x_planned.size()>0)
             {
-                if ( ((*it).getCtrlPointName() == "End-Effector") || ((*it).getCtrlPointName() == "Elbow"))
+                setNewTarget(x_planned[0],false);
+                if (x_planned.size()==2 && additionalControlPoints)
                 {
-                    if ((*it).getDimension() >= 3)
-                    {
-                        if ((*it).getDimension() > 3)
-                            yWarning("[reactCtrlThread::run()] %d dimensions specified for control point %s - only first three (pos) will be used.",(*it).getDimension(),(*it).getCtrlPointName().c_str());
-                        if ((*it).getNbWaypoint() >= 1)
-                        {
-                            if ((*it).getNbWaypoint() > 1)
-                                yWarning("[reactCtrlThread::run()] %d waypoints specified for control point %s - only first one will be used.",(*it).getNbWaypoint(),(*it).getCtrlPointName().c_str());
-                            if ((*it).getCtrlPointName() == "End-Effector")
-                            {
-                                Vector x_temp = (*it).getWaypoints().front();
-                                printf("\tReceived x_temp = %s\n",x_temp.toString(3,3).c_str());
-                                if (x_temp.size() == (*it).getDimension())
-                                    setNewTarget((*it).getWaypoints().front(),false);
-                                else
-                                    yWarning("[reactCtrlThread::run()] problem with obtaining waypoint\n");
-                                //vector<Vector> waypoints = (*it).getWaypoints(); //temporary
-                                //setNewTarget(*(++(waypoints.begin())),false); //temporary
-                                printMessage(0,"[reactCtrlThread::run()] setting end-eff position from streaming: (%s).\n",
-                                             x_d.toString(3,3).c_str());
-                            }
-                            else if (((*it).getCtrlPointName() == "Elbow") && additionalControlPoints)
-                            {   //elbow
-                                Vector x_temp = (*it).getWaypoints().front();
-                                printf("\tReceived x_temp = %s\n",x_temp.toString(3,3).c_str());
-
-                                ControlPoint *controlPoint = new ControlPoint();
-                                controlPoint->type = "Elbow";
-                                controlPoint->x_desired = (*it).getWaypoints().front();
-                                //vector<Vector> waypoints2 = (*it).getWaypoints(); //temporary
-                                //controlPoint->x_desired = *(++(waypoints2.begin())); //temporary
-                                 //temporary
-                                //Vector elbow_des_pos(3,0.0);
-                                //elbow_des_pos(0)=-0.1; elbow_des_pos(1)= -0.1; elbow_des_pos(2)= 0.0;
-                                //elbow_des_pos(0)=-0.027; elbow_des_pos(1)= -0.243; elbow_des_pos(2)= 0.195;
-                                //controlPoint->x_desired = elbow_des_pos; //temporary
-                                //printf("testing: setting fixed elbow target to (%s) \n",controlPoint->x_desired.toString(3,3).c_str());
-                                printMessage(0,"[reactCtrlThread::run()] Pushing desired elbow position from streaming: (%s).\n",
-                                             controlPoint->x_desired.toString(3,3).c_str());
-                                additionalControlPointsVector.push_back(*controlPoint);
-                            }
-                        }
-                        else
-                            yWarning("[reactCtrlThread::run()] %d waypoints for control point %s < 1 - ignoring.",(*it).getNbWaypoint(),(*it).getCtrlPointName().c_str());
-                    
-                    }
-                    else //((*it).numberDimension < 3)
-                        yWarning("[reactCtrlThread::run()] %d dimensions specified for control point %s < 3 - ignoring.",(*it).getDimension(),(*it).getCtrlPointName().c_str());
+                    ControlPoint *ctrlPt = new ControlPoint();
+                    ctrlPt->type = "Elbow";
+                    ctrlPt->x_desired = x_planned[1];
+                    additionalControlPointsVector.push_back(*ctrlPt);
                 }
-                else
-                    yWarning("[reactCtrlThread::run()] Don't know how to handle control point of type %s.",(*it).getCtrlPointName().c_str());
-                
             }
-            yInfo("Filled up additionalControlPointsVector: \n");
-            for (std::vector<ControlPoint>::iterator it = additionalControlPointsVector.begin() ; it != additionalControlPointsVector.end(); ++it)
-            {
-               printMessage(0,(*it).toString().c_str());
-            }
-            if(additionalControlPoints && (additionalControlPointsVector.size() != 1))
-                yWarning("[reactCtrlThread::run():] additionalControlPoints is ON, expecting one for elbow, but additionalControlPointsVector.size() is %lu.\n",additionalControlPointsVector.size());
         }
     }
     else{
@@ -719,13 +662,7 @@ void reactCtrlThread::threadRelease()
     }
     
     collisionPoints.clear();    
-    
-    if(nextStreamedTargets != NULL){
-        yDebug("deleting nextStreamedTargets..");
-        delete nextStreamedTargets;
-        nextStreamedTargets = NULL;    
-    }
-    
+
     additionalControlPointsVector.clear();
     if(minJerkTarget != NULL){
         yDebug("deleting minJerkTarget..");
@@ -1550,6 +1487,44 @@ void reactCtrlThread::sendData()
     }
 }
 
+bool reactCtrlThread::readMotionPlan(std::vector<Vector> &x_desired)
+{
+    Bottle *inPlan = streamedTargets.read(false);
+
+    bool hasPlan = false;
+    if(inPlan!=NULL) {
+        yInfo() << "received motionPlan";
+        int nbCtrlPts = inPlan->size();
+
+        for (int8_t i=0; i<nbCtrlPts; i++)
+        {
+            if (Bottle* inListTraj = inPlan->get(i).asList())
+            {
+                string ctrlPtName = inListTraj->find("control-point").asString();
+                if (inListTraj->find("number-waypoints").asInt()>0)
+                {
+                    int nDim = inListTraj->find("number-dimension").asInt();
+                    if (nDim>=3)
+                    {
+                        Vector xCtrlPt(nDim, 0.0);
+                        if (Bottle* coordinate = inListTraj->find("waypoint_0").asList())
+                        {
+                            if (coordinate->size()==nDim)
+                            {
+                                for (int8_t k=0; k<nDim; k++)
+                                    xCtrlPt[k]=coordinate->get(k).asDouble();
+                                yInfo("\tControl point of %s\t: %s\n",ctrlPtName.c_str(),xCtrlPt.toString(3,3).c_str());
+                                x_desired.push_back(xCtrlPt);
+                                hasPlan = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return hasPlan;
+}
 
 /**** visualizations using iCubGui **************************************/
 

@@ -39,7 +39,6 @@
 #include <iCub/ctrl/minJerkCtrl.h>
 #include <iCub/ctrl/pids.h>
 #include <iCub/ctrl/filters.h>
-#include <iCub/motionPlan/motionPlan.h>
 
 #include <iostream>
 #include <fstream>
@@ -235,7 +234,7 @@ protected:
     yarp::sig::Vector circleCenter;
 
     bool streamingTarget;
-    motionPlan *nextStreamedTargets;
+    yarp::os::BufferedPort<yarp::os::Bottle> streamedTargets;
     std::vector<ControlPoint> additionalControlPointsVector; 
   
     
@@ -364,6 +363,12 @@ protected:
     **/
     void sendData();
 
+    /**
+    * @brief Receive trajectories of control points from planner
+    * @param x_desired standard vector of set of 3D points
+    * @return true if received trajectories are valid, false otherwise
+    */
+    bool readMotionPlan(std::vector<yarp::sig::Vector> &x_desired);
 
     /***************************** visualizations in icubGui  ****************************/
     //uses corresponding global variables for target pos (x_d) or particle pos (x_n) and creates bottles for the port to iCubGui
