@@ -415,11 +415,10 @@ void reactCtrlThread::run()
                 setNewTarget(x_planned[0],false);
                 if (x_planned.size()==2 && additionalControlPoints)
                 {
-                    ControlPoint *ctrlPt = new ControlPoint();
-                    ctrlPt->type = "Elbow";
-                    ctrlPt->x_desired = x_planned[1];
-                    additionalControlPointsVector.push_back(*ctrlPt);
-                    delete ctrlPt;
+                    ControlPoint ctrlPt;
+                    ctrlPt.type = "Elbow";
+                    ctrlPt.x_desired = x_planned[1];
+                    additionalControlPointsVector.push_back(ctrlPt);
                 }
             }
         }
