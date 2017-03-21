@@ -419,6 +419,7 @@ void reactCtrlThread::run()
                     ctrlPt->type = "Elbow";
                     ctrlPt->x_desired = x_planned[1];
                     additionalControlPointsVector.push_back(*ctrlPt);
+                    delete ctrlPt;
                 }
             }
         }
