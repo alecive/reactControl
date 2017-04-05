@@ -3,19 +3,20 @@ clear;
 
 visualize_time_stats = true;
 visualize_target = true;
+visualize_elbow_target = true;
 visualize_all_joint_pos = true;
 visualize_all_joint_vel = true;
 visualize_single_joint_in_detail = true;
 visualize_ineq_constr = true;
 visualize_ipopt_stats = true;
-save_figs = true;
+save_figs = false;
 chosen_time_column = 6; % 4 for sender, 6 for receiver 
 
 %path_prefix = 'input/';
 %path_prefix = 'icubSimTests/test_20160404a/';
-path_prefix = 'icubSimTests/test_20160408b_ugoCode/';
+path_prefix = 'multipleControlPoints_icubSim/data2/';
 %path_prefix = 'icubExperiments/moveWithIpoptWithoutAcceptHeuristicsOldTolerance_works/';
-path_prefix_dumper = 'data/';
+path_prefix_dumper = '';
 
 
 if save_figs
@@ -26,7 +27,8 @@ end
 % joint vel limits for every DOF, then ...
 %  fout_param<<trajTime<<" "<<trajSpeed<<" "<<tol<<" "<<globalTol<<" "<<getRate()/1000.0<<" "<<boundSmoothnessFlag<<" "<<boundSmoothnessValue;
 %if(controlMode == "velocity") fout_param<<"1 "; else if(controlMode == "positionDirect")    fout_param<<"2 ";
-% for 10 DOF case: 1:nDOF, 2-21 joint pos min/max, 22-41 joint vel limits, 42 traj time, 43 traj speed (deg/s), 44: tol, 45: globalTol, 46: rate is s, 47: bound_smoothness flag,
+% for 10 DOF case: 1:nDOF, 2-21 joint pos min/max, 22-41 joint vel limits, 42 traj time, 43 traj speed (deg/s), 44: tol, 
+%45: globalTol, 46: rate is s, 47: bound_smoothness flag,
 % 48: bound smoothness value, 49: controlMode, 50: ipOptMemory 0~off, 1~on
 % 7 DOF case: 1:nDOF, 2-15 joint pos min/max, 16-29 joint vel limits, 30 traj time, 31 traj speed (deg/s), 32: tol, 33: globalTol, 34: rate is s, 35: bound_smoothness flag,
 % 36: bound smoothness value, 37: controlMode, 38: ipOptMemory 0~off, 1~on
@@ -39,14 +41,22 @@ NR_EXTRA_TIME_COLUMNS = 4; % these will be created so that there is time startin
 %1: packetID, 2: sender time stamp, 3:receiver time stamp, 
 % 4: time from 0, sender; 5: increments of 4; 6: time from 0 receiver; 7: increments in 6 
 %8: nActiveDOF in chain
-% 9:11 desired final target (for end-effector), 12:14 current end effector position 
-% 15-17 current desired target given by particle (for end-effector)
-%variable - if torso on: 18:27: if torso off: 18:24 ; joint velocities as solution from ipopt and sent to robot 
-%variable - if torso on: 28:37: if torso off: 25:31 ; joint positions as solution to control and sent to robot 
-%variable - if torso on: 38:57; if torso off: 32:38;  joint vel limits as input to ipopt, after avoidanceHandler
+% 9:11 desired final target position (for end-effector),
+% 12:14 current end effector position 
+% 15:17 current desired target position given by particle (for end-effector)
+% 18:20 desired final target orientation (for end-effector),
+% 21:23 current end effector orientation 
+% 24:26 current desired target orientation given by referenceGen (currently not supported - equal to desired final - o_d)
+%variable - if torso on: 27:36: if torso off: 27:33 ; joint velocities as solution from ipopt and sent to robot 
+%variable - if torso on: 37:46: if torso off: 34:40 ; joint positions as solution to control and sent to robot 
+%variable - if torso on: 47:66; if torso off: 41:54;  joint vel limits as input to ipopt, after avoidanceHandler
 %assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
-% variable - if torso on: 58: if torso off: 46; ipopt exit code (Solve_Succeeded=0)
-% variable - if torso on: 59: if torso off: 47; time taken to solve problem (s) ~ ipopt + avoidance handler
+% variable - if torso on: 67; if torso off: 55; ipopt exit code (Solve_Succeeded=0)
+% variable - if torso on: 68; if torso off: 56; time taken to solve problem (s) ~ ipopt + avoidance handler
+% variable - if positionDirect & torso on: 69:78; if torso off: 57:63;  joint pos from
+% virtual chain ipopt is operating on
+% variable - if positionDirect & torso on: 79:81; target elbow position 
+% variable - if positionDirect & torso on: 82:84; actual elbow position (real chain) 
 
 d_orig=importdata([path_prefix path_prefix_dumper 'reactCtrl/data.log']);
 
@@ -62,19 +72,17 @@ target_x.column = 9;
 target_y.column = 10;
 target_z.column = 11;
     
-targetEE_x.column = 15;
-targetEE_y.column = 16;
-targetEE_z.column = 17;
-    
 EE_x.column = 12;
 EE_y.column = 13;
 EE_z.column = 14;
-    
+
+targetEE_x.column = 15;
+targetEE_y.column = 16;
+targetEE_z.column = 17;
 
 %controlMode = 'velocity';
 %controlMode = 'positionDirect'; % should be picked up automatically from
 %the param file
-
 
 if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 arm
     chainActiveDOF = 10
@@ -87,9 +95,9 @@ if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 
     for i=1:chainActiveDOF
         joint_info(i).pos_limit_min = d_params(2*i); joint_info(i).pos_limit_max = d_params(2*i+1);
         joint_info(i).vel_limit_min = d_params(20+2*i); joint_info(i).vel_limit_max = d_params(20+2*i+1);
-        joint_info(i).vel_column = 13+i+NR_EXTRA_TIME_COLUMNS; joint_info(i).pos_column = 23+i+NR_EXTRA_TIME_COLUMNS; 
-        joint_info(i).vel_limit_min_avoid_column = 32+2*i+NR_EXTRA_TIME_COLUMNS; joint_info(i).vel_limit_max_avoid_column = 32+2*i+1+NR_EXTRA_TIME_COLUMNS;
-        joint_info(i).integrated_pos_column = 55+i+NR_EXTRA_TIME_COLUMNS; 
+        joint_info(i).vel_column = 22+i+NR_EXTRA_TIME_COLUMNS; joint_info(i).pos_column = 32+i+NR_EXTRA_TIME_COLUMNS; 
+        joint_info(i).vel_limit_min_avoid_column = 41+2*i+NR_EXTRA_TIME_COLUMNS; joint_info(i).vel_limit_max_avoid_column = 41+2*i+1+NR_EXTRA_TIME_COLUMNS;
+        joint_info(i).integrated_pos_column = 64+i+NR_EXTRA_TIME_COLUMNS; 
     end
     
     if (length(d_params) == 41) % old format before outputting extra params (prior to 13.2.2016)
@@ -119,16 +127,45 @@ if((d_params(1) == 10) && (d_orig(1,4) == 10) ) % 10 DOF situation - 3 torso, 7 
         elseif(d_params(49) == 2)
             controlMode = 'positionDirect'    
         end
-     end    
-     if(size(d_orig,2) >= 55)
-       ipoptExitCode_col = 58; % setting the cols already for the new d, after adding extra time xols
-       timeToSolve_s_col = 59;
-     end
+        if (length(d_params) >= 53)
+            if(d_params(53) == 1)
+                interactionMode = 'stiff'
+            elseif(d_params(53) == 0)
+                interactionMode = 'compliant'    
+            end
+        end
+        if (length(d_params) >= 54)
+            if(d_params(54) == 1)
+                additionalControlPointsFlag = true
+            elseif(d_params(54) == 0)
+                additionalControlPointsFlag = false    
+            end
+        end
+    end   
+         
+   ipoptExitCode_col = 67; % setting the cols already for the new d, after adding extra time cols
+   timeToSolve_s_col = 68;
      
-     
-    if ( (strcmp(controlMode,'positionDirect')) && (size(d_orig,2) <  65) )
-        error('It seems that integrated positions were not logged.'); 
+    if (strcmp(controlMode,'positionDirect')) 
+        if (size(d_orig,2) <  74) 
+            error('It seems that integrated positions were not logged.'); 
+        end
+        target_elbow_x.column = 79;
+        target_elbow_y.column = 80;
+        target_elbow_z.column = 81;
+        elbow_x.column = 82;
+        elbow_y.column = 83;
+        elbow_z.column = 84;
+    else 
+        target_elbow_x.column = 69;
+        target_elbow_y.column = 70;
+        target_elbow_z.column = 71;
+        elbow_x.column = 72;
+        elbow_y.column = 73;
+        elbow_z.column = 74;
     end
+    
+   
         
 elseif((d_params(1) == 7) && (d_orig(1,4) == 7) ) % 7 DOF situation - arm
     chainActiveDOF = 7
@@ -141,14 +178,13 @@ elseif((d_params(1) == 7) && (d_orig(1,4) == 7) ) % 7 DOF situation - arm
     for i=1:chainActiveDOF
         joint_info(i).pos_limit_min = d_params(2*i); joint_info(i).pos_limit_max = d_params(2*i+1);
         joint_info(i).vel_limit_min = d_params(14+2*i); joint_info(i).vel_limit_max = d_params(14+2*i+1);
-        joint_info(i).vel_column = 13+i+NR_EXTRA_TIME_COLUMNS; joint_info(i).pos_column = 20+i+NR_EXTRA_TIME_COLUMNS; 
-        joint_info(i).vel_limit_min_avoid_column = 26+2*i+NR_EXTRA_TIME_COLUMNS; joint_info(i).vel_limit_max_avoid_column = 26+2*i+1+NR_EXTRA_TIME_COLUMNS;
-        joint_info(i).integrated_pos_column = 43+i+NR_EXTRA_TIME_COLUMNS; 
+        joint_info(i).vel_column = 22+i+NR_EXTRA_TIME_COLUMNS; joint_info(i).pos_column = 29+i+NR_EXTRA_TIME_COLUMNS; 
+        joint_info(i).vel_limit_min_avoid_column = 35+2*i+NR_EXTRA_TIME_COLUMNS; joint_info(i).vel_limit_max_avoid_column = 35+2*i+1+NR_EXTRA_TIME_COLUMNS;
+        joint_info(i).integrated_pos_column = 52+i+NR_EXTRA_TIME_COLUMNS; 
     end
     
     % 7 DOF case: 1:nDOF, 2-15 joint pos min/max, 16-29 joint vel limits, 30 traj time, 31 traj speed (deg/s), 32: tol, 33: globalTol, 34: rate is s, 35: bound_smoothness flag,
     % 36: bound smoothness value, 37: controlMode, 38: ipOptMemory 0~off, 1~on
-
     if (length(d_params) >= 38) 
         dT = d_params(34)
         if (d_params(35) ==1)
@@ -176,18 +212,20 @@ elseif((d_params(1) == 7) && (d_orig(1,4) == 7) ) % 7 DOF situation - arm
            end
         end
          
+       % TODO set interaction mode and additionalControl points here
+        
        
     else
         error('Unexpected param.log length for 7 DOF chain');
     end
    
-    ipoptExitCode_col = 46; % setting the cols already for the new d, after adding extra time xols
-    timeToSolve_s_col = 47;
+    ipoptExitCode_col = 55; % setting the cols already for the new d, after adding extra time cols
+    timeToSolve_s_col = 56;
     
-    if ( (strcmp(controlMode,'positionDirect')) && (size(d_orig,2) <  50) )
+    if ( (strcmp(controlMode,'positionDirect')) && (size(d_orig,2) <  59) )
         error('It seems that intergrated positions were not logged.'); 
     end
-    
+    % TODO add elbow pos plotting here
      
 else
    error('This script is currently not supporting other than 10 DOF and 7 DOF chains'); 
@@ -258,10 +296,10 @@ if visualize_time_stats
 
 end
 
-%% reference vs. end-effector
+%% reference vs. real position end-effector and elbow
 if visualize_target
 
-    f1 = figure(1); clf(f1); set(f1,'Color','white','Name','Target, reference, end-effector in space');  
+    f1 = figure(1); clf(f1); set(f1,'Color','white','Name','Target, reference, end-effector (and elbow) in space');  
     hold on; axis equal; view([-130 30]); grid;
     xlabel('x [m]');
     ylabel('y [m]');
@@ -270,12 +308,21 @@ if visualize_target
     plot3(d(:,target_x.column),d(:,target_y.column),d(:,target_z.column),'r*','LineWidth',4); % plots the desired target trajectory
     %plot3(d(end,5),d(end,6),d(end,7),'r*','LineWidth',10); % plots the desired target final pos
 
-    plot3(d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column),'go','LineWidth',2); % plots the end-eff targets as given by particle
-    plot3(d(end,targetEE_x.column),d(end,targetEE_y.column),d(end,targetEE_z.column),'go','LineWidth',4); % plots the end-eff target final pos
+    plot3(d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column),'go','LineWidth',2); % plots the end-eff targets as given by reference
+    plot3(d(end,targetEE_x.column),d(end,targetEE_y.column),d(end,targetEE_z.column),'go','LineWidth',4); % plots the end-eff reference final pos
 
     plot3(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),'k.','LineWidth',3); % plots the end-eff trajectory
     plot3(d(end,EE_x.column),d(end,EE_y.column),d(end,EE_z.column),'kx','LineWidth',6); % plots the end-eff final pos
 
+    if visualize_elbow_target % for elbow - target and reference are currently identical (9.12.2016) 
+         plot3(d(:,target_elbow_x.column),d(:,target_elbow_y.column),d(:,target_elbow_z.column),'r*','LineWidth',4); % plots the desired elbow target trajectory
+         plot3(d(:,target_elbow_x.column),d(:,target_elbow_y.column),d(:,target_elbow_z.column),'go','LineWidth',2); % plots the elbow targets as given by reference
+         plot3(d(end,target_elbow_x.column),d(end,target_elbow_y.column),d(end,target_elbow_z.column),'go','LineWidth',4); % plots the elbow reference final pos
+         plot3(d(:,elbow_x.column),d(:,elbow_y.column),d(:,elbow_z.column),'k.','LineWidth',3); % plots the elbow real trajectory
+         plot3(d(end,elbow_x.column),d(end,elbow_y.column),d(end,elbow_z.column),'kx','LineWidth',6); % plots the elbow final pos plot3(d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column),'go','LineWidth',2); % plots the end-eff targets as given by reference
+         plot3(d(end,targetEE_x.column),d(end,targetEE_y.column),d(end,targetEE_z.column),'go','LineWidth',4); % plots the end-eff target final pos
+    end    
+       
     hold off;
 
     f11 = figure(11); clf(f11); set(f11,'Color','white','Name','Target, reference, end-effector in time and space');  
@@ -295,9 +342,9 @@ if visualize_target
                 plot(t,100*d(:,targetEE_y.column),'go','MarkerSize',3);
                 plot(t,100*d(:,EE_y.column),'k.','MarkerSize',4);
                 ylabel('position (cm)');
-            hold off;
- 
-       subplot(3,1,3);
+            hold off;  
+       
+        subplot(3,1,3);
             hold on;
             title('z coordinate');
                 plot(t,100*d(:,target_z.column),'r*','MarkerSize',5);
@@ -306,7 +353,37 @@ if visualize_target
                 ylabel('position (cm)');
             hold off;
      
-
+    if visualize_elbow_target
+       f12 = figure(12); clf(f12);
+       set(f12,'Color','white','Name','Target and elbow pos in time and space');  
+        subplot(3,1,1);
+            hold on;
+            title('x coordinate');
+                plot(t,100*d(:,target_elbow_x.column),'r*','MarkerSize',5);
+                plot(t,100*d(:,target_elbow_x.column),'go','MarkerSize',3);
+                plot(t,100*d(:,elbow_x.column),'k.','MarkerSize',4);
+                ylabel('position (cm)');
+            hold off;
+         
+        subplot(3,1,2);
+            hold on;
+            title('y coordinate');
+                plot(t,100*d(:,target_elbow_y.column),'r*','MarkerSize',5);
+                plot(t,100*d(:,target_elbow_y.column),'go','MarkerSize',3);
+                plot(t,100*d(:,elbow_y.column),'k.','MarkerSize',4);
+                ylabel('position (cm)');
+            hold off; 
+            
+         subplot(3,1,3);
+            hold on;
+            title('z coordinate');
+                plot(t,100*d(:,target_elbow_z.column),'r*','MarkerSize',5);
+                plot(t,100*d(:,target_elbow_z.column),'go','MarkerSize',3);
+                plot(t,100*d(:,elbow_z.column),'k.','MarkerSize',4);
+                ylabel('position (cm)');
+            hold off;
+     
+    end
          
     
     
@@ -387,9 +464,8 @@ if visualize_target
             hold off;
     
     
-    f22 = figure(22); clf(f22); set(f22,'Color','white','Name','Distance ref vs. end-eff and target');      
+    f22 = figure(22); clf(f22); set(f22,'Color','white','Name','Distance end-eff vs. reference and target');      
    
-        title('Distance reference vs. end-effector')
         xlabel('time (s)');
         [ax,h1,h2] = plotyy(t,100*myEuclDist3d_matrix(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column)),...
             t,100*myEuclDist3d_matrix(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),d(:,target_x.column),d(:,target_y.column),d(:,target_z.column)));
@@ -398,17 +474,31 @@ if visualize_target
         legend('Distance end-eff to reference','Distance end-eff to final target'); % reference is the current target
         set(get(ax(1),'Ylabel'),'String','Distance (cm)'); 
         set(get(ax(2),'Ylabel'),'String','Distance (cm)');
+        
+    f23 = figure(23); clf(f23); set(f23,'Color','white','Name','Distance elbow vs. reference and target');      
+   
+        xlabel('time (s)');
+        [ax,h1,h2] = plotyy(t,100*myEuclDist3d_matrix(d(:,elbow_x.column),d(:,elbow_y.column),d(:,elbow_z.column),d(:,target_elbow_x.column),d(:,target_elbow_y.column),d(:,target_elbow_z.column)),...
+            t,100*myEuclDist3d_matrix(d(:,elbow_x.column),d(:,elbow_y.column),d(:,elbow_z.column),d(:,target_elbow_x.column),d(:,target_elbow_y.column),d(:,target_elbow_z.column)));
+        set(h1,'Marker','o','MarkerSize',10,'Color','b');
+        set(h2,'Marker','*','MarkerSize',10,'Color','g');
+        legend('Distance elbow to reference','Distance elbow to final target'); % reference is the current target
+        set(get(ax(1),'Ylabel'),'String','Distance (cm)'); 
+        set(get(ax(2),'Ylabel'),'String','Distance (cm)');    
 
 
     if save_figs
-       saveas(f1,'output/TargetReferenceEndeffectorTrajectories.fig');
+       saveas(f1,'output/TargetReferenceEndeffectorTrajectoriesInSpace.fig');
        saveas(f11,'output/TargetReferenceEndeffectorTrajectoriesInTime.fig');
+       saveas(f12,'output/TargetVsRealElbowTrajectoriesInTime.fig');
        saveas(f2,'output/End-effector reference detail.fig');
        saveas(f21,'output/End-effector position detail.fig');
        saveas(f22,'output/TargetReferenceEndeffectorDistances.fig');
+       saveas(f23,'output/TargetReferenceElbowDistances.fig');
     end
 
 end
+
 
 %% joint values vs. joint limits
 if visualize_all_joint_pos

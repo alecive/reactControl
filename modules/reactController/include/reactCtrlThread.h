@@ -1,8 +1,8 @@
 /* 
  * Copyright: (C) 2015 iCub Facility - Istituto Italiano di Tecnologia
- * Author: Alessandro Roncone <alessandro.roncone@iit.it>
+ * Authors: Matej Hoffmann <matej.hoffmann@iit.it>, Alessandro Roncone <alessandro.roncone@yale.edu>
  * website: www.robotcub.org
- * author website: http://alecive.github.io
+ * author websites: https://sites.google.com/site/matejhof, http://alecive.github.io
  * 
  * Permission is granted to copy, distribute, and/or modify this program
  * under the terms of the GNU General Public License, version 2 or any
@@ -52,9 +52,11 @@
 #include "particleThread.h"
 #include "avoidanceHandler.h"
 
+
 using namespace yarp::dev;
 
 using namespace std;
+
 
 class reactCtrlThread: public yarp::os::RateThread
 {
@@ -62,7 +64,8 @@ class reactCtrlThread: public yarp::os::RateThread
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & , const string &_ ,
-                    int , bool , string , double , double , double , double , string , bool , bool , bool , bool , bool, bool , bool , bool , bool , particleThread * );
+                    int , bool , string , double , double , double , double , string , 
+                    bool , bool , bool , bool , bool, bool , bool , bool , bool , bool , particleThread * );
     // INIT
     virtual bool threadInit();
     // RUN
@@ -85,6 +88,9 @@ public:
     // Sets a moving target along a circular trajectory in the y and z axes, relative to the current end-effector position
     bool setNewCircularTarget(const double _radius,const double _frequency);
 
+    //Will be reading reaching targets from a port
+    bool setStreamingTarget();
+    
     // Sets the tolerance
     bool setTol(const double );
 
@@ -153,6 +159,7 @@ protected:
         
     bool hittingConstraints; //inequality constraints for safety of shoudler assembly and to prevent self-collisions torso-upper arm, upper-arm - forearm
     bool orientationControl; //if orientation should be controlled as well
+    bool additionalControlPoints; //if there are additional control points - Cartesian targets for others parts of the robot body - e.g. elbow
     bool visualizeTargetInSim;  // will use the yarp rpc /icubSim/world to visualize the target
     // will use the yarp rpc /icubSim/world to visualize the particle (trajectory - intermediate targets)
     bool visualizeParticleInSim; 
@@ -204,7 +211,6 @@ protected:
     // Gaze interface
     IGazeControl    *igaze;
     int contextGaze;
-
     
     size_t chainActiveDOF;
     //parallel virtual arm and chain on which ipopt will be working in the positionDirect mode case
@@ -216,17 +222,22 @@ protected:
     yarp::sig::Vector x_n;  // Desired next end-effector position
     yarp::sig::Vector x_d;  // Vector that stores the new target
 
+    //All orientation in Euler angle format
     yarp::sig::Vector o_0;  // Initial end-effector orientation
     yarp::sig::Vector o_t;  // Current end-effector orientation
     yarp::sig::Vector o_n;  // Desired next end-effector orientation
     yarp::sig::Vector o_d;  // Vector that stores the new orientation
-
 
     bool movingTargetCircle;
     double radius;
     double frequency;
     yarp::sig::Vector circleCenter;
 
+    bool streamingTarget;
+    yarp::os::BufferedPort<yarp::os::Bottle> streamedTargets;
+    std::vector<ControlPoint> additionalControlPointsVector; 
+  
+    
     //N.B. All angles in this thread are in degrees
     yarp::sig::Vector qA; //current values of arm joints (should be 7)
     yarp::sig::Vector qT; //current values of torso joints (3, in the order expected for iKin: yaw, roll, pitch)
@@ -352,6 +363,12 @@ protected:
     **/
     void sendData();
 
+    /**
+    * @brief Receive trajectories of control points from planner
+    * @param x_desired standard vector of set of 3D points
+    * @return true if received trajectories are valid, false otherwise
+    */
+    bool readMotionPlan(std::vector<yarp::sig::Vector> &x_desired);
 
     /***************************** visualizations in icubGui  ****************************/
     //uses corresponding global variables for target pos (x_d) or particle pos (x_n) and creates bottles for the port to iCubGui

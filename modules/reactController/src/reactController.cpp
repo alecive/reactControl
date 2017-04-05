@@ -1,6 +1,6 @@
 /* 
  * Copyright: (C) 2015 iCub Facility - Istituto Italiano di Tecnologia
- * Author: Alessandro Roncone <alessandro.roncone@iit.it>
+ * Authors: Alessandro Roncone <alessandro.roncone@yale.edu>, Matej Hoffmann <matej.hoffmann@iit.it>
  * website: www.robotcub.org
  * author website: http://alecive.github.io
  * 
@@ -108,10 +108,12 @@ private:
     double  globalTol;  // global tolerance of the task. The controller exits if norm(x_d-x)<globalTol
     double       vMax;  // max velocity set for the joints
     
-    string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk" 
+    string referenceGen; // either "uniformParticle" (constant velocity with particleThread) or "minJerk" 
+    //or "none" (will directly apply the target - used especially in the mode when targets are streamed)  
     
     bool hittingConstraints; //inequality constraints for safety of shoudler assembly and to prevent self-collisions torso-upper arm, upper-arm - forearm  
     bool orientationControl; //if orientation should be controlled as well
+    bool additionalControlPoints; //if there are additional control points - Cartesian targets for others parts of the robot body - e.g. elbow
     
     bool ipOptMemoryOn; // whether ipopt should account for the real motor model
     bool ipOptFilterOn; 
@@ -123,6 +125,8 @@ private:
     bool boundSmoothnessFlag; //for ipopt - whether changes in velocity commands need to be smooth
     //double boundSmoothnessValue; //actual allowed change in every joint velocity commands in deg/s from one time step to the next. Note: this is not adapted to the thread rate set by the rctCtrlRate param
     
+    //setting visualization in iCub simulator; the visualizations in iCubGui constitute an independent pipeline
+    // (currently the iCubGui ones are on and cannot be toggled on/off from the outside)
     bool visualizeTargetInSim; // will use the yarp rpc /icubSim/world to visualize the target
     bool visualizeParticleInSim; // will use the yarp rpc /icubSim/world to visualize the particle (trajectory - intermediate targets)
     bool visualizeCollisionPointsInSim; // will visualize the (potential) collision points in iCub simulator 
@@ -143,21 +147,22 @@ public:
         disableTorso = false;
         gazeControl = false;
         stiffInteraction = true;
-        controlMode = "velocity";        
+        controlMode = "positionDirect";        
         trajSpeed    =   0.1;
         tol          =  1e-5;
         globalTol    =  1e-2;
-        vMax         =  30.0;
+        vMax         =  20.0;
         
-        referenceGen = "uniformParticle";
+        referenceGen = "minJerk";
         hittingConstraints = true;
         orientationControl = true;
+        additionalControlPoints = false;
         ipOptMemoryOn = false;
         ipOptFilterOn = false;
         //ipOptFilter_tc = 0.25;
         
-        tactileCollisionPointsOn = false;
-        visualCollisionPointsOn = false;
+        tactileCollisionPointsOn = true;
+        visualCollisionPointsOn = true;
         
         boundSmoothnessFlag = false;
         //boundSmoothnessValue = 30; // 30 deg/s change in a time step is huge - would have no effect 
@@ -178,7 +183,7 @@ public:
     {
         if (_xd.size()>=3)
         {
-            yInfo("");
+            yInfo(" ");
             yInfo("[reactController] received new x_d: %s", _xd.toString(3,3).c_str());
             return rctCtrlThrd->setNewTarget(_xd, false);
         }
@@ -189,7 +194,7 @@ public:
     {
         if (_rel_xd.size()>=3)
         {
-            yInfo("");
+            yInfo(" ");
             yInfo("[reactController] received new relative x_d: %s", _rel_xd.toString(3,3).c_str());
             return rctCtrlThrd->setNewRelativeTarget(_rel_xd);
         }
@@ -198,7 +203,7 @@ public:
 
     bool set_relative_circular_xd(const double _radius, const double _frequency)
     {
-            yInfo("");
+            yInfo(" ");
             yInfo("[reactController] received new relative circular x_d: radius %f, frequency: %f.",_radius,_frequency);
             if ((_radius>=0.0) && (_radius <= 0.3) && (_frequency >=0.0) && (_frequency<=1.0)  )
                 return rctCtrlThrd->setNewCircularTarget(_radius,_frequency);   
@@ -206,6 +211,13 @@ public:
                 yWarning("[reactController] set_relative_circular_xd(): expecting radius <0,0.3>, frequency <0,1>");    
                 return false;
             }
+    }
+    
+    bool set_streaming_xd()
+    {
+        yInfo(" ");
+        yInfo("[reactController] will be reading reaching targets from a port.");
+        return rctCtrlThrd->setStreamingTarget();   
     }
     
     bool set_tol(const double _tol)
@@ -477,10 +489,10 @@ public:
            if (rf.check("referenceGen"))
             {
                 referenceGen = rf.find("referenceGen").asString();
-                if(referenceGen!="uniformParticle" && referenceGen!="minJerk")
+                if((referenceGen!="uniformParticle") && (referenceGen!="minJerk") && (referenceGen!="none"))
                 {
-                    referenceGen="uniformParticle";
-                    yWarning("[reactController] referenceGen was not in the admissible values (uniformParticle / minJerk). Using %s as default.",referenceGen.c_str());
+                    referenceGen="minJerk";
+                    yWarning("[reactController] referenceGen was not in the admissible values (uniformParticle / minJerk / none). Using %s as default.",referenceGen.c_str());
                 }
                 else 
                     yInfo("[reactController] referenceGen to use is: %s", referenceGen.c_str());
@@ -570,6 +582,22 @@ public:
                 yInfo("[reactController] Could not find orientationControl flag (on/off) in the config file; using %d as default",orientationControl);
             }  
             
+            //*********** orientation control *************************************************/
+            if (rf.check("additionalControlPoints"))
+            {
+                if(rf.find("additionalControlPoints").asString()=="on"){
+                    additionalControlPoints = true;
+                    yInfo("[reactController] additionalControlPoints flag set to on.");
+                }
+                else{
+                    additionalControlPoints = false;
+                    yInfo("[reactController] additionalControlPoints flag set to off.");
+                }
+            }
+            else
+            {
+                yInfo("[reactController] Could not find additionalControlPoints flag (on/off) in the config file; using %d as default",additionalControlPoints);
+            }  
             
             //********************** ipopt using memory - motor model ***********************
             if (rf.check("ipOptMemory"))
@@ -719,7 +747,7 @@ public:
                                           globalTol, vMax, tol, referenceGen, 
                                           tactileCollisionPointsOn,visualCollisionPointsOn,
                                           gazeControl,stiffInteraction,
-                                          hittingConstraints, orientationControl,
+                                          hittingConstraints, orientationControl, additionalControlPoints,
                                           visualizeTargetInSim, visualizeParticleInSim,
                                           visualizeCollisionPointsInSim, prtclThrd);
         if (!rctCtrlThrd->start())
@@ -791,9 +819,9 @@ int main(int argc, char * argv[])
 
     if (rf.check("help"))
     {   
-        yInfo(""); 
+        yInfo(" "); 
         yInfo("Options:");
-        yInfo("");
+        yInfo(" ");
         yInfo("   --context     path:  where to find the called resource");
         yInfo("   --from        from:  the name of the .ini file.");
         yInfo("   --name        name:  the name of the module (default reactController).");
@@ -801,7 +829,7 @@ int main(int argc, char * argv[])
         yInfo("   --part        part:  the arm to use. Default left_arm.");
         yInfo("   --rate        rate:  the period used by the thread. Default 100ms.");
         yInfo("   --verbosity   int:   verbosity level (default 0).");
-        yInfo("");
+        yInfo(" ");
         return 0;
     }
     

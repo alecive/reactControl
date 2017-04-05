@@ -1,6 +1,7 @@
 /* 
  * Copyright: (C) 2015 iCub Facility - Istituto Italiano di Tecnologia
- * Author: Alessandro Roncone <alessandro.roncone@iit.it>
+ * Authors: Ugo Pattacini <ugo.pattacini@iit.it>, Matej Hoffmann <matej.hoffmann@iit.it>, 
+ * Alessandro Roncone <alessandro.roncone@yale.edu>
  * website: www.robotcub.org
  * author website: http://alecive.github.io
  * 
@@ -19,6 +20,8 @@
 
 #ifndef __REACTIPOPT_H__
 #define __REACTIPOPT_H__
+
+#include <sstream>
 
 #include <IpTNLP.hpp>
 #include <IpIpoptApplication.hpp>
@@ -42,7 +45,32 @@ using namespace yarp::math;
 using namespace iCub::ctrl;
 using namespace iCub::iKin;
 
-
+class ControlPoint
+{
+    public:
+        string type; //e.g. "elbow"
+        yarp::sig::Vector x_desired; //desired Cartesian position (x,y,z) in Root FoR 
+        yarp::sig::Vector p0; //position of the control point depending on current state of chain
+        yarp::sig::Matrix J0_xyz; //Jacobian for position depending on current state of chain
+        
+        ControlPoint()
+        {
+            x_desired.resize(3); x_desired.zero();
+            x_desired(0)=-0.2; //just to have it iCub Root FoR friendly
+            p0.resize(3); p0.zero();
+            p0(0) = -0.1;
+            //for J0_xyz we don't know the size yet - depending on the control point
+        }
+        
+        string toString()
+        {
+            std::stringstream sstm;
+            sstm<< "ControlPoint, type: "<<type<<", x_desired: ("<<x_desired.toString(3,3)<<"), p0: ("<<p0.toString(3,3)<<"), J0_xyz: "<<endl<<
+            J0_xyz.toString(3,3)<<endl;
+            
+            return sstm.str();
+        }
+};
 
 /****************************************************************/
 class ControllerNLP : public Ipopt::TNLP
@@ -50,7 +78,8 @@ class ControllerNLP : public Ipopt::TNLP
     iKinChain &chain;
     bool hitting_constraints;
     bool orientation_control;
-
+    bool additional_control_points_flag;
+        
     Vector xr,pr;
     Matrix Hr,skew_nr,skew_sr,skew_ar;
     Matrix q_lim,v_lim;    
@@ -60,6 +89,11 @@ class ControllerNLP : public Ipopt::TNLP
     Matrix bounds;
     double dt;
 
+    std::vector<ControlPoint> &additional_control_points;
+    int extra_ctrl_points_nr;
+    double additional_control_points_tol;
+    Vector err_xyz_elbow; 
+        
     double shou_m,shou_n;
     double elb_m,elb_n;
 
@@ -79,11 +113,13 @@ class ControllerNLP : public Ipopt::TNLP
     Matrix skew(const Vector &w);
 
     public:
-    ControllerNLP(iKinChain &chain_);
+    ControllerNLP(iKinChain &chain_, std::vector<ControlPoint> &additional_control_points_);
+    virtual ~ControllerNLP();
     void set_xr(const Vector &xr);
     void set_v_limInDegPerSecond(const Matrix &v_lim);
     void set_hitting_constraints(const bool _hitting_constraints);
     void set_orientation_control(const bool _orientation_control);
+    void set_additional_control_points(const bool _additional_control_points_flag);
     void set_dt(const double dt);
     void set_v0InDegPerSecond(const Vector &v0);
     void init();
