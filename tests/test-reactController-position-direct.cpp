@@ -22,6 +22,7 @@
 #include <sstream>
 #include <fstream>
 #include <iomanip>
+#include <vector>
 #include <deque>
 
 #include <IpTNLP.hpp>
@@ -893,7 +894,7 @@ public:
 class ControllerModule : public RFModule
 {
     PolyDriver drvTorso,drvArm;
-    VectorOf<int> armJoints;
+    vector<int> armJoints;
 
     iCubArm *arm;
     iKinChain *chain;
@@ -975,7 +976,7 @@ public:
         ilim.push_back(ilim_arm);
         arm->alignJointsBounds(ilim);
 
-        VectorOf<int> modes;
+        vector<int> modes;
         for (size_t i=0; i<7; i++)
         {
             armJoints.push_back(i);
@@ -985,10 +986,10 @@ public:
         IControlMode2 *imod;
 
         drvTorso.view(imod);
-        imod->setControlModes(modes.getFirst());
+        imod->setControlModes(modes.data());
 
         drvArm.view(imod);
-        imod->setControlModes(armJoints.size(),armJoints.getFirst(),modes.getFirst());
+        imod->setControlModes((int)armJoints.size(),armJoints.data(),modes.data());
 
         Vector q0(chain->getDOF());
         IEncoders *ienc;
@@ -1118,7 +1119,7 @@ public:
         idir->setPositions(refs_swapped.data());
 
         drvArm.view(idir);
-        idir->setPositions(armJoints.size(),armJoints.getFirst(),
+        idir->setPositions((int)armJoints.size(),armJoints.data(),
                            refs.subVector(3,3+armJoints.size()-1).data());
 
         chain->setAng(CTRL_DEG2RAD*refs);
@@ -1157,7 +1158,7 @@ public:
         ipos->stop();
 
         drvArm.view(ipos);
-        ipos->stop(armJoints.size(),armJoints.getFirst());
+        ipos->stop((int)armJoints.size(),armJoints.data());
 
         drvTorso.close();
         drvArm.close();

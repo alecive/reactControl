@@ -17,6 +17,7 @@
  * Public License for more details.
 */
 
+#include <vector>
 #include <fstream>
 #include <sstream>
 #include <iomanip>
@@ -215,14 +216,14 @@ bool reactCtrlThread::threadInit()
     jointsToSetInteractionA.clear();
     for (int i=0; i<NR_ARM_JOINTS_FOR_INTERACTION_MODE;i++)
         jointsToSetInteractionA.push_back(i);
-    iintmodeA->getInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.getFirst(),interactionModesOrig.getFirst());
+    iintmodeA->getInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.data(),interactionModesOrig.data());
     if(stiffInteraction){
         interactionModesNew.resize(NR_ARM_JOINTS_FOR_INTERACTION_MODE,VOCAB_IM_STIFF);
-        iintmodeA->setInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.getFirst(),interactionModesNew.getFirst());
+        iintmodeA->setInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.data(),interactionModesNew.data());
     }
     else{
         interactionModesNew.resize(NR_ARM_JOINTS_FOR_INTERACTION_MODE,VOCAB_IM_COMPLIANT);
-        iintmodeA->setInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.getFirst(),interactionModesNew.getFirst());
+        iintmodeA->setInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.data(),interactionModesNew.data());
         iimpA->setImpedance(0,0.4,0.03); 
         iimpA->setImpedance(1,0.4,0.03);
         iimpA->setImpedance(2,0.4,0.03);
@@ -634,7 +635,7 @@ void reactCtrlThread::threadRelease()
 {
     
     yInfo("Putting back original interaction modes."); 
-    iintmodeA->setInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.getFirst(),interactionModesOrig.getFirst());
+    iintmodeA->setInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.data(),interactionModesOrig.data());
     jointsToSetInteractionA.clear();
     interactionModesNew.clear();
     interactionModesOrig.clear();
@@ -1085,20 +1086,20 @@ void reactCtrlThread::printJointsBounds()
     }
 }
 
-bool reactCtrlThread::areJointsHealthyAndSet(VectorOf<int> &jointsToSet,
+bool reactCtrlThread::areJointsHealthyAndSet(vector<int> &jointsToSet,
                                              const string &_p, const string &_s)
 {
     jointsToSet.clear();
-    VectorOf<int> modes;
+    vector<int> modes;
     if (_p=="arm")
     {
         modes.resize(NR_ARM_JOINTS,VOCAB_CM_IDLE);
-        imodA->getControlModes(modes.getFirst());
+        imodA->getControlModes(modes.data());
     }
     else if (_p=="torso")
     {
         modes.resize(NR_TORSO_JOINTS,VOCAB_CM_IDLE);
-        imodT->getControlModes(modes.getFirst());
+        imodT->getControlModes(modes.data());
     }
     else
         return false;
@@ -1143,7 +1144,7 @@ bool reactCtrlThread::areJointsHealthyAndSet(VectorOf<int> &jointsToSet,
     return true;
 }
 
-bool reactCtrlThread::setCtrlModes(const VectorOf<int> &jointsToSet,
+bool reactCtrlThread::setCtrlModes(const vector<int> &jointsToSet,
                                    const string &_p, const string &_s)
 {
     if (_s!="position" && _s!="velocity" && _s!="positionDirect")
@@ -1152,7 +1153,7 @@ bool reactCtrlThread::setCtrlModes(const VectorOf<int> &jointsToSet,
     if (jointsToSet.size()==0)
         return true;
 
-    VectorOf<int> modes;
+    vector<int> modes;
     for (size_t i=0; i<jointsToSet.size(); i++)
     {
         if (_s=="position")
@@ -1171,21 +1172,18 @@ bool reactCtrlThread::setCtrlModes(const VectorOf<int> &jointsToSet,
 
     if (_p=="arm")
     {
-        imodA->setControlModes(jointsToSet.size(),
-                               jointsToSet.getFirst(),
-                               modes.getFirst());
+        imodA->setControlModes((int)jointsToSet.size(),
+                               jointsToSet.data(),
+                               modes.data());
     }
     else if (_p=="torso")
     {
-        imodT->setControlModes(jointsToSet.size(),
-                               jointsToSet.getFirst(),
-                               modes.getFirst());
+        imodT->setControlModes((int)jointsToSet.size(),
+                               jointsToSet.data(),
+                               modes.data());
     }
     else
         return false;
-    
-    
-    
 
     return true;
 }
@@ -1193,8 +1191,8 @@ bool reactCtrlThread::setCtrlModes(const VectorOf<int> &jointsToSet,
 //N.B. the targetValues can be either positions or velocities, depending on the control mode!
 bool reactCtrlThread::controlArm(const string _controlMode, const yarp::sig::Vector &_targetValues)
 {   
-    VectorOf<int> jointsToSetA;
-    VectorOf<int> jointsToSetT;
+    vector<int> jointsToSetA;
+    vector<int> jointsToSetT;
     if (!areJointsHealthyAndSet(jointsToSetA,"arm",_controlMode))
     {
         yWarning("[reactCtrlThread::controlArm] Stopping control because arm joints are not healthy!");
@@ -1297,23 +1295,21 @@ bool reactCtrlThread::stopControlAndSwitchToPositionModeHelper()
 {
     state=STATE_IDLE;
     
-    VectorOf<int> jointsToSetA;
+    vector<int> jointsToSetA;
     jointsToSetA.push_back(0);jointsToSetA.push_back(1);jointsToSetA.push_back(2);jointsToSetA.push_back(3);jointsToSetA.push_back(4);
     jointsToSetA.push_back(5);jointsToSetA.push_back(6);
     if (useTorso)
     {
         ivelA->stop();
         ivelT->stop();
-        VectorOf<int> jointsToSetT;
+        vector<int> jointsToSetT;
         jointsToSetT.push_back(0);jointsToSetT.push_back(1);jointsToSetT.push_back(2);
         return  setCtrlModes(jointsToSetA,"arm","position") && setCtrlModes(jointsToSetT,"torso","position");
     }
     else{
         ivelA->stop();
         return  setCtrlModes(jointsToSetA,"arm","position"); 
-        
     }
-   
 }
 
 

@@ -10,6 +10,10 @@ endif(COMMAND cmake_policy)
 
 project(react-control)
 
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED 11)
+
 find_package(YARP)
 find_package(ICUB)
 find_package(ICUBcontrib)

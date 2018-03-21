@@ -43,8 +43,8 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include <stdio.h>
-#include <stdarg.h>
+#include <cstdio>
+#include <cstdarg>
 #include <vector>
 #include <deque>
 
@@ -195,9 +195,9 @@ protected:
     iCub::iKin::iKinChain  *armChain;
     int jntsA;
     
-    VectorOf<InteractionModeEnum> interactionModesOrig;
-    VectorOf<InteractionModeEnum> interactionModesNew;
-    VectorOf<int> jointsToSetInteractionA;
+    vector<InteractionModeEnum> interactionModesOrig;
+    vector<InteractionModeEnum> interactionModesNew;
+    vector<int> jointsToSetInteractionA;
     
     // "Classical" interfaces for the torso
     IEncoders            *iencsT;
@@ -318,7 +318,7 @@ protected:
      * @param  _s mode to set. It can be either "position" or "velocity"
      * @return             true/false if success/failure
      */
-    bool areJointsHealthyAndSet(yarp::sig::VectorOf<int> &jointsToSet,
+    bool areJointsHealthyAndSet(std::vector<int> &jointsToSet,
                                 const string &_p, const string &_s);
 
     /**
@@ -327,7 +327,7 @@ protected:
      * @param  _s mode to set. It can be either "position" or "velocity"
      * @return    true/false if success/failure
      */
-    bool setCtrlModes(const yarp::sig::VectorOf<int> &jointsToSet,
+    bool setCtrlModes(const std::vector<int> &jointsToSet,
                       const string &_p, const string &_s);
 
 
