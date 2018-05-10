@@ -235,7 +235,7 @@ public:
 
         if (pid_change)
         {
-            ipid->getPid(joint,&pid0);
+            ipid->getPid(VOCAB_PIDTYPE_VELOCITY,joint,&pid0);
             pid1=pid0;
 
             if (pid_change_Kp)
@@ -282,16 +282,16 @@ public:
         if (((part=="head_v2") || (part=="right_arm") || (part=="left_arm")) &&
             ((joint==0) || (joint==1)))
         {
-            ipid->setPid(0,pid);
-            ipid->setPid(1,pid);
+            ipid->setPid(VOCAB_PIDTYPE_VELOCITY,0,pid);
+            ipid->setPid(VOCAB_PIDTYPE_VELOCITY,1,pid);
         }
         else if ((part=="torso") && ((joint==1) || (joint==2)))
         {
-            ipid->setPid(1,pid);
-            ipid->setPid(2,pid);
+            ipid->setPid(VOCAB_PIDTYPE_VELOCITY,1,pid);
+            ipid->setPid(VOCAB_PIDTYPE_VELOCITY,2,pid);
         }
         else
-            ipid->setPid(joint,pid1);
+            ipid->setPid(VOCAB_PIDTYPE_VELOCITY,joint,pid1);
     }
 
     /***********************************************************/
@@ -302,17 +302,17 @@ public:
             ((joint==0) || (joint==1)))
         {
             pwm.resize(2);
-            ipid->getOutput(0,&pwm[0]);
-            ipid->getOutput(1,&pwm[1]);
+            ipid->getPidOutput(VOCAB_PIDTYPE_VELOCITY,0,&pwm[0]);
+            ipid->getPidOutput(VOCAB_PIDTYPE_VELOCITY,1,&pwm[1]);
         }
         else if ((part=="torso") && ((joint==1) || (joint==2)))
         {
             pwm.resize(2);
-            ipid->getOutput(1,&pwm[0]);
-            ipid->getOutput(2,&pwm[1]);
+            ipid->getPidOutput(VOCAB_PIDTYPE_VELOCITY,1,&pwm[0]);
+            ipid->getPidOutput(VOCAB_PIDTYPE_VELOCITY,2,&pwm[1]);
         }
         else
-            ipid->getOutput(joint,&pwm[0]);
+            ipid->getPidOutput(VOCAB_PIDTYPE_VELOCITY,joint,&pwm[0]);
 
         return pwm;
     }
@@ -354,7 +354,7 @@ public:
            
             int mode= 0; //cnt%3;
             double fb;  ienc->getEncoder(joint,&fb);
-            double ref; ipid->getReference(joint,&ref);
+            double ref; ipid->getPidReference(VOCAB_PIDTYPE_VELOCITY,joint,&ref);
             Vector pwm=getOutput();
             Vector vel(1), e(1); e[0]=fb1-fb;
         
