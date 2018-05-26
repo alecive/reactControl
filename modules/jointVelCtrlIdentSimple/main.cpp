@@ -413,7 +413,6 @@ public:
     /***********************************************************/
     bool configure(ResourceFinder &rf)
     {
-        Time::turboBoost();
         thr.configure(rf);
         return thr.start();
     }
