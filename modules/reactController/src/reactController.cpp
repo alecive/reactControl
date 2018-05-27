@@ -766,7 +766,7 @@ public:
             return false;
         }
 
-        rpcSrvr.open(("/"+name+"/rpc:i").c_str());
+        rpcSrvr.open("/"+name+"/rpc:i");
         attach(rpcSrvr);
 
         return true;

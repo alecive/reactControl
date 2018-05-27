@@ -153,7 +153,7 @@ protected:
     double pid_Kd;
 
     PolyDriver        drv;
-    IControlMode2    *imod;
+    IControlMode     *imod;
     IControlLimits   *ilim;
     IEncoders        *ienc;
     IPositionControl *ipos;
@@ -176,10 +176,10 @@ public:
     /***********************************************************/
     void configure(ResourceFinder &rf)
     {
-        name=rf.find("name").asString().c_str();
+        name=rf.find("name").asString();
         setRate(rf.check("period",Value(10)).asInt());
-        robot=rf.check("robot",Value("icub")).asString().c_str();
-        part=rf.check("part",Value("right_arm")).asString().c_str();
+        robot=rf.check("robot",Value("icub")).asString();
+        part=rf.check("part",Value("right_arm")).asString();
         joint=rf.check("joint",Value(0)).asInt();
         T=rf.check("T",Value(10.0)).asDouble();
         gain=rf.check("gain",Value(40.0)).asDouble();
@@ -194,10 +194,10 @@ public:
         props.put("Zeta",rf.check("Zeta",Value(0.0)).asDouble());
         string str;
         str="(dimension_0 (";
-        str+=props.toString().c_str();
+        str+=props.toString();
         str+="))";
 
-        plantParameters.fromString(str.c_str());
+        plantParameters.fromString(str);
 
         if (pid_change_Kp=rf.check("PID_Kp"))
             pid_Kp=rf.find("PID_Kp").asDouble();
@@ -220,8 +220,8 @@ public:
 
         Property options;
         options.put("device","remote_controlboard");
-        options.put("remote",("/"+robot+"/"+_part).c_str());
-        options.put("local",("/"+name+"/"+_part).c_str());
+        options.put("remote","/"+robot+"/"+_part);
+        options.put("local","/"+name+"/"+_part);
 
         if (!drv.open(options))
             return false;
@@ -268,7 +268,7 @@ public:
         imod->setControlMode(joint,VOCAB_CM_VELOCITY);
         goToStartingPos();
 
-        port.open(("/"+name+":o").c_str());
+        port.open("/"+name+":o");
         Network::connect("/jointVelCtrlIdent:o","/data/jointVelCtrlIdent");
     
         t0=Time::now();

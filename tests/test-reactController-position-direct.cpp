@@ -948,7 +948,7 @@ public:
         }
 
         Property option("(device remote_controlboard)");
-        option.put("remote",("/"+robot+"/torso").c_str());
+        option.put("remote","/"+robot+"/torso");
         option.put("local","/test-reactController/torso");
         if (!drvTorso.open(option))
         {
@@ -958,7 +958,7 @@ public:
         }
 
         option.unput("remote"); option.unput("local");
-        option.put("remote",("/"+robot+"/left_arm").c_str());
+        option.put("remote","/"+robot+"/left_arm");
         option.put("local","/test-reactController/left_arm");
         if (!drvArm.open(option))
         {
@@ -983,7 +983,7 @@ public:
             modes.push_back(VOCAB_CM_POSITION_DIRECT);
         }
 
-        IControlMode2 *imod;
+        IControlMode *imod;
 
         drvTorso.view(imod);
         imod->setControlModes(modes.data());
@@ -1152,7 +1152,7 @@ public:
     /****************************************************************/
     bool close()
     {
-        IPositionControl2 *ipos;
+        IPositionControl *ipos;
 
         drvTorso.view(ipos);
         ipos->stop();

@@ -91,7 +91,7 @@ bool reactCtrlThread::threadInit()
     
    /******** iKin chain and variables, and transforms init *************************/
    
-    arm = new iCub::iKin::iCubArm(part_short.c_str());
+    arm = new iCub::iKin::iCubArm(part_short);
     // Release / block torso links (blocked by default)
     for (int i = 0; i < NR_TORSO_JOINTS; i++)
     {
@@ -148,11 +148,11 @@ bool reactCtrlThread::threadInit()
     /*****  Drivers, interfaces, control boards etc. ***********************************************************/
     
     yarp::os::Property OptA;
-    OptA.put("robot",  robot.c_str());
-    OptA.put("part",   part.c_str());
+    OptA.put("robot",  robot);
+    OptA.put("part",   part);
     OptA.put("device", "remote_controlboard");
-    OptA.put("remote",("/"+robot+"/"+part).c_str());
-    OptA.put("local", ("/"+name +"/"+part).c_str());
+    OptA.put("remote", "/"+robot+"/"+part);
+    OptA.put("local",  "/"+name +"/"+part);
     if (!ddA.open(OptA))
     {
         yError("[reactCtrlThread]Could not open %s PolyDriver!",part.c_str());
@@ -181,11 +181,11 @@ bool reactCtrlThread::threadInit()
     }
 
     yarp::os::Property OptT;
-    OptT.put("robot",  robot.c_str());
+    OptT.put("robot",  robot);
     OptT.put("part",   "torso");
     OptT.put("device", "remote_controlboard");
-    OptT.put("remote",("/"+robot+"/torso").c_str());
-    OptT.put("local", ("/"+name +"/torso").c_str());
+    OptT.put("remote", "/"+robot+"/torso");
+    OptT.put("local",  "/"+name +"/torso");
     if (!ddT.open(OptT))
     {
         yError("[reactCtrlThread]Could not open torso PolyDriver!");
@@ -241,7 +241,7 @@ bool reactCtrlThread::threadInit()
         Property OptGaze;
         OptGaze.put("device","gazecontrollerclient");
         OptGaze.put("remote","/iKinGazeCtrl");
-        OptGaze.put("local",("/"+name+"/gaze").c_str());
+        OptGaze.put("local","/"+name+"/gaze");
 
         if ((!ddG.open(OptGaze)) || (!ddG.view(igaze))){
         yError(" could not open the Gaze Controller!");
@@ -320,7 +320,7 @@ bool reactCtrlThread::threadInit()
        
     outPort.open("/"+name +"/data:o"); //for dumping
     if (visualizeIniCubGui)
-         outPortiCubGui.open(("/"+name+"/gui:o").c_str());
+         outPortiCubGui.open("/"+name+"/gui:o");
     
     fout_param.open("param.log");
     
@@ -361,11 +361,11 @@ bool reactCtrlThread::threadInit()
     
     if((robot == "icubSim") && (visualizeTargetInSim || visualizeParticleInSim || visualizeCollisionPointsInSim) ){ 
         string port2icubsim = "/" + name + "/sim:o";
-        if (!portToSimWorld.open(port2icubsim.c_str())) {
+        if (!portToSimWorld.open(port2icubsim)) {
             yError("[reactCtrlThread] Unable to open port << port2icubsim << endl");
         }    
         std::string port2world = "/icubSim/world";
-        yarp::os::Network::connect(port2icubsim, port2world.c_str());
+        yarp::os::Network::connect(port2icubsim, port2world);
     
         cmd.clear();
         cmd.addString("world");

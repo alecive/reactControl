@@ -183,16 +183,16 @@ protected:
     PolyDriver       ddG; // gaze  controller  driver
     
     // "Classical" interfaces for the arm
-    IEncoders            *iencsA;
-    IVelocityControl2     *ivelA;
+    IEncoders             *iencsA;
+    IVelocityControl      *ivelA;
     IPositionDirect       *iposDirA;
-    IControlMode2         *imodA;
-    IInteractionMode     *iintmodeA;
-    IImpedanceControl    *iimpA;
+    IControlMode          *imodA;
+    IInteractionMode      *iintmodeA;
+    IImpedanceControl     *iimpA;
     IControlLimits        *ilimA;
     yarp::sig::Vector     *encsA;
-    iCub::iKin::iCubArm    *arm;
-    iCub::iKin::iKinChain  *armChain;
+    iCub::iKin::iCubArm   *arm;
+    iCub::iKin::iKinChain *armChain;
     int jntsA;
     
     vector<InteractionModeEnum> interactionModesOrig;
@@ -200,12 +200,12 @@ protected:
     vector<int> jointsToSetInteractionA;
     
     // "Classical" interfaces for the torso
-    IEncoders            *iencsT;
-    IVelocityControl2     *ivelT;
-    IPositionDirect       *iposDirT;
-    IControlMode2         *imodT;
-    IControlLimits        *ilimT;
-    yarp::sig::Vector     *encsT;
+    IEncoders         *iencsT;
+    IVelocityControl  *ivelT;
+    IPositionDirect   *iposDirT;
+    IControlMode      *imodT;
+    IControlLimits    *ilimT;
+    yarp::sig::Vector *encsT;
     int jntsT;
     
     // Gaze interface
