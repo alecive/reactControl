@@ -21,7 +21,7 @@
 #define __PARTICLETHREAD_H__
 
 #include <yarp/os/Time.h>
-#include <yarp/os/RateThread.h>
+#include <yarp/os/PeriodicThread.h>
 #include <yarp/os/Log.h>
 #include <yarp/os/Mutex.h>
 #include <yarp/os/LockGuard.h>
@@ -38,7 +38,7 @@
 
 using namespace std;
 
-class particleThread: public yarp::os::RateThread
+class particleThread: public yarp::os::PeriodicThread
 {
 protected:
     /***************************************************************************/

@@ -21,7 +21,7 @@
 #define __REACTCONTROLLERTHREAD_H__
 
 #include <yarp/os/Time.h>
-#include <yarp/os/RateThread.h>
+#include <yarp/os/PeriodicThread.h>
 #include <yarp/os/Log.h>
 #include <yarp/os/Mutex.h>
 #include <yarp/os/LockGuard.h>
@@ -58,7 +58,7 @@ using namespace yarp::dev;
 using namespace std;
 
 
-class reactCtrlThread: public yarp::os::RateThread
+class reactCtrlThread: public yarp::os::PeriodicThread
 {
     
 public:
@@ -169,7 +169,7 @@ protected:
     
     /***************************************************************************/
     // INTERNAL VARIABLES:
-    double dT;  //period of the thread in seconds  =getRate()/1000.0;
+    double dT;  //period of the thread in seconds  =getPeriod();
 
     particleThread  *prtclThrd;     // Pointer to the particleThread in order to access its data - if referenceGen is "uniformParticle"
     iCub::ctrl::minJerkTrajGen *minJerkTarget; //if referenceGen is "minJerk"

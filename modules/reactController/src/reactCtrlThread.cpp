@@ -59,7 +59,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  bool _additionaControlPoints, 
                                  bool _visualizeTargetInSim, bool _visualizeParticleInSim, bool _visualizeCollisionPointsInSim,
                                  particleThread *_pT) :
-                                 RateThread(_rate), name(_name), robot(_robot), part(_part),
+                                 PeriodicThread((double)_rate/1000.0), name(_name), robot(_robot), part(_part),
                                  verbosity(_verbosity), useTorso(!_disableTorso), controlMode(_controlMode),
                                  trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol),
                                  referenceGen(_referenceGen), 
@@ -70,7 +70,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
                                  visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim)
 {
-    dT=getRate()/1000.0;
+    dT=getPeriod();
     prtclThrd=_pT;  //in case of referenceGen != uniformParticle, NULL will be received
 }
 
@@ -1335,8 +1335,7 @@ Vector reactCtrlThread::computeDeltaX()
     J_cst.resize(3,chainActiveDOF);
     J_cst.zero();
     submatrix(J1,J_cst,0,2,0,chainActiveDOF-1);
-    double dT=getRate()/1000.0;
-
+    double dT=getPeriod();
     return dT*J_cst*q_dot;
 }
 

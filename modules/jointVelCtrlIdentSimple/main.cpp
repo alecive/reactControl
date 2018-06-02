@@ -130,7 +130,7 @@ using namespace iCub::ctrl;
 
 
 /***********************************************************/
-class IdentThread : public RateThread
+class IdentThread : public PeriodicThread
 {
 protected:
     string robot;
@@ -171,13 +171,13 @@ protected:
 
 public:
     /***********************************************************/
-    IdentThread() : RateThread(1000), velEst(16,1.0) { }
+    IdentThread() : PeriodicThread(1.0), velEst(16,1.0) { }
 
     /***********************************************************/
     void configure(ResourceFinder &rf)
     {
         name=rf.find("name").asString();
-        setRate(rf.check("period",Value(10)).asInt());
+        setPeriod((double)rf.check("period",Value(10)).asInt()/1000.0);
         robot=rf.check("robot",Value("icub")).asString();
         part=rf.check("part",Value("right_arm")).asString();
         joint=rf.check("joint",Value(0)).asInt();
@@ -250,8 +250,8 @@ public:
             setPid(pid1);
         }
 
-        ctrl1=new minJerkVelCtrlForIdealPlant(getRate()/1000.0,1);
-        ctrl2=new minJerkVelCtrlForNonIdealPlant(getRate()/1000.0,1);
+        ctrl1=new minJerkVelCtrlForIdealPlant(getPeriod(),1);
+        ctrl2=new minJerkVelCtrlForNonIdealPlant(getPeriod(),1);
         ctrl2->setPlantParameters(plantParameters);
 
         Property props;
