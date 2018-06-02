@@ -7,7 +7,6 @@ project(tests)
 find_package(IPOPT REQUIRED)
 
 include_directories(${IPOPT_INCLUDE_DIRS}
-                    ${YARP_INCLUDE_DIRS}                    
                     ${ICUB_INCLUDE_DIRS})
 
 add_definitions(-D_USE_MATH_DEFINES)
