@@ -95,14 +95,14 @@ bool reactCtrlThread::threadInit()
     // Release / block torso links (blocked by default)
     for (int i = 0; i < NR_TORSO_JOINTS; i++)
     {
-        if (useTorso)
-        {
-            arm->releaseLink(i);
-        }
-        else
-        {
-            arm->blockLink(i,0.0);
-        }
+//        if (useTorso)
+//        {
+        arm->releaseLink(i);
+//        }
+//        else
+//        {
+//            arm->blockLink(i,0.0);
+//        }
     }
 
     //we set up the variables based on the current DOF - that is without torso joints if torso is blocked
@@ -110,8 +110,8 @@ bool reactCtrlThread::threadInit()
  
     //N.B. All angles in this thread are in degrees
     qA.resize(NR_ARM_JOINTS,0.0); //current values of arm joints (should be 7)
-    if (useTorso)
-        qT.resize(NR_TORSO_JOINTS,0.0); //current values of torso joints (3, in the order expected for iKin: yaw, roll, pitch)
+//    if (useTorso)
+    qT.resize(NR_TORSO_JOINTS,0.0); //current values of torso joints (3, in the order expected for iKin: yaw, roll, pitch)
     q.resize(chainActiveDOF,0.0); //current joint angle values (10 if torso is on, 7 if off)
     qIntegrated.resize(chainActiveDOF,0.0); //joint angle pos predictions from integrator
     lim.resize(chainActiveDOF,2); //joint pos limits
@@ -134,7 +134,19 @@ bool reactCtrlThread::threadInit()
         // disable torso roll
         vLimNominal(1,0)=vLimNominal(1,1)=0.0;
         vLimAdapted(1,0)=vLimAdapted(1,1)=0.0;
-    }     
+    }
+    else
+    {
+        // disable torso pitch
+        vLimNominal(0,0)=vLimNominal(0,1)=0.0;
+        vLimAdapted(0,0)=vLimAdapted(0,1)=0.0;
+        // disable torso roll
+        vLimNominal(1,0)=vLimNominal(1,1)=0.0;
+        vLimAdapted(1,0)=vLimAdapted(1,1)=0.0;
+        // disable torso yaw
+        vLimNominal(2,0)=vLimNominal(2,1)=0.0;
+        vLimAdapted(2,0)=vLimAdapted(2,1)=0.0;
+    }
          
     //H.resize(4,4);
 
@@ -733,6 +745,11 @@ bool reactCtrlThread::enableTorso()
     {
         arm->releaseLink(i);
     }
+    vLimNominal(0,0)=vLimNominal(2,0)=-vMax;
+    vLimAdapted(0,0)=vLimAdapted(2,0)=-vMax;
+
+    vLimNominal(0,1)=vLimNominal(2,1)=vMax;
+    vLimAdapted(0,1)=vLimAdapted(2,1)=vMax;
     alignJointsBounds();
     return true;
 }
@@ -746,10 +763,20 @@ bool reactCtrlThread::disableTorso()
     }
 
     useTorso=false;
-    for (int i = 0; i < 3; i++)
-    {
-        arm->blockLink(i,0.0);
-    }
+//    for (int i = 0; i < 3; i++)
+//    {
+//        arm->blockLink(i,0.0);
+//    }
+
+    // disable torso pitch
+    vLimNominal(0,0)=vLimNominal(0,1)=0.0;
+    vLimAdapted(0,0)=vLimAdapted(0,1)=0.0;
+    // disable torso roll
+    vLimNominal(1,0)=vLimNominal(1,1)=0.0;
+    vLimAdapted(1,0)=vLimAdapted(1,1)=0.0;
+    // disable torso yaw
+    vLimNominal(2,0)=vLimNominal(2,1)=0.0;
+    vLimAdapted(2,0)=vLimAdapted(2,1)=0.0;
     return true;
 }
 
@@ -783,6 +810,18 @@ bool reactCtrlThread::setVMax(const double _vMax)
         if (useTorso){
             vLimNominal(1,0)=vLimNominal(1,1)=0.0;
             vLimAdapted(1,0)=vLimAdapted(1,1)=0.0;
+        }
+        else
+        {
+            // disable torso pitch
+            vLimNominal(0,0)=vLimNominal(0,1)=0.0;
+            vLimAdapted(0,0)=vLimAdapted(0,1)=0.0;
+            // disable torso roll
+            vLimNominal(1,0)=vLimNominal(1,1)=0.0;
+            vLimAdapted(1,0)=vLimAdapted(1,1)=0.0;
+            // disable torso yaw
+            vLimNominal(2,0)=vLimNominal(2,1)=0.0;
+            vLimAdapted(2,0)=vLimAdapted(2,1)=0.0;
         }
         return true;
     }
@@ -1030,20 +1069,20 @@ void reactCtrlThread::updateArmChain()
     iencsA->getEncoders(encsA->data());
     qA=encsA->subVector(0,NR_ARM_JOINTS-1);
 
-    if (useTorso)
-    {
-        iencsT->getEncoders(encsT->data());
-        qT[0]=(*encsT)[2];
-        qT[1]=(*encsT)[1];
-        qT[2]=(*encsT)[0];
+//    if (useTorso)
+//    {
+    iencsT->getEncoders(encsT->data());
+    qT[0]=(*encsT)[2];
+    qT[1]=(*encsT)[1];
+    qT[2]=(*encsT)[0];
 
-        q.setSubvector(0,qT);
-        q.setSubvector(NR_TORSO_JOINTS,qA);
-    }
-    else
-    {
-        q = qA;        
-    }
+    q.setSubvector(0,qT);
+    q.setSubvector(NR_TORSO_JOINTS,qA);
+//    }
+//    else
+//    {
+//        q = qA;
+//    }
     arm->setAng(q*CTRL_DEG2RAD);
     //H=arm->getH();
     //x_t=H.subcol(0,3,3);
@@ -1200,15 +1239,15 @@ bool reactCtrlThread::controlArm(const string _controlMode, const yarp::sig::Vec
         return false;
     }
  
-    if (useTorso)
+//    if (useTorso)
+//    {
+    if (!areJointsHealthyAndSet(jointsToSetT,"torso",_controlMode))
     {
-        if (!areJointsHealthyAndSet(jointsToSetT,"torso",_controlMode))
-        {
-            yWarning("[reactCtrlThread::controlArm] Stopping control because torso joints are not healthy!");
-            stopControlHelper();
-            return false;
-        }
+        yWarning("[reactCtrlThread::controlArm] Stopping control because torso joints are not healthy!");
+        stopControlHelper();
+        return false;
     }
+//    }
     
     if (!setCtrlModes(jointsToSetA,"arm",_controlMode))
     {
@@ -1216,14 +1255,14 @@ bool reactCtrlThread::controlArm(const string _controlMode, const yarp::sig::Vec
         return false;
     }   
 
-    if (useTorso)
+//    if (useTorso)
+//    {
+    if (!setCtrlModes(jointsToSetT,"torso",_controlMode))
     {
-        if (!setCtrlModes(jointsToSetT,"torso",_controlMode))
-        {
-            yError("[reactCtrlThread::controlArm] I am not able to set the torso joints to %s mode!",_controlMode.c_str());
-            return false;
-        }
+        yError("[reactCtrlThread::controlArm] I am not able to set the torso joints to %s mode!",_controlMode.c_str());
+        return false;
     }
+//    }
     /*if(verbosity>=10){
         printf("[reactCtrlThread::controlArm] setting following arm joints to %s: ",Vocab::decode(VOCAB_CM_VELOCITY).c_str());
         for (size_t k=0; k<jointsToSetA.size(); k++){
@@ -1240,8 +1279,8 @@ bool reactCtrlThread::controlArm(const string _controlMode, const yarp::sig::Vec
     }*/
     if (_controlMode == "velocity"){
         printMessage(1,"[reactCtrlThread::controlArm] Joint velocities (iKin order, deg/s): %s\n",_targetValues.toString(3,3).c_str());
-        if (useTorso)
-        {
+//        if (useTorso)
+//        {
             Vector velsT(TORSO_DOF,0.0);
             velsT[0] = _targetValues[2]; //swapping pitch and yaw as per iKin vs. motor interface convention
             velsT[1] = _targetValues[1];
@@ -1250,16 +1289,16 @@ bool reactCtrlThread::controlArm(const string _controlMode, const yarp::sig::Vec
             printMessage(2,"    velocityMove(): torso (swap pitch & yaw): %s\n",velsT.toString(3,3).c_str());
             ivelT->velocityMove(velsT.data());
             ivelA->velocityMove(_targetValues.subVector(3,9).data()); //indexes 3 to 9 are the arm joints velocities
-        }
-        else
-        {
-            ivelA->velocityMove(_targetValues.data()); //if there is not torso, _targetValues has only the 7 arm joints
-        }
+//        }
+//        else
+//        {
+//            ivelA->velocityMove(_targetValues.data()); //if there is not torso, _targetValues has only the 7 arm joints
+//        }
     }
     else if(_controlMode == "positionDirect"){ 
          printMessage(1,"[reactCtrlThread::controlArm] Target joint positions (iKin order, deg): %s\n",_targetValues.toString(3,3).c_str());
-        if (useTorso)
-        {
+//        if (useTorso)
+//        {
             Vector posT(3,0.0);
             posT[0] = _targetValues[2]; //swapping pitch and yaw as per iKin vs. motor interface convention
             posT[1] = _targetValues[1];
@@ -1268,11 +1307,11 @@ bool reactCtrlThread::controlArm(const string _controlMode, const yarp::sig::Vec
             printMessage(2,"    positionDirect: torso (swap pitch & yaw): %s\n",posT.toString(3,3).c_str());
             iposDirT->setPositions(posT.data());
             iposDirA->setPositions(_targetValues.subVector(3,9).data()); //indexes 3 to 9 are the arm joints 
-        }
-        else
-        {
-            iposDirA->setPositions(_targetValues.data()); //if there is not torso, _targetValues has only the 7 arm joints
-        }
+//        }
+//        else
+//        {
+//            iposDirA->setPositions(_targetValues.data()); //if there is not torso, _targetValues has only the 7 arm joints
+//        }
         
     }
         
@@ -1282,12 +1321,12 @@ bool reactCtrlThread::controlArm(const string _controlMode, const yarp::sig::Vec
 
 bool reactCtrlThread::stopControlHelper()
 {
-    if (useTorso)
-    {
+//    if (useTorso)
+//    {
         return ivelA->stop() && ivelT->stop();
-    }
+//    }
 
-    return ivelA->stop();
+//    return ivelA->stop();
 }
 
 
@@ -1298,18 +1337,18 @@ bool reactCtrlThread::stopControlAndSwitchToPositionModeHelper()
     vector<int> jointsToSetA;
     jointsToSetA.push_back(0);jointsToSetA.push_back(1);jointsToSetA.push_back(2);jointsToSetA.push_back(3);jointsToSetA.push_back(4);
     jointsToSetA.push_back(5);jointsToSetA.push_back(6);
-    if (useTorso)
-    {
+//    if (useTorso)
+//    {
         ivelA->stop();
         ivelT->stop();
         vector<int> jointsToSetT;
         jointsToSetT.push_back(0);jointsToSetT.push_back(1);jointsToSetT.push_back(2);
         return  setCtrlModes(jointsToSetA,"arm","position") && setCtrlModes(jointsToSetT,"torso","position");
-    }
-    else{
-        ivelA->stop();
-        return  setCtrlModes(jointsToSetA,"arm","position"); 
-    }
+//    }
+//    else{
+//        ivelA->stop();
+//        return  setCtrlModes(jointsToSetA,"arm","position");
+//    }
 }
 
 
@@ -1361,10 +1400,10 @@ void reactCtrlThread::convertPosFromRootToSimFoR(const Vector &pos, Vector &outP
 void reactCtrlThread::convertPosFromLinkToRootFoR(const Vector &pos,const SkinPart skinPart, Vector &outPos)
 {
     Matrix T_root_to_link = yarp::math::zeros(4,4);
-    int torsoDOF = 0;
-    if (useTorso){
-        torsoDOF = 3;
-    }
+//    int torsoDOF = 0;
+//    if (useTorso){
+    int torsoDOF = 3;
+//    }
 
      T_root_to_link = arm->getH(SkinPart_2_LinkNum[skinPart].linkNum + torsoDOF);
      //e.g. skinPart LEFT_UPPER_ARM gives link number 2, which means we ask iKin for getH(2+3), which gives us  FoR 6 - at the first elbow joint, which is the FoR for the upper arm 
