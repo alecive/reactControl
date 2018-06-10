@@ -1090,7 +1090,7 @@ bool reactCtrlThread::areJointsHealthyAndSet(vector<int> &jointsToSet,
                                              const string &_p, const string &_s)
 {
     jointsToSet.clear();
-    vector<int> modes;
+    vector<int> modes(jntsA);
     if (_p=="arm")
     {
         modes.resize(NR_ARM_JOINTS,VOCAB_CM_IDLE);
