@@ -2,7 +2,7 @@
 # Author: Alessandro Roncone <alessandro.roncone@iit.it>
 # CopyPolicy: Released under the terms of the GNU GPL v2.0.
 
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.5)
 
 if(COMMAND cmake_policy)
     cmake_policy(SET CMP0003 NEW)

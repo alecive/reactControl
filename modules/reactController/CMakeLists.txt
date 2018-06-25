@@ -24,12 +24,11 @@ yarp_add_idl(IDL_GEN_FILES ${PROJECT_NAME}.thrift)
 source_group("IDL Files" FILES ${idl_files})
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include
-                    ${IPOPT_INCLUDE_DIRS}
-                    ${ICUB_INCLUDE_DIRS})
+                    ${IPOPT_INCLUDE_DIRS})
 
 add_definitions(${IPOPT_DEFINITIONS} -D_USE_MATH_DEFINES)
 add_executable(${PROJECT_NAME} ${header_files} ${source_files} ${IDL_GEN_FILES} ${idl_files})
-target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES} ctrlLib iKin skinDynLib  ${IPOPT_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES} ctrlLib iKin skinDynLib ${IPOPT_LIBRARIES})
 set_property(TARGET ${PROJECT_NAME} APPEND_STRING PROPERTY LINK_FLAGS " ${IPOPT_LINK_FLAGS}")
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 

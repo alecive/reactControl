@@ -2,12 +2,10 @@
 # Authors: Ugo Pattacini, Matej Hoffmann
 # CopyPolicy: Released under the terms of the GNU GPL v2.0.
 
-cmake_minimum_required(VERSION 2.6)
-set(PROJECTNAME jointVelCtrlIdentSimple)
-project(${PROJECTNAME})
+cmake_minimum_required(VERSION 3.5)
+project(jointVelCtrlIdentSimple)
 
-include_directories(${IPOPT_INCLUDE_DIRS}
-                    ${ICUB_INCLUDE_DIRS})
+include_directories(${IPOPT_INCLUDE_DIRS})
 
 add_definitions(-D_USE_MATH_DEFINES)
 add_executable(${PROJECT_NAME} main.cpp)
