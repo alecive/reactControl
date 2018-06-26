@@ -18,15 +18,12 @@ find_package(YARP)
 find_package(ICUB)
 find_package(ICUBcontrib)
 
-list(APPEND CMAKE_MODULE_PATH ${YARP_MODULE_PATH})
 list(APPEND CMAKE_MODULE_PATH ${ICUB_MODULE_PATH})
 list(APPEND CMAKE_MODULE_PATH ${ICUBCONTRIB_MODULE_PATH})
 
 include(ICUBcontribHelpers)
 include(ICUBcontribOptions)
 icubcontrib_set_default_prefix()
-
-include(YarpInstallationHelpers)   # pick up yarp's cmake scripts
 
 ## then modules
 add_subdirectory(modules)

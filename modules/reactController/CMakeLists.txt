@@ -6,8 +6,6 @@ project(reactController)
 
 find_package(IPOPT REQUIRED)
 
-include(YarpIDL)
-
 set(header_files ${CMAKE_CURRENT_SOURCE_DIR}/include/reactIpOpt.h
                  ${CMAKE_CURRENT_SOURCE_DIR}/include/reactCtrlThread.h
                  ${CMAKE_CURRENT_SOURCE_DIR}/include/particleThread.h
