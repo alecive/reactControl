@@ -8,8 +8,8 @@ find_package(IPOPT REQUIRED)
 
 include_directories(${IPOPT_INCLUDE_DIRS})
 
-add_definitions(-D_USE_MATH_DEFINES)
 add_executable(test-reactController-position-direct test-reactController-position-direct.cpp)
+target_compile_definitions(test-reactController-position-direct PRIVATE _USE_MATH_DEFINES)
 target_link_libraries(test-reactController-position-direct ${YARP_LIBRARIES} ctrlLib iKin ${IPOPT_LIBRARIES})
 install(TARGETS test-reactController-position-direct DESTINATION bin)
 
