@@ -121,8 +121,8 @@ bool reactCtrlThread::threadInit()
     if (useTorso){ 
         ;
         // disable torso pitch
-        //vLimNominal(0,0)=vLimNominal(0,1)=0.0;  
-        //vLimAdapted(0,0)=vLimAdapted(0,1)=0.0;  
+        //vLimNominal(0,0)=vLimNominal(0,1)=0.0;
+        //vLimAdapted(0,0)=vLimAdapted(0,1)=0.0;
         // disable torso roll
         vLimNominal(1,0)=vLimNominal(1,1)=0.0;
         vLimAdapted(1,0)=vLimAdapted(1,1)=0.0;
@@ -1460,10 +1460,17 @@ void reactCtrlThread::sendData()
             {
                //we assume there will be only one - elbow - now
                //desired elbow position; variable - if torso on and positionDirect: 70:72 ;
-               vectorIntoBottle( (*additionalControlPointsVector.begin()).x_desired , b); 
-               //actual elbow position on real chain; variable - if torso on and positionDirect: 73:75 ;
-               vectorIntoBottle( (*(arm->asChain())).getH((*(arm->asChain())).getDOF()-4-1).getCol(3).subVector(0,2) , b);
+               vectorIntoBottle( (*additionalControlPointsVector.begin()).x_desired , b);
             }
+            else
+            {
+               Vector elbow_d(3,0.0);
+               vectorIntoBottle( elbow_d , b);
+            }
+
+            //actual elbow position on real chain; variable - if torso on and positionDirect: 73:75 ;
+            vectorIntoBottle( (*(arm->asChain())).getH((*(arm->asChain())).getDOF()-4-1).getCol(3).subVector(0,2) , b);
+
                                       
             outPort.setEnvelope(ts);
             outPort.write(b);
