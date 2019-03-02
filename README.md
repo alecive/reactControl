@@ -1,6 +1,6 @@
 # react-control
 
-<a href="https://zenhub.com"><img src="https://raw.githubusercontent.com/ZenHubIO/support/master/zenhub-badge.png"></a>
+[![ZenHub](https://img.shields.io/badge/Shipping_faster_with-ZenHub-435198.svg)](https://zenhub.com)
 
 This repository contains a controller for the iCub for performing reaching with simultaneous reactive whole-body obstacle avoidance. The module thus encapsulates the functionality of an inverse kinematics solver and the actual controller that generates the commands to reach a position in Cartesian space. The obstacles - perceived visually or through the iCub's sensitive skin - are incorporated on the run as additional constraints.
 
