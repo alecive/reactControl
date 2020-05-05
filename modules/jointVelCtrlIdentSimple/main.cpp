@@ -449,7 +449,6 @@ int main(int argc, char *argv[])
     }
 
     ResourceFinder rf;
-    rf.setVerbose(true);
     rf.setDefault("name","jointVelCtrlIdent");
     rf.configure(argc,argv);
 

@@ -782,7 +782,6 @@ int main(int argc, char *argv[])
 {
     yarp::os::Network yarp;
     ResourceFinder rf;
-    rf.setVerbose(true);
     rf.setDefaultContext("react-control");
     rf.setDefaultConfigFile("reactController-sim.ini");
     rf.configure(argc,argv);
