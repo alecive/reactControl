@@ -352,6 +352,8 @@
             // avoid hitting forearm
             m+=2; nnz_jac_g+=2+2;
         }
+        m+= 1; nnz_jac_g+= n;
+
 
         nnz_h_lag=0;
         index_style=TNLP::C_STYLE;
@@ -400,6 +402,8 @@
             g_l[6+extra_ctrl_points_nr]=-elb_n;
             g_u[6+extra_ctrl_points_nr]=std::numeric_limits<double>::max();
         }
+        g_l[1+extra_ctrl_points_nr+6*hitting_constraints]=0.0;
+        g_u[1+extra_ctrl_points_nr+6*hitting_constraints]=1;  // Upper bound for smoothness constraint - try different values
 
         return true;
     }
@@ -511,6 +515,7 @@
             g[5+extra_ctrl_points_nr]=-elb_m*(q0[3+3+0]+dt*x[3+3+0])+q0[3+3+1]+dt*x[3+3+1];
             g[6+extra_ctrl_points_nr]=elb_m*(q0[3+3+0]+dt*x[3+3+0])+q0[3+3+1]+dt*x[3+3+1];
         }
+        g[1+6*hitting_constraints+extra_ctrl_points_nr]=norm2(v-v0); // smoothness constraint
 
         return true;
     }
@@ -572,6 +577,11 @@
 
                 iRow[idx]=6+extra_ctrl_points_nr; jCol[idx]=3+3+0; idx++;
                 iRow[idx]=6+extra_ctrl_points_nr; jCol[idx]=3+3+1; idx++;
+            }
+            for (Ipopt::Index i=0; i<n; i++)
+            {
+                iRow[idx]=1+extra_ctrl_points_nr+hitting_constraints*6; jCol[idx]=i;
+                idx++;
             }
             
 //             yInfo("[ControllerNLP::eval_jac_g] \n");
@@ -636,6 +646,12 @@
                 values[idx++]=elb_m*dt;
                 values[idx++]=dt;
             }
+
+          for (Ipopt::Index i=0; i<n; i++)
+          {
+            values[idx++]=2.0*dt*(v[i]-v0[i]); // TODO: check sign
+          }
+
 //             yInfo("[ControllerNLP::eval_jac_g]\n");
 //             for(int k=0; k<idx; k++)
 //                 yInfo("    values[%d]=%f \n",k,values[k]);

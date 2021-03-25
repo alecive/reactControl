@@ -1,0 +1,66 @@
+<application>
+    <name>Reactcontrol_icubSim_new</name>
+
+    <dependencies>
+    </dependencies>
+ 
+    <module>
+        <name>iCub_SIM</name>
+        <parameters></parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>iCub_SIM</tag>
+    </module>
+
+   <module>
+        <name>reactController</name>
+        <parameters></parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>reactController</tag>
+    </module>
+
+    <module>
+        <name>virtualContactGeneration</name>
+        <parameters></parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>virtContactGen</tag>
+    </module>	
+
+    <module>
+        <name>skinEventsAggregator</name>
+        <parameters></parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag>skinEventsAggreg</tag>
+    </module>
+
+
+    <!--module>
+        <name></name>
+        <parameters></parameters>
+        <node>localhost</node>
+        <stdio></stdio>
+        <tag></tag>
+    </module-->
+
+    <connection>
+      <from>/virtualContactGeneration/virtualContacts:o</from>
+	<to>/skinEventsAggregator/skin_events:i</to>
+        <protocol>udp</protocol>
+    </connection>
+
+    <connection>
+        <from>/skinEventsAggregator/skin_events_aggreg:o</from>
+	<to>/reactController/skin_events_aggreg:i</to>
+        <protocol>udp</protocol>
+    </connection>
+
+        
+    <!--connection>
+        <from></from>
+	<to></to>
+        <protocol>udp</protocol>
+    </connection-->
+</application>

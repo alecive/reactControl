@@ -194,87 +194,87 @@
         <protocol>udp</protocol>
     </connection>
     <connection>
-        <from>/icub/skin/left_hand_comp</from>
+        <from>/icubSim/skin/left_hand_comp</from>
 	<to>/data/skin_tactile_comp_left_hand</to>
         <protocol>udp</protocol>
     </connection>
     <connection>
-        <from>/icub/skin/left_forearm_comp</from>
+        <from>/icubSim/skin/left_forearm_comp</from>
 	<to>/data/skin_tactile_comp_left_forearm</to>
         <protocol>udp</protocol>
     </connection>
     <connection>
-        <from>/icub/skin/left_arm_comp</from>
+        <from>/icubSim/skin/left_arm_comp</from>
 	<to>/data/skin_tactile_comp_left_arm</to>
         <protocol>udp</protocol>
     </connection>
     <connection>
-        <from>/icub/skin/right_hand_comp</from>
+        <from>/icubSim/skin/right_hand_comp</from>
 	<to>/data/skin_tactile_comp_right_hand</to>
         <protocol>udp</protocol>
     </connection>
     <connection>
-        <from>/icub/skin/right_forearm_comp</from>
+        <from>/icubSim/skin/right_forearm_comp</from>
 	<to>/data/skin_tactile_comp_right_forearm</to>
         <protocol>udp</protocol>
     </connection>
     <connection>
-        <from>/icub/skin/right_arm_comp</from>
+        <from>/icubSim/skin/right_arm_comp</from>
 	<to>/data/skin_tactile_comp_right_arm</to>
         <protocol>udp</protocol>
     </connection>
     <!--connection>
-        <from>/icub/skin/torso_comp</from>
+        <from>/icubSim/skin/torso_comp</from>
 	<to>/data/skin_tactile_comp_torso</to>
         <protocol>udp</protocol>
     </connection-->          
      
     <connection>
-        <from>/icub/head/state:o</from>
+        <from>/icubSim/head/state:o</from>
 	<to>/data/joints_head</to>
         <protocol>udp</protocol>
     </connection>
     <connection>
-        <from>/icub/torso/state:o</from>
+        <from>/icubSim/torso/state:o</from>
         <to>/data/joints_torso</to>
         <protocol>udp</protocol>
     </connection>
     <connection>
-        <from>/icub/left_arm/state:o</from>
+        <from>/icubSim/left_arm/state:o</from>
         <to>/data/joints_leftArm</to>
         <protocol>udp</protocol>
     </connection>
     <connection>
-        <from>/icub/right_arm/state:o</from>
+        <from>/icubSim/right_arm/state:o</from>
         <to>/data/joints_rightArm</to>
         <protocol>udp</protocol>
     </connection>
    
 
     <!--connection>
-        <from>/icub/inertial</from>
+        <from>/icubSim/inertial</from>
         <to>/data/inertial</to>
         <protocol>udp</protocol>
     </connection-->
     
     <!--connection>
-        <from>/icub/camcalib/left/out</from>
+        <from>/icubSim/camcalib/left/out</from>
         <to>/data/images/left</to>
         <protocol>udp</protocol>
     </connection>
     <connection>
-        <from>/icub/camcalib/right/out</from>
+        <from>/icubSim/camcalib/right/out</from>
         <to>/data/images/right</to>
         <protocol>udp</protocol>
     </connection-->
     
     <!--connection>
-        <from>/icub/left_arm/analog:o</from>
+        <from>/icubSim/left_arm/analog:o</from>
 	    <to>/data/forces_leftArm</to>
         <protocol>udp</protocol>
     </connection>
     <connection>
-        <from>/icub/right_arm/analog:o</from>
+        <from>/icubSim/right_arm/analog:o</from>
 	    <to>/data/forces_rightArm</to>
         <protocol>udp</protocol>
     </connection-->
