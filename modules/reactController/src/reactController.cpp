@@ -203,14 +203,14 @@ public:
 
     bool set_relative_circular_xd(const double _radius, const double _frequency)
     {
-            yInfo(" ");
-            yInfo("[reactController] received new relative circular x_d: radius %f, frequency: %f.",_radius,_frequency);
-            if ((_radius>=0.0) && (_radius <= 0.3) && (_frequency >=0.0) && (_frequency<=1.0)  )
-                return rctCtrlThrd->setNewCircularTarget(_radius,_frequency);   
-            else{
-                yWarning("[reactController] set_relative_circular_xd(): expecting radius <0,0.3>, frequency <0,1>");    
-                return false;
-            }
+        yInfo(" ");
+        yInfo("[reactController] received new relative circular x_d: radius %f, frequency: %f.",_radius,_frequency);
+        if ((_radius>=0.0) && (_radius <= 0.3) && (_frequency >=0.0) && (_frequency<=1.0)  )
+            return rctCtrlThrd->setNewCircularTarget(_radius,_frequency);
+        else{
+            yWarning("[reactController] set_relative_circular_xd(): expecting radius <0,0.3>, frequency <0,1>");
+            return false;
+        }
     }
     
     bool set_streaming_xd()

@@ -64,7 +64,7 @@ public:
     
     virtual ~AvoidanceHandlerAbstract();
     
- protected:
+protected:
     unsigned int verbosity;
     std::string type;
     iCub::iKin::iKinChain chain;
