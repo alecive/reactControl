@@ -134,8 +134,8 @@ private:
 public:
     reactController()
     {
-        rctCtrlThrd=0;
-        prtclThrd=0;
+        rctCtrlThrd=nullptr;
+        prtclThrd=nullptr;
 
         robot =         "icubSim";
         name  = "reactController";
@@ -335,7 +335,7 @@ public:
         return rctCtrlThrd->stopControlAndSwitchToPositionMode();
     }
 
-    bool configure(ResourceFinder &rf)
+    bool configure(ResourceFinder &rf) override
     {
         //******************************************************
         //******************* NAME ******************
@@ -486,7 +486,7 @@ public:
             
        
           //*** generating positions for end-effector - trajectory between current pos and final target
-           if (rf.check("referenceGen"))
+            if (rf.check("referenceGen"))
             {
                 referenceGen = rf.find("referenceGen").asString();
                 if((referenceGen!="uniformParticle") && (referenceGen!="minJerk") && (referenceGen!="none"))
@@ -526,7 +526,7 @@ public:
 
      
           //*** we will command the robot in velocity or in positionDirect
-           if (rf.check("controlMode"))
+            if (rf.check("controlMode"))
             {
                 controlMode = rf.find("controlMode").asString();
                 if(controlMode!="velocity" && controlMode!="positionDirect")
@@ -733,14 +733,14 @@ public:
             if (!prtclThrd->start())
             {
                 delete prtclThrd;
-                prtclThrd=0;
+                prtclThrd=nullptr;
 
                 yError("[reactController] particleThread wasn't instantiated!!");
                 return false;
             }
         }
         else
-            prtclThrd = NULL;
+            prtclThrd = nullptr;
             
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
                                           disableTorso, controlMode, trajSpeed, 
@@ -753,13 +753,13 @@ public:
         if (!rctCtrlThrd->start())
         {
             delete rctCtrlThrd;
-            rctCtrlThrd = 0;
+            rctCtrlThrd = nullptr;
 
             if (prtclThrd)
             {
                 prtclThrd->stop();
                 delete prtclThrd;
-                prtclThrd=0;
+                prtclThrd=nullptr;
             }
 
             yError("[reactController] reactCtrlThread wasn't instantiated!!");
@@ -773,12 +773,12 @@ public:
     }
 
     /************************************************************************/
-    bool attach(RpcServer &source)
+    bool attach(RpcServer &source) override
     {
         return this->yarp().attachAsServer(source);
     }
 
-    bool close()
+    bool close() override
     {
         yInfo("REACT CONTROLLER: Stopping threads..");
         if (rctCtrlThrd)
@@ -786,22 +786,22 @@ public:
             yInfo("REACT CONTROLLER: Stopping rctCtrlThrd...");
             rctCtrlThrd->stop();
             delete rctCtrlThrd;
-            rctCtrlThrd=0;
+            rctCtrlThrd=nullptr;
         }
         if (prtclThrd)
         {
             yInfo("REACT CONTROLLER: Stopping prtclThrd...");
             prtclThrd->stop();
             delete prtclThrd;
-            prtclThrd=0;
+            prtclThrd=nullptr;
         }
         rpcSrvr.close();
 
         return true;
     }
 
-    double getPeriod()  { return 1.0; }
-    bool updateModule() { return true; }
+    double getPeriod() override  { return 1.0; }
+    bool updateModule() override { return true; }
 };
 
 /**

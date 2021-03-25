@@ -32,7 +32,7 @@
 #include <iCub/ctrl/math.h>
 #include <iCub/ctrl/pids.h>
 
-#include <stdarg.h>
+#include <cstdarg>
 
 using namespace std;
 
@@ -70,9 +70,9 @@ public:
     // CONSTRUCTOR
     particleThread(int , const string & , int );
     // RUN
-    virtual void run();
+    void run() override;
     // RELEASE
-    virtual void threadRelease();
+    void threadRelease() override;
 
     /**
     * Initializes the integrator to a new particle to track.

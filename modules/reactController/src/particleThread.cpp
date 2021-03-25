@@ -95,7 +95,7 @@ int particleThread::printMessage(const int l, const char *f, ...) const
 
 void particleThread::threadRelease()
 {
-    delete integrator; integrator = NULL;
+    delete integrator; integrator = nullptr;
 }
 
 // empty line to make gcc happy

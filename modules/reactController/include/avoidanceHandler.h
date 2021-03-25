@@ -24,7 +24,7 @@
 #include <vector>
 #include <deque>
 
-#include <stdarg.h>
+#include <cstdarg>
 #include <string>
 
 #include <algorithm>
@@ -91,8 +91,8 @@ class AvoidanceHandlerTactile : public virtual AvoidanceHandlerAbstract
 
 public:
     AvoidanceHandlerTactile(const iCub::iKin::iKinChain &_chain,const std::vector<collisionPoint_t> &_collisionPoints,const unsigned int _verbosity=0);
-    void setParameters(const yarp::os::Property &parameters);
-    yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim);
+    void setParameters(const yarp::os::Property &params) override;
+    yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim) override;
 
 protected:
     double avoidingSpeed;

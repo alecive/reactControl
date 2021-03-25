@@ -18,9 +18,7 @@
 */
 
 #include <vector>
-#include <fstream>
 #include <sstream>
-#include <iomanip>
 
 #include <IpIpoptApplication.hpp>
 
@@ -89,7 +87,7 @@ bool reactCtrlThread::threadInit()
         part_short="right";
     }
     
-   /******** iKin chain and variables, and transforms init *************************/
+    /******** iKin chain and variables, and transforms init *************************/
    
     arm = new iCub::iKin::iCubArm(part_short);
     // Release / block torso links (blocked by default)
@@ -118,8 +116,7 @@ bool reactCtrlThread::threadInit()
         vLimNominal(r,1)=vMax;
         vLimAdapted(r,1)=vMax;
     }
-    if (useTorso){ 
-        ;
+    if (useTorso){
         // disable torso pitch
         //vLimNominal(0,0)=vLimNominal(0,1)=0.0;
         //vLimAdapted(0,0)=vLimAdapted(0,1)=0.0;
@@ -163,7 +160,7 @@ bool reactCtrlThread::threadInit()
         return false;
     }
 
-    bool okA = 1;
+    bool okA = true;
     
     if (ddA.isValid())
     {
@@ -196,7 +193,7 @@ bool reactCtrlThread::threadInit()
         return false;
     }
 
-    bool okT = 1;
+    bool okT = true;
     
     if (ddT.isValid())
     {
@@ -270,7 +267,7 @@ bool reactCtrlThread::threadInit()
     if(referenceGen == "minJerk") 
         minJerkTarget = new minJerkTrajGen(3,dT,1.0); //dim 3, dT, trajTime 1s - will be overwritten later
     else
-        minJerkTarget = NULL;
+        minJerkTarget = nullptr;
   
     streamingTarget = true;
     additionalControlPointsVector.clear();
@@ -306,9 +303,9 @@ bool reactCtrlThread::threadInit()
         I = new Integrator(dT,q,lim);  
     }
     else{
-        virtualArm = NULL;
-        virtualArmChain = NULL;
-        I = NULL;
+        virtualArm = nullptr;
+        virtualArmChain = nullptr;
+        I = nullptr;
     }      
     /*** visualize in iCubGui  ***************/
     visualizeIniCubGui = true;
@@ -415,7 +412,7 @@ void reactCtrlThread::run()
         if (readMotionPlan(x_planned))
         {
             additionalControlPointsVector.clear();
-            if (x_planned.size()>0)
+            if (!x_planned.empty())
             {
                 setNewTarget(x_planned[0],false);
                 if (x_planned.size()==2 && additionalControlPoints)
@@ -428,8 +425,7 @@ void reactCtrlThread::run()
             }
         }
     }
-    else{
-        ;
+    else {
        //temporary - we set the desired elbow pos manually in order to test without the planner module
 //        additionalControlPointsVector.clear();
 //        ControlPoint *controlPoint = new ControlPoint();
@@ -547,11 +543,11 @@ void reactCtrlThread::run()
             if(gazeControl)
                 igaze -> lookAtFixationPoint(x_d); //for now looking at final target (x_d), not at intermediate/next target x_n
             
-             if (tactileCollisionPointsOn || visualCollisionPointsOn){
+            if (tactileCollisionPointsOn || visualCollisionPointsOn){
                 AvoidanceHandlerAbstract *avhdl; 
                 avhdl = new AvoidanceHandlerTactile(*arm->asChain(),collisionPoints,verbosity); //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
                 vLimAdapted=avhdl->getVLIM(CTRL_DEG2RAD * vLimNominal) * CTRL_RAD2DEG;
-                delete avhdl; avhdl = NULL; //TODO this is not efficient, in the future find a way to reset the handler, not recreate
+                delete avhdl; avhdl = nullptr; //TODO this is not efficient, in the future find a way to reset the handler, not recreate
             }
             
             yDebug("vLimAdapted = %s",vLimAdapted.toString(3,3).c_str());
@@ -645,9 +641,9 @@ void reactCtrlThread::threadRelease()
     interactionModesOrig.clear();
     
     yInfo("threadRelease(): deleting arm and torso encoder arrays and arm object.");
-    delete encsA; encsA = NULL;
-    delete encsT; encsT = NULL;
-    delete   arm;   arm = NULL;
+    delete encsA; encsA = nullptr;
+    delete encsT; encsT = nullptr;
+    delete   arm;   arm = nullptr;
     bool stoppedOk = stopControlAndSwitchToPositionMode();
     if (stoppedOk)
         yInfo("Sucessfully stopped arm and torso controllers");
@@ -669,23 +665,23 @@ void reactCtrlThread::threadRelease()
     collisionPoints.clear();    
 
     additionalControlPointsVector.clear();
-    if(minJerkTarget != NULL){
+    if(minJerkTarget != nullptr){
         yDebug("deleting minJerkTarget..");
         delete minJerkTarget;
-        minJerkTarget = NULL;    
+        minJerkTarget = nullptr;
     }
   
-    if(virtualArm != NULL){
+    if(virtualArm != nullptr){
         yDebug("deleting virtualArm..");
         delete virtualArm;
-        virtualArm = NULL;   
-        virtualArmChain = NULL;    
+        virtualArm = nullptr;
+        virtualArmChain = nullptr;
     }
          
-    if(I != NULL){
+    if(I != nullptr){
         yDebug("deleting integrator I..");
         delete I;
-        I = NULL;    
+        I = nullptr;
     }
        
     if (visualizeIniCubGui)
@@ -778,7 +774,7 @@ bool reactCtrlThread::setTol(const double _tol)
     return false;
 }
 
-double reactCtrlThread::getTol()
+double reactCtrlThread::getTol() const
 {
     return tol;
 }
@@ -816,7 +812,7 @@ bool reactCtrlThread::setVMax(const double _vMax)
     return false;
 }
 
-double reactCtrlThread::getVMax()
+double reactCtrlThread::getVMax() const
 {
     return vMax;
 }
@@ -1077,11 +1073,11 @@ bool reactCtrlThread::alignJointsBounds()
     yDebug("[reactCtrlThread][alignJointsBounds] pre alignment:");
     printJointsBounds();
 
-    deque<IControlLimits*> lim;
-    lim.push_back(ilimT);
-    lim.push_back(ilimA);
+    deque<IControlLimits*> limits;
+    limits.push_back(ilimT);
+    limits.push_back(ilimA);
 
-    if (!arm->alignJointsBounds(lim)) return false;
+    if (!arm->alignJointsBounds(limits)) return false;
 
     // iCub::iKin::iKinChain &chain=*arm->asChain();
     // chain(0).setMin(-22.0*CTRL_DEG2RAD);    chain(0).setMin(-84.0*CTRL_DEG2RAD);
@@ -1151,13 +1147,13 @@ bool reactCtrlThread::areJointsHealthyAndSet(vector<int> &jointsToSet,
     }
     if(verbosity >= 10){
         printf("[reactCtrlThread::areJointsHealthyAndSet] %s: ctrl Modes retreived: ",_p.c_str());
-        for (size_t j=0; j<modes.size(); j++){
-                printf("%s ",Vocab::decode(modes[j]).c_str());
+        for (int mode : modes){
+                printf("%s ",Vocab::decode(mode).c_str());
         }
         printf("\n");
         printf("Indexes of joints to set: ");
-        for (size_t k=0; k<jointsToSet.size(); k++){
-                printf("%d ",jointsToSet[k]);
+        for (int joint : jointsToSet){
+                printf("%d ",joint);
         }
         printf("\n");
     }
@@ -1171,7 +1167,7 @@ bool reactCtrlThread::setCtrlModes(const vector<int> &jointsToSet,
     if (_s!="position" && _s!="velocity" && _s!="positionDirect")
         return false;
 
-    if (jointsToSet.size()==0)
+    if (jointsToSet.empty())
         return true;
 
     vector<int> modes;
@@ -1210,7 +1206,7 @@ bool reactCtrlThread::setCtrlModes(const vector<int> &jointsToSet,
 }
 
 //N.B. the targetValues can be either positions or velocities, depending on the control mode!
-bool reactCtrlThread::controlArm(const string _controlMode, const yarp::sig::Vector &_targetValues)
+bool reactCtrlThread::controlArm(const string& _controlMode, const yarp::sig::Vector &_targetValues)
 {   
     vector<int> jointsToSetA;
     vector<int> jointsToSetT;
@@ -1327,8 +1323,7 @@ Vector reactCtrlThread::computeDeltaX()
     J_cst.resize(3,chainActiveDOF);
     J_cst.zero();
     submatrix(J1,J_cst,0,2,0,chainActiveDOF-1);
-    double dT=getPeriod();
-    return dT*J_cst*q_dot;
+    return getPeriod()*J_cst*q_dot;
 }
 
 
@@ -1347,7 +1342,6 @@ void reactCtrlThread::convertPosFromRootToSimFoR(const Vector &pos, Vector &outP
     //printf("convertPosFromRootToSimFoR: outPos in simulator FoR:%s\n",outPos.toString().c_str());
     outPos.resize(3); 
     //printf("convertPosFromRootToSimFoR: outPos after resizing back to 3 values:%s\n",outPos.toString().c_str());
-    return;
 }
 
 void reactCtrlThread::convertPosFromLinkToRootFoR(const Vector &pos,const SkinPart skinPart, Vector &outPos)
@@ -1368,15 +1362,12 @@ void reactCtrlThread::convertPosFromLinkToRootFoR(const Vector &pos,const SkinPa
     outPos = T_root_to_link * pos_temp;
     outPos.resize(3);
     //printf("convertPosFromLinkToRootFoR: outPos after resizing back to 3 values:%s\n",outPos.toString().c_str());
-    
-    return;   
- 
 }
 
  /**** communication through ports in/out ****************/
 
 
-bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, double gain, string which_chain,std::vector<collisionPoint_t> &collPoints)
+bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, double gain, const string& which_chain,std::vector<collisionPoint_t> &collPoints)
 {
     //printMessage(9,"[reactCtrlThread::getCollisionPointsFromPort].\n");
     collisionPoint_t collPoint;    
@@ -1388,7 +1379,7 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
     collPoint.magnitude=0.0;
     
     Bottle* collPointsMultiBottle = inPort.read(false);
-    if(collPointsMultiBottle != NULL){
+    if(collPointsMultiBottle != nullptr){
          printMessage(5,"[reactCtrlThread::getCollisionPointsFromPort]: There were %d bottles on the port.\n",collPointsMultiBottle->size());
          for(int i=0; i< collPointsMultiBottle->size();i++){
              Bottle* collPointBottle = collPointsMultiBottle->get(i).asList();
@@ -1413,7 +1404,7 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
     else{
        printMessage(9,"[reactCtrlThread::getCollisionPointsFromPort]: no avoidance vectors on the port.\n") ;
        return false;
-    };   
+    }
 }
 
 void reactCtrlThread::sendData()
@@ -1483,7 +1474,7 @@ bool reactCtrlThread::readMotionPlan(std::vector<Vector> &x_desired)
     Bottle *inPlan = streamedTargets.read(false);
 
     bool hasPlan = false;
-    if(inPlan!=NULL) {
+    if(inPlan!=nullptr) {
         yInfo() << "received motionPlan";
         int nbCtrlPts = inPlan->size();
 
@@ -1520,7 +1511,7 @@ bool reactCtrlThread::readMotionPlan(std::vector<Vector> &x_desired)
 /**** visualizations using iCubGui **************************************/
 
 
-void reactCtrlThread::sendiCubGuiObject(const string object_type)
+void reactCtrlThread::sendiCubGuiObject(const string& object_type)
 {
     if (outPortiCubGui.getOutputCount()>0)
     {
@@ -1584,7 +1575,7 @@ void reactCtrlThread::sendiCubGuiObject(const string object_type)
         else if(object_type == "additionalTargets")
         {        
             int i=1;
-            for (std::vector<ControlPoint>::const_iterator it = additionalControlPointsVector.begin() ; it != additionalControlPointsVector.end(); ++it)
+            for (const auto & controlPoint : additionalControlPointsVector)
             {
                 obj.addString("object");
                 obj.addString("extra-target");
@@ -1595,9 +1586,9 @@ void reactCtrlThread::sendiCubGuiObject(const string object_type)
                 obj.addDouble(30.0);
         
                 // positions - iCubGui works in mm
-                obj.addDouble(1000*(*it).x_desired(0));
-                obj.addDouble(1000*(*it).x_desired(1));
-                obj.addDouble(1000*(*it).x_desired(2));
+                obj.addDouble(1000 * controlPoint.x_desired(0));
+                obj.addDouble(1000 * controlPoint.x_desired(1));
+                obj.addDouble(1000 * controlPoint.x_desired(2));
         
                 // orientation
                 obj.addDouble(0.0);
@@ -1633,13 +1624,13 @@ void reactCtrlThread::deleteiCubGuiObject(const string object_type)
   
  /***** visualizations in iCub simulator ********************************/
 
-void reactCtrlThread::createStaticSphere(double radius, const Vector &pos)
+void reactCtrlThread::createStaticSphere(double _radius, const Vector &pos)
 {
     cmd.clear();
     cmd.addString("world");
     cmd.addString("mk");
     cmd.addString("ssph");
-    cmd.addDouble(radius);
+    cmd.addDouble(_radius);
     
     cmd.addDouble(pos(0));
     cmd.addDouble(pos(1));
@@ -1713,8 +1704,8 @@ void reactCtrlThread::showCollisionPointsInSim()
     int j=1;
     Vector posRoot(3,0.0);
     Vector posSim(3,0.0);
-    for(std::vector<collisionPoint_t>::const_iterator it = collisionPoints.begin(); it != collisionPoints.end(); ++it) {
-        convertPosFromLinkToRootFoR(it->x,it->skin_part,posRoot);
+    for(const auto & collisionPoint : collisionPoints) {
+        convertPosFromLinkToRootFoR(collisionPoint.x,collisionPoint.skin_part,posRoot);
         convertPosFromRootToSimFoR(posRoot,posSim);
         moveBox(j,posSim); //just move a box from the sim world
         j++;
@@ -1729,11 +1720,9 @@ void reactCtrlThread::showCollisionPointsInSim()
             pos = collisionPointsSimReservoirPos;
             pos(2) = pos(2) + +0.03*k;
             printMessage(5,"There are fewer collision points, %d, than available boxes in sim, %d, moving the rest to the reservoir in the sim world -  this one to: %s \n",nrCollisionPoints,collisionPointsVisualizedCount,pos.toString(3,3).c_str());
-            moveBox(k,pos);    
+            moveBox(k,pos);
         }
-        
-    }    
-                 
+    }
 }
 
 int reactCtrlThread::printMessage(const int l, const char *f, ...) const

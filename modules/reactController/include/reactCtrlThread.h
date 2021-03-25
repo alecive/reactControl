@@ -65,11 +65,11 @@ public:
                     int , bool , string , double , double , double , double , string , 
                     bool , bool , bool , bool , bool, bool , bool , bool , bool , bool , particleThread * );
     // INIT
-    virtual bool threadInit();
+    bool threadInit() override;
     // RUN
-    virtual void run();
+    void run() override;
     // RELEASE
-    virtual void threadRelease();
+    void threadRelease() override;
 
     // Enables the torso
     bool enableTorso();
@@ -93,13 +93,13 @@ public:
     bool setTol(const double );
 
     // Gets the tolerance
-    double getTol();
+    double getTol() const;
 
     // Sets the vMax
     bool setVMax(const double );
 
     // Gets the vMax
-    double getVMax();
+    double getVMax() const;
 
     // [DEPRECATED] Sets the trajectory time 
     bool setTrajTime(const double );
@@ -111,10 +111,10 @@ public:
     bool setVerbosity(const int );
 
     // gets the verbosity
-    int getVerbosity() { return verbosity; };
+    int getVerbosity() const { return verbosity; };
 
     // gets the state of the controller
-    int getState() { return state; };
+    int getState() const { return state; };
 
     /**
     * Stops the control of the robot
@@ -306,7 +306,7 @@ protected:
     /**
     * Sends the computed velocities or positions to the robot, depending on controlMode
     */
-    bool controlArm(const string controlMode,const yarp::sig::Vector &);
+    bool controlArm(const string& controlMode,const yarp::sig::Vector &);
 
     /**
      * Check the state of each joint to be controlled
@@ -353,7 +353,7 @@ protected:
 
    /************************** communication through ports in/out ***********************************/
 
-    bool getCollisionPointsFromPort(yarp::os::BufferedPort<yarp::os::Bottle> &inPort, double gain, string whichChain,std::vector<collisionPoint_t> &collPoints);
+    bool getCollisionPointsFromPort(yarp::os::BufferedPort<yarp::os::Bottle> &inPort, double gain, const string& whichChain,std::vector<collisionPoint_t> &collPoints);
 
     /**
     * Sends useful data to a port in order to track it on matlab
@@ -369,7 +369,7 @@ protected:
 
     /***************************** visualizations in icubGui  ****************************/
     //uses corresponding global variables for target pos (x_d) or particle pos (x_n) and creates bottles for the port to iCubGui
-    void sendiCubGuiObject(const std::string object_type);
+    void sendiCubGuiObject(const std::string& object_type);
     
     void deleteiCubGuiObject(const std::string object_type);
     
