@@ -396,7 +396,7 @@ void reactCtrlThread::run()
 {
     bool controlSuccess =false;
     //printMessage(2,"[reactCtrlThread::run()] started, state: %d.\n",state);
-    //yarp::os::LockGuard lg(mutex);
+    //std::lock_guard<std::mutex> lg(mut);
     updateArmChain();
     //printMessage(10,"[reactCtrlThread::run()] updated arm chain.\n");
     //debug - see Jacobian
@@ -726,7 +726,7 @@ void reactCtrlThread::threadRelease()
 
 bool reactCtrlThread::enableTorso()
 {
-   // yarp::os::LockGuard lg(mutex);
+   // std::lock_guard<std::mutex> lg(mut);
     if (state==STATE_REACH)
     {
         return false;
@@ -748,7 +748,7 @@ bool reactCtrlThread::enableTorso()
 
 bool reactCtrlThread::disableTorso()
 {
-    //yarp::os::LockGuard lg(mutex);
+    //std::lock_guard<std::mutex> lg(mut);
     if (state==STATE_REACH)
     {
         return false;
@@ -945,7 +945,7 @@ bool reactCtrlThread::setStreamingTarget()
 
 bool reactCtrlThread::stopControl()
 {
-    //yarp::os::LockGuard lg(mutex);
+    //std::lock_guard<std::mutex> lg(mut);
     bool stoppedOk = stopControlHelper();
     if (stoppedOk)
         yInfo("reactCtrlThread::stopControl(): Sucessfully stopped controllers");
@@ -956,7 +956,7 @@ bool reactCtrlThread::stopControl()
 
 bool reactCtrlThread::stopControlAndSwitchToPositionMode()
 {
-    //yarp::os::LockGuard lg(mutex);
+    //std::lock_guard<std::mutex> lg(mut);
     bool stoppedOk = stopControlAndSwitchToPositionModeHelper();
     if (stoppedOk)
         yInfo("reactCtrlThread::stopControlAndSwitchToPositionMode(): Sucessfully stopped controllers");

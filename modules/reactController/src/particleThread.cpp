@@ -37,14 +37,14 @@ void particleThread::run()
 {
     if (isRunning)
     {
-        LockGuard lg(mutex);
+        std::lock_guard<std::mutex> lg(mut);
         integrator->integrate(vel);
     }
 }
 
 bool particleThread::setupNewParticle(const yarp::sig::Vector &_x_0, const yarp::sig::Vector &_vel)
 {
-    LockGuard lg(mutex);
+    std::lock_guard<std::mutex> lg(mut);
     if (_x_0.size()>=3 && _vel.size()>=3)
     {
         isRunning=true;
@@ -58,7 +58,7 @@ bool particleThread::setupNewParticle(const yarp::sig::Vector &_x_0, const yarp:
 
 bool particleThread::resetParticle(const yarp::sig::Vector &_x_0)
 {
-    LockGuard lg(mutex);
+    std::lock_guard<std::mutex> lg(mut);
     integrator->reset(_x_0);
     isRunning=false;
     return true;
@@ -66,14 +66,14 @@ bool particleThread::resetParticle(const yarp::sig::Vector &_x_0)
 
 bool particleThread::stopParticle()
 {
-    LockGuard lg(mutex);
+    std::lock_guard<std::mutex> lg(mut);
     isRunning=false;
     return true;
 }
 
 yarp::sig::Vector particleThread::getParticle()
 {
-    LockGuard lg(mutex);
+    std::lock_guard<std::mutex> lg(mut);
     return integrator->get();
 }
 
