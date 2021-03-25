@@ -23,8 +23,6 @@
 #include <yarp/os/Time.h>
 #include <yarp/os/PeriodicThread.h>
 #include <yarp/os/Log.h>
-#include <yarp/os/Mutex.h>
-#include <yarp/os/LockGuard.h>
 #include <yarp/os/Port.h>
 #include <yarp/sig/Vector.h>
 #include <yarp/sig/Matrix.h>
@@ -269,8 +267,7 @@ protected:
     double timeToSolveProblem_s; //time taken by q_dot = solveIK(ipoptExitCode) ~ ipopt + avoidance handler
 
     // Mutex for handling things correctly
-    yarp::os::Mutex mutex;
-    
+    std::mutex mut;
     yarp::os::Bottle    cmd; 
     yarp::sig::Matrix T_world_root; //homogenous transf. matrix expressing the rotation and translation of FoR from world (simulator) to from robot (Root) FoR
     

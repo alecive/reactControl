@@ -23,8 +23,6 @@
 #include <yarp/os/Time.h>
 #include <yarp/os/PeriodicThread.h>
 #include <yarp/os/Log.h>
-#include <yarp/os/Mutex.h>
-#include <yarp/os/LockGuard.h>
 
 #include <yarp/sig/Vector.h>
 #include <yarp/sig/Matrix.h>
@@ -57,8 +55,7 @@ protected:
     yarp::sig::Vector vel;
 
     // Mutex for handling things correctly
-    yarp::os::Mutex mutex;
-
+    std::mutex mut;
     // Variable to turn the particleThread on or off
     bool isRunning;
 
