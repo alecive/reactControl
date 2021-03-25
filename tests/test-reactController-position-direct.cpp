@@ -1080,7 +1080,7 @@ public:
         Vector xo=obstacle->move();
 
         avhdl->updateCtrlPoints();
-        Matrix VLIM=avhdl->getVLIM(*obstacle,v_lim);
+        Matrix VLIM=avhdl->getVLIM(*obstacle,CTRL_DEG2RAD*v_lim)*CTRL_RAD2DEG;
 
         Ipopt::SmartPtr<Ipopt::IpoptApplication> app=new Ipopt::IpoptApplication;
         app->Options()->SetNumericValue("tol",1e-3);

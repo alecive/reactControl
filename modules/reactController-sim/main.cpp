@@ -928,7 +928,7 @@ int main(int argc, char *argv[])
         xo=obstacle.move();
 
         avhdl->updateCtrlPoints();
-        Matrix VLIM=avhdl->getVLIM(obstacle,v_lim);
+        Matrix VLIM=avhdl->getVLIM(obstacle,CTRL_DEG2RAD*v_lim)*CTRL_RAD2DEG;
 
         nlp->set_xr(xr);
         nlp->set_v_lim(VLIM); //VLIM in deg/s; set_v_lim converts to radians/s

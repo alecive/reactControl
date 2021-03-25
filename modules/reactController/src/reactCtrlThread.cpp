@@ -550,7 +550,7 @@ void reactCtrlThread::run()
              if (tactileCollisionPointsOn || visualCollisionPointsOn){
                 AvoidanceHandlerAbstract *avhdl; 
                 avhdl = new AvoidanceHandlerTactile(*arm->asChain(),collisionPoints,verbosity); //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
-                vLimAdapted=avhdl->getVLIM(vLimNominal);
+                vLimAdapted=avhdl->getVLIM(CTRL_DEG2RAD * vLimNominal) * CTRL_RAD2DEG;
                 delete avhdl; avhdl = NULL; //TODO this is not efficient, in the future find a way to reset the handler, not recreate
             }
             
