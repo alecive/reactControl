@@ -63,7 +63,7 @@ public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & , const string &_ ,
                     int , bool , string , double , double , double , double , string , 
-                    bool , bool , bool , bool , bool, bool , bool , bool , bool , bool , particleThread * );
+                    bool , bool , bool , bool , bool, bool , bool , bool , bool , bool , particleThread * , bool, int);
     // INIT
     bool threadInit() override;
     // RUN
@@ -164,6 +164,8 @@ protected:
     // will use the yarp rpc /icubSim/world to visualize the potential collision points
     bool visualizeCollisionPointsInSim;
     //to enable/disable the smooth changes of joint velocities bounds in optimizer
+    bool smoothingConstraint; // inequality constraint for smoothing robot move (difference between following joint velocities)
+    int horizonMPC; // horizon of model predictive control
     
     /***************************************************************************/
     // INTERNAL VARIABLES:
@@ -218,6 +220,7 @@ protected:
     yarp::sig::Vector x_0;  // Initial end-effector position
     yarp::sig::Vector x_t;  // Current end-effector position
     yarp::sig::Vector x_n;  // Desired next end-effector position
+    yarp::sig::Vector x_n_next;  // Desired end-effector position after next one
     yarp::sig::Vector x_d;  // Vector that stores the new target
 
     //All orientation in Euler angle format
@@ -274,7 +277,8 @@ protected:
     bool visualizeIniCubGui;
     bool visualizeParticleIniCubGui;
     bool visualizeTargetIniCubGui;
-    
+
+    bool firstRun; // compute x_n and x_n_next for t = 0, used for MPC horizon = 1
     // objects in simulator will be created only for first target - with new targets they will be moved
     bool firstTarget;
     std::vector<collisionPoint_t> collisionPoints; //list of "avoidance vectors" from peripersonal space / safety margin

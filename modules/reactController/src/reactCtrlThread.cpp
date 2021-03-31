@@ -56,7 +56,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  bool _hittingConstraints, bool _orientationControl,
                                  bool _additionaControlPoints, 
                                  bool _visualizeTargetInSim, bool _visualizeParticleInSim, bool _visualizeCollisionPointsInSim,
-                                 particleThread *_pT) :
+                                 particleThread *_pT, bool _smoothingConstraint, int _horizonMPC) :
                                  PeriodicThread((double)_rate/1000.0), name(_name), robot(_robot), part(_part),
                                  verbosity(_verbosity), useTorso(!_disableTorso), controlMode(_controlMode),
                                  trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol),
@@ -66,7 +66,8 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  hittingConstraints(_hittingConstraints),orientationControl(_orientationControl),
                                  additionalControlPoints(_additionaControlPoints),
                                  visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
-                                 visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim)
+                                 visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim), smoothingConstraint(_smoothingConstraint),
+                                 horizonMPC(_horizonMPC)
 {
     dT=getPeriod();
     prtclThrd=_pT;  //in case of referenceGen != uniformParticle, NULL will be received
@@ -483,6 +484,7 @@ void reactCtrlThread::run()
     switch (state)
     {
         case STATE_WAIT:
+            firstRun = true;
             break;
         case STATE_REACH:
         {
@@ -518,14 +520,24 @@ void reactCtrlThread::run()
             }
             else if(referenceGen == "minJerk"){
                 minJerkTarget->computeNextValues(x_d);    
-                //refGenMinJerk->computeNextValues(x_t,x_d); 
-                x_n = minJerkTarget->getPos();
+                //refGenMinJerk->computeNextValues(x_t,x_d);
+                if (horizonMPC == 0) {
+                    x_n = minJerkTarget->getPos();
+                } else  {
+                    if (firstRun) {
+                        firstRun = false;
+                        x_n_next = minJerkTarget->getPos();  // TODO check it
+                    }
+                    x_n = x_n_next;
+                    x_n_next = minJerkTarget->getPos();
+                }
             }
 
             else if(referenceGen == "none")
             {
                 x_n = x_d;
             }
+            yDebug("[reactCtrlThread] x_n: %s,  x_n_next: %s",x_n.toString(3,3).c_str(), x_n_next.toString(3,3).c_str());
  
             if(visualizeParticleIniCubGui){
                 sendiCubGuiObject("particle");
@@ -981,51 +993,57 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
    //yInfo()<<"   e_pos real using x_t       [m] = "<<norm(x_n-x_t); 
    //yInfo()<<"   e_pos_virtual before opt step [m] = "<<norm(x_n-xee_pos_virtual);
         
-   Vector res(chainActiveDOF,0.0); 
-    
-   Vector xr(6,0.0);
-   xr.setSubvector(0,x_n);
-   xr.setSubvector(3,o_n);
-    
-   Ipopt::SmartPtr<Ipopt::IpoptApplication> app=new Ipopt::IpoptApplication;
-   app->Options()->SetNumericValue("tol",tol);
-   app->Options()->SetNumericValue("constr_viol_tol",1e-6);
-   app->Options()->SetIntegerValue("acceptable_iter",0);
-   app->Options()->SetStringValue("mu_strategy","adaptive");
-   app->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
-   app->Options()->SetNumericValue("max_cpu_time",0.75*dT);
-   app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
-   app->Options()->SetStringValue("hessian_approximation","limited-memory");
-   app->Options()->SetStringValue("derivative_test",verbosity?"first-order":"none");
-   app->Options()->SetIntegerValue("print_level",verbosity?5:0);
-   app->Initialize();
+    Vector res(chainActiveDOF,0.0);
 
-   /*Matrix H5real=(*(arm->asChain())).getH(5);
-   Vector elbow_pos_real = H5real.getCol(3).subVector(0,2);
-   //printf("[reactCtrlThread::solveIK]: real chain getH(%d) - elbow: \n %s \n",*(arm->asChain()).getDOF()-4-1,H5real.toString(3,3).c_str());
-   printf("[reactCtrlThread::solveIK]: real p0 - elbow: (%s)\n",elbow_pos_real.toString(3,3).c_str());
-   Matrix H5virtual=(*virtualArmChain).getH(5);
-   Vector elbow_pos_virtual = H5virtual.getCol(3).subVector(0,2);
-   //printf("[reactCtrlThread::solveIK]: real chain getH(%d) - elbow: \n %s \n",*(arm->asChain()).getDOF()-4-1,H5real.toString(3,3).c_str());
-   printf("[reactCtrlThread::solveIK]: virtual p0 - elbow: (%s)\n",elbow_pos_virtual.toString(3,3).c_str());    */                 
-   
-   Ipopt::SmartPtr<ControllerNLP> nlp;
-   if (controlMode == "positionDirect") //in this mode, ipopt will use the qIntegrated values to update its copy of chain
-        nlp=new ControllerNLP(*virtualArmChain,additionalControlPointsVector);
-   else
-        nlp=new ControllerNLP(*(arm->asChain()),additionalControlPointsVector);
-   nlp->set_hitting_constraints(hittingConstraints);
-   nlp->set_orientation_control(orientationControl);
-   nlp->set_additional_control_points(additionalControlPoints);
-   nlp->set_dt(dT);
-   nlp->set_xr(xr);
-   nlp->set_v_limInDegPerSecond(vLimAdapted);
-   nlp->set_v0InDegPerSecond(q_dot);
-   nlp->init();
+    Vector xr(6,0.0);
+    xr.setSubvector(0,x_n);
+    xr.setSubvector(3,o_n);
+    Vector xr_next(6,0.0);
+    if (horizonMPC > 0) {
+        xr_next.setSubvector(0, x_n_next);
+        xr_next.setSubvector(3, o_n);
+    }
 
-   _exit_code=app->OptimizeTNLP(GetRawPtr(nlp));
-  
-   res=nlp->get_resultInDegPerSecond();
+    Ipopt::SmartPtr<Ipopt::IpoptApplication> app=new Ipopt::IpoptApplication;
+    app->Options()->SetNumericValue("tol",tol);
+    app->Options()->SetNumericValue("constr_viol_tol",1e-6);
+    app->Options()->SetIntegerValue("acceptable_iter",0);
+    app->Options()->SetStringValue("mu_strategy","adaptive");
+    app->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
+    app->Options()->SetNumericValue("max_cpu_time",0.75*dT);
+    app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
+    app->Options()->SetStringValue("hessian_approximation","limited-memory");
+    app->Options()->SetStringValue("derivative_test",verbosity?"first-order":"none");
+//    app->Options()->SetStringValue("derivative_test_print_all", "yes");
+    app->Options()->SetIntegerValue("print_level",verbosity?5:0);
+    app->Initialize();
+
+    /*Matrix H5real=(*(arm->asChain())).getH(5);
+    Vector elbow_pos_real = H5real.getCol(3).subVector(0,2);
+    //printf("[reactCtrlThread::solveIK]: real chain getH(%d) - elbow: \n %s \n",*(arm->asChain()).getDOF()-4-1,H5real.toString(3,3).c_str());
+    printf("[reactCtrlThread::solveIK]: real p0 - elbow: (%s)\n",elbow_pos_real.toString(3,3).c_str());
+    Matrix H5virtual=(*virtualArmChain).getH(5);
+    Vector elbow_pos_virtual = H5virtual.getCol(3).subVector(0,2);
+    //printf("[reactCtrlThread::solveIK]: real chain getH(%d) - elbow: \n %s \n",*(arm->asChain()).getDOF()-4-1,H5real.toString(3,3).c_str());
+    printf("[reactCtrlThread::solveIK]: virtual p0 - elbow: (%s)\n",elbow_pos_virtual.toString(3,3).c_str());    */
+    Ipopt::SmartPtr<ControllerNLP> nlp;
+    if (controlMode == "positionDirect") //in this mode, ipopt will use the qIntegrated values to update its copy of chain
+        nlp=new ControllerNLP(*virtualArmChain,additionalControlPointsVector, horizonMPC);
+    else
+        nlp=new ControllerNLP(*(arm->asChain()),additionalControlPointsVector, horizonMPC);
+    nlp->set_hitting_constraints(hittingConstraints);
+    nlp->set_smoothing_constraint(smoothingConstraint);
+    nlp->set_orientation_control(orientationControl);
+    nlp->set_additional_control_points(additionalControlPoints);
+    nlp->set_dt(dT);
+    nlp->set_xr(xr);
+    if (horizonMPC > 0) nlp->set_xr_next(xr_next);
+    nlp->set_v_limInDegPerSecond(vLimAdapted);
+    nlp->set_v0InDegPerSecond(q_dot);
+    nlp->init();
+    _exit_code=app->OptimizeTNLP(GetRawPtr(nlp));
+
+    res=nlp->get_resultInDegPerSecond();
    
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
     if(verbosity >= 1){ 

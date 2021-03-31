@@ -56,13 +56,13 @@
 
         for (size_t i=0; i<chain.getDOF(); i++)
         {
-            qGuard[i]=0.25*guardRatio*(chain(i).getMax()-chain(i).getMin());
+            qGuard[i]=0.25*guardRatio*(q_lim(i,1)-q_lim(i,0));
 
-            qGuardMinExt[i]=chain(i).getMin()+qGuard[i];
+            qGuardMinExt[i]=q_lim(i,0)+qGuard[i];
             qGuardMinInt[i]=qGuardMinExt[i]+qGuard[i];
             qGuardMinCOG[i]=0.5*(qGuardMinExt[i]+qGuardMinInt[i]);
 
-            qGuardMaxExt[i]=chain(i).getMax()-qGuard[i];
+            qGuardMaxExt[i]=q_lim(i,1)-qGuard[i];
             qGuardMaxInt[i]=qGuardMaxExt[i]-qGuard[i];
             qGuardMaxCOG[i]=0.5*(qGuardMaxExt[i]+qGuardMaxInt[i]);
         }
@@ -79,7 +79,7 @@
             else if (qi<qGuardMinInt[i])
             {
                 bounds(i,0)=(qi<=qGuardMinExt[i]?0.0:
-                             0.5*(1.0+tanh(+10.0*(qi-qGuardMinCOG[i])/qGuard[i]))); 
+                             0.5*(1.0+tanh(+10.0*(qi-qGuardMinCOG[i])/qGuard[i])));
                 bounds(i,1)=1.0;
             }
             else
@@ -127,17 +127,21 @@
 
 //public:
     /****************************************************************/
-    ControllerNLP::ControllerNLP(iKinChain &chain_, std::vector<ControlPoint> &additional_control_points_) : 
-    chain(chain_), additional_control_points(additional_control_points_)
+    ControllerNLP::ControllerNLP(iKinChain &chain_, std::vector<ControlPoint> &additional_control_points_, int horizon_) :
+    chain(chain_), additional_control_points(additional_control_points_), horizon(horizon_)
     {
         xr.resize(6,0.0);
+        xr_next.resize(6, 0.0);
         set_xr(xr);
-
-        v0.resize(chain.getDOF(),0.0); v=v0;
+        set_xr_next(xr_next);
+        err_xyz_next.resize(3,0.0);
+        v0.resize(chain.getDOF(),0.0); v=v0; v_new = v0;
         He=zeros(4,4); He(3,3)=1.0;
-
         q_lim.resize(chain.getDOF(),2);
-        v_lim.resize(chain.getDOF(),2);        
+        v_lim.resize(chain.getDOF(),2);
+        ori_grad.resize((chain.getDOF()), 0.0);
+        pos_grad.resize(chain.getDOF(), 0.0);
+        new_pos_grad.resize((horizon_+1)*chain.getDOF(), 0.0);
         for (size_t r=0; r<chain.getDOF(); r++)
         {
             q_lim(r,0)=chain(r).getMin();
@@ -147,13 +151,12 @@
             v_lim(r,0)=-v_lim(r,1);
         }
         bounds=v_lim;
-        
         computeSelfAvoidanceConstraints();
         computeGuard();
-
         hitting_constraints=true;
         orientation_control=true;
         additional_control_points_flag = false;
+        smoothing_constraint = false;
         
         dt=0.01;
     }
@@ -175,11 +178,24 @@
     }
 
     /****************************************************************/
+    void ControllerNLP::set_xr_next(const Vector &_xr_next)
+    {
+        yAssert(xr_next.length() == _xr_next.length())
+        xr_next=_xr_next;
+
+        Hr_next=v2m(_xr_next);
+        pr_next=_xr_next.subVector(0, 2);
+
+//        skew_nr_next=skew(Hr_next.getCol(0));
+//        skew_sr_next=skew(Hr_next.getCol(1));
+//        skew_ar_next=skew(Hr_next.getCol(2));
+    }
+
+    /****************************************************************/
     void ControllerNLP::set_v_limInDegPerSecond(const Matrix &_v_lim)
     {
         yAssert((v_lim.rows() == _v_lim.rows()) &&
                 (v_lim.cols() == _v_lim.cols()))
-
         for (int r=0; r < _v_lim.rows(); r++)
             yAssert(_v_lim(r, 0) <= _v_lim(r, 1))
 
@@ -190,6 +206,12 @@
     void ControllerNLP::set_hitting_constraints(const bool _hitting_constraints)
     {
         hitting_constraints=_hitting_constraints;
+    }
+
+    /****************************************************************/
+    void ControllerNLP::set_smoothing_constraint(const bool _smoothing_constraint)
+    {
+        smoothing_constraint =_smoothing_constraint;
     }
 
     /****************************************************************/
@@ -232,7 +254,15 @@
         Matrix J0=chain.GeoJacobian();
         J0_xyz=J0.submatrix(0,2,0,chain.getDOF()-1);
         J0_ang=J0.submatrix(3,5,0,chain.getDOF()-1);
-        
+        if (horizon == 1) {
+            for (int i = 0; i < chain.getDOF(); i++) {
+                Matrix mat = Matrix(6, chain.getDOF());
+                for (int j = 0; j < chain.getDOF(); ++j) {
+                    mat.setCol(j, chain.Hessian_ij(i, j));
+                }
+                Hess.push_back(mat);
+            }
+        }
         if (additional_control_points_flag)
         {
             additional_control_points_tol = 0.0001; //norm2 is used in the g function, so this is the Eucl. distance error squared - actual distance is sqrt(additional_control_points_tol);
@@ -300,7 +330,6 @@
         }
         else
             extra_ctrl_points_nr = 0;
-
         computeBounds();
     }
 
@@ -322,10 +351,10 @@
     bool ControllerNLP::get_nlp_info(Ipopt::Index &n, Ipopt::Index &m, Ipopt::Index &nnz_jac_g,
                       Ipopt::Index &nnz_h_lag, IndexStyleEnum &index_style)
     {
-        n=chain.getDOF();
+        n=(horizon+1)*chain.getDOF();
 
         // reaching in position
-        m=1; nnz_jac_g=n;
+        m=1; nnz_jac_g=chain.getDOF();
         
         if(additional_control_points_flag)
         {
@@ -333,7 +362,7 @@
             {
                 if(additional_control_point.type == "Elbow")
                 {
-                    m+=1; nnz_jac_g += (n-4); //taking out 2 wrist and 2 elbow joints  
+                    m+=1; nnz_jac_g += (chain.getDOF()-4); //taking out 2 wrist and 2 elbow joints
                 }
                 else
                     yWarning("[ControllerNLP::get_nlp_info]: other control points type than Elbow are not supported (this was %s).",
@@ -343,18 +372,28 @@
 
         if (hitting_constraints)
         {
-            // shoulder's cables length
-            m+=3; nnz_jac_g+=2+3+2;
+            for (int i = 0; i <= horizon; ++i) { // TODO vyresit
+                // shoulder's cables length
+                m += 3;
+                nnz_jac_g += 2 + 3 + 2;
 
-            // avoid hitting torso
-            m+=1; nnz_jac_g+=2;
+                // avoid hitting torso
+                m += 1;
+                nnz_jac_g += 2;
 
-            // avoid hitting forearm
-            m+=2; nnz_jac_g+=2+2;
+                // avoid hitting forearm
+                m += 2;
+                nnz_jac_g += 2 + 2;
+            }
+            for (int i = 1; i <= horizon; i++) {
+                nnz_jac_g += 2 + 3 + 2;
+                nnz_jac_g += 2;
+                nnz_jac_g += 2 + 2;
+            }
         }
-        m+= 1; nnz_jac_g+= n;
-
-
+        if (smoothing_constraint) {
+            m += 1; nnz_jac_g += chain.getDOF();
+        }
         nnz_h_lag=0;
         index_style=TNLP::C_STYLE;
         return true;
@@ -364,12 +403,12 @@
     bool ControllerNLP::get_bounds_info(Ipopt::Index n, Ipopt::Number *x_l, Ipopt::Number *x_u,
                          Ipopt::Index m, Ipopt::Number *g_l, Ipopt::Number *g_u)
     {
-        for (Ipopt::Index i=0; i<n; i++)
-        {
-            x_l[i]=bounds(i,0);
-            x_u[i]=bounds(i,1);            
+        for (int j = 0; j <= horizon; j++) {
+            for (Ipopt::Index i = 0; i < chain.getDOF(); i++) {
+                x_l[i+j*chain.getDOF()] = bounds(i, 0);
+                x_u[i+j*chain.getDOF()] = bounds(i, 1);
+            }
         }
-
         // reaching in position - upper and lower bounds on the error (Euclidean square norm)
         g_l[0]=0.0;
         g_u[0]=0.0; 
@@ -384,27 +423,31 @@
 
         if (hitting_constraints)
         {
-            // shoulder's cables length
-            g_l[1+extra_ctrl_points_nr]=-347.00*CTRL_DEG2RAD;
-            g_u[1+extra_ctrl_points_nr]=std::numeric_limits<double>::max();
-            g_l[2+extra_ctrl_points_nr]=-366.57*CTRL_DEG2RAD;
-            g_u[2+extra_ctrl_points_nr]=112.42*CTRL_DEG2RAD;
-            g_l[3+extra_ctrl_points_nr]=-66.60*CTRL_DEG2RAD;
-            g_u[3+extra_ctrl_points_nr]=213.30*CTRL_DEG2RAD;
+            for (int i = 0; i <= horizon; ++i) {
+                // shoulder's cables length
+                g_l[1+extra_ctrl_points_nr+6*i]=-347.00*CTRL_DEG2RAD;
+                g_u[1+extra_ctrl_points_nr+6*i]=std::numeric_limits<double>::max();
+                g_l[2+extra_ctrl_points_nr+6*i]=-366.57*CTRL_DEG2RAD;
+                g_u[2+extra_ctrl_points_nr+6*i]=112.42*CTRL_DEG2RAD;
+                g_l[3+extra_ctrl_points_nr+6*i]=-66.60*CTRL_DEG2RAD;
+                g_u[3+extra_ctrl_points_nr+6*i]=213.30*CTRL_DEG2RAD;
 
-            // avoid hitting torso
-            g_l[4+extra_ctrl_points_nr]=shou_n;
-            g_u[4+extra_ctrl_points_nr]=std::numeric_limits<double>::max();
+                // avoid hitting torso
+                g_l[4+extra_ctrl_points_nr+6*i]=shou_n;
+                g_u[4+extra_ctrl_points_nr+6*i]=std::numeric_limits<double>::max();
 
-            // avoid hitting forearm
-            g_l[5+extra_ctrl_points_nr]=-std::numeric_limits<double>::max();
-            g_u[5+extra_ctrl_points_nr]=elb_n;
-            g_l[6+extra_ctrl_points_nr]=-elb_n;
-            g_u[6+extra_ctrl_points_nr]=std::numeric_limits<double>::max();
+                // avoid hitting forearm
+                g_l[5+extra_ctrl_points_nr+6*i]=-std::numeric_limits<double>::max();
+                g_u[5+extra_ctrl_points_nr+6*i]=elb_n;
+                g_l[6+extra_ctrl_points_nr+6*i]=-elb_n;
+                g_u[6+extra_ctrl_points_nr+6*i]=std::numeric_limits<double>::max();
+            }
+
         }
-        g_l[1+extra_ctrl_points_nr+6*hitting_constraints]=0.0;
-        g_u[1+extra_ctrl_points_nr+6*hitting_constraints]=1;  // Upper bound for smoothness constraint - try different values
-
+        if (smoothing_constraint) { // Upper bound for smoothness constraint - try different values
+            g_l[1 + extra_ctrl_points_nr + 6 * (horizon + 1) * hitting_constraints] = 0.0;
+            g_u[1 + extra_ctrl_points_nr + 6 * (horizon + 1) * hitting_constraints] = 0.7;
+        }
         return true;
     }
 
@@ -413,8 +456,10 @@
                             bool init_z, Ipopt::Number *z_L, Ipopt::Number *z_U,
                             Ipopt::Index m, bool init_lambda, Ipopt::Number *lambda)
     {
-        for (Ipopt::Index i=0; i<n; i++)
-            x[i]=std::min(std::max(bounds(i,0),v0[i]),bounds(i,1));
+        for (int j = 0; j <= horizon; j++) {
+            for (Ipopt::Index i = 0; i < chain.getDOF(); i++)
+                x[i+j*chain.getDOF()] = std::min(std::max(bounds(i, 0), v0[i]), bounds(i, 1));
+        }
         return true;
     }
 
@@ -423,8 +468,11 @@
     {
         if (new_x)
         {
-            for (size_t i=0; i<v.length(); i++)
-                v[i]=x[i];
+            for (size_t i=0; i<v.length(); i++) {
+                v[i] = x[i];
+                if (horizon == 1)
+                    v_new[i] = x[i+v.length()];
+            }
 
             Vector w=J0_ang*v;
             double theta=norm(w);
@@ -442,11 +490,38 @@
             err_ang=dcm2axis(Hr*He.transposed());
             err_ang*=err_ang[3];
             err_ang.pop_back();
-                    
+            if (horizon == 1) {
+                Matrix J_xyz_new = Matrix(6, chain.getDOF());
+                for (int i = 0; i < chain.getDOF(); ++i) {
+                    J_xyz_new.setCol(i, J0_xyz.getCol(i) + dt * Hess[i] * v);
+                }
+                Vector pe_next = pe + dt * (J_xyz_new * v_new);
+                err_xyz_next = pr_next - pe_next;
+            }
             Matrix L=-0.5*(skew_nr*skew(He.getCol(0))+
                            skew_sr*skew(He.getCol(1))+
                            skew_ar*skew(He.getCol(2)));
             Derr_ang=-dt*(L*J0_ang);
+
+            if (orientation_control)
+                ori_grad = 2.0*(Derr_ang.transposed() * err_ang);
+
+            pos_grad = -2.0 * dt * (J0_xyz.transposed() * err_xyz);
+            if (horizon == 1) {
+                for (int i = 0; i < chain.getDOF(); ++i) {
+                    new_pos_grad[i] = 2.0 * dt * 2.0 * dt * dot(err_xyz, Hess[i] * v_new);
+                }
+                for (int j = 1; j <= horizon; j++) {
+                    for (Ipopt::Index i = 0; i < chain.getDOF(); i++) {
+                        new_pos_grad[i+j*chain.getDOF()] = -2.0*dt*dot(err_xyz,J0_xyz.getCol(i)+2.0*dt*Hess[i]*v);
+                    }
+                }
+            }
+//            printf("Dot: ");
+//            for (int i = 0; i < J0_xyz.cols(); ++i) {
+//                printf("%f ",dot(err_xyz,J0_xyz.getCol(i)));
+//            }
+//            printf("\t %s \n", (J0_xyz.transposed()*err_xyz).toString().c_str());
             
             if (additional_control_points_flag)
             {
@@ -478,11 +553,16 @@
 
     /****************************************************************/
     bool ControllerNLP::eval_grad_f(Ipopt::Index n, const Ipopt::Number* x, bool new_x,
-                     Ipopt::Number *grad_f)
+                     Ipopt::Number *grad_f) // TODO: improve orientation gradient (derivative test: error 1e-4 - 1e-5)
     {
         computeQuantities(x,new_x);
-        for (Ipopt::Index i=0; i<n; i++)
-            grad_f[i]=(orientation_control?2.0*dot(err_ang,Derr_ang.getCol(i)):0.0);
+        for (Ipopt::Index i=0; i<chain.getDOF(); i++)
+            grad_f[i]=ori_grad[i] + ((horizon== 1) ? (pos_grad[i] - new_pos_grad[i]) : 0.0);
+        for (int j = 1; j <= horizon; j++) { // TODO check - derivative test says gradient is 0 for these variables
+            for (Ipopt::Index i = 0; i < chain.getDOF(); i++) {
+                grad_f[i+j*chain.getDOF()] = new_pos_grad[i+j*chain.getDOF()];
+            }
+        }
         return true; 
     }
 
@@ -503,19 +583,26 @@
         }
         if (hitting_constraints)
         {
-            // shoulder's cables length
-            g[1+extra_ctrl_points_nr]=1.71*(q0[3+0]+dt*x[3+0]-(q0[3+1]+dt*x[3+1]));
-            g[2+extra_ctrl_points_nr]=1.71*(q0[3+0]+dt*x[3+0]-(q0[3+1]+dt*x[3+1])-(q0[3+2]+dt*x[3+2]));
-            g[3+extra_ctrl_points_nr]=q0[3+1]+dt*x[3+1]+q0[3+2]+dt*x[3+2];
+            Vector q1 = q0;
+            for (int i = 0; i <= horizon; ++i) {
+                for (int j = 0; j < 5; ++j) {
+                    q1[3 + j] += dt * x[3 + j + i*chain.getDOF()];
+                }
+                // shoulder's cables length
+                g[1 + extra_ctrl_points_nr + 6 * i] = 1.71 * (q1[3 + 0] - q1[3 + 1]);
+                g[2 + extra_ctrl_points_nr + 6 * i] = 1.71 * (q1[3 + 0] - q1[3 + 1] - q1[3 + 2]);
+                g[3 + extra_ctrl_points_nr + 6 * i] = q1[3 + 1] + q1[3 + 2];
 
-            // avoid hitting torso
-            g[4+extra_ctrl_points_nr]=q0[3+1]+dt*x[3+1]-shou_m*(q0[3+2]+dt*x[3+2]);
+                // avoid hitting torso
+                g[4 + extra_ctrl_points_nr + 6 * i] = q1[3 + 1] - shou_m * q1[3 + 2];
 
-            // avoid hitting forearm
-            g[5+extra_ctrl_points_nr]=-elb_m*(q0[3+3+0]+dt*x[3+3+0])+q0[3+3+1]+dt*x[3+3+1];
-            g[6+extra_ctrl_points_nr]=elb_m*(q0[3+3+0]+dt*x[3+3+0])+q0[3+3+1]+dt*x[3+3+1];
+                // avoid hitting forearm
+                g[5 + extra_ctrl_points_nr + 6 * i] = -elb_m * q1[3 + 3 + 0] + q1[3 + 3 + 1];
+                g[6 + extra_ctrl_points_nr + 6 * i] = elb_m * q1[3 + 3 + 0] + q1[3 + 3 + 1];
+            }
         }
-        g[1+6*hitting_constraints+extra_ctrl_points_nr]=norm2(v-v0); // smoothness constraint
+        if (smoothing_constraint)
+            g[1+6*(horizon+1)*hitting_constraints+extra_ctrl_points_nr]=norm2(v-v0); // smoothness constraint
 
         return true;
     }
@@ -530,7 +617,7 @@
             Ipopt::Index idx=0;
 
             // reaching in position - end-effector
-            for (Ipopt::Index i=0; i<n; i++)
+            for (Ipopt::Index i=0; i<chain.getDOF(); i++)
             {
                 iRow[idx]=0; jCol[idx]=i;
                 idx++;
@@ -543,7 +630,7 @@
                     if(additional_control_point.type == "Elbow")
                     {
                          // reaching in position - elbow control point
-                        for (Ipopt::Index j=0; j<(n-4); j++)
+                        for (Ipopt::Index j=0; j<(chain.getDOF()-4); j++)
                         {
                             iRow[idx]=1; jCol[idx]=j;
                             idx++;
@@ -556,32 +643,36 @@
             
             if (hitting_constraints)
             {
-                // shoulder's cables length
-                iRow[idx]=1+extra_ctrl_points_nr; jCol[idx]=3+0; idx++;
-                iRow[idx]=1+extra_ctrl_points_nr; jCol[idx]=3+1; idx++;
+                for (int j = 0; j <= horizon; ++j) {
+                    for (int i = j; i <= horizon; ++i) {
+                        // shoulder's cables length
+                        iRow[idx]=1+extra_ctrl_points_nr+6*i; jCol[idx]=3+0+j*chain.getDOF(); idx++;
+                        iRow[idx]=1+extra_ctrl_points_nr+6*i; jCol[idx]=3+1+j*chain.getDOF(); idx++;
 
-                iRow[idx]=2+extra_ctrl_points_nr; jCol[idx]=3+0; idx++;
-                iRow[idx]=2+extra_ctrl_points_nr; jCol[idx]=3+1; idx++;
-                iRow[idx]=2+extra_ctrl_points_nr; jCol[idx]=3+2; idx++;
+                        iRow[idx]=2+extra_ctrl_points_nr+6*i; jCol[idx]=3+0+j*chain.getDOF(); idx++;
+                        iRow[idx]=2+extra_ctrl_points_nr+6*i; jCol[idx]=3+1+j*chain.getDOF(); idx++;
+                        iRow[idx]=2+extra_ctrl_points_nr+6*i; jCol[idx]=3+2+j*chain.getDOF(); idx++;
 
-                iRow[idx]=3+extra_ctrl_points_nr; jCol[idx]=3+1; idx++;
-                iRow[idx]=3+extra_ctrl_points_nr; jCol[idx]=3+2; idx++;
+                        iRow[idx]=3+extra_ctrl_points_nr+6*i; jCol[idx]=3+1+j*chain.getDOF(); idx++;
+                        iRow[idx]=3+extra_ctrl_points_nr+6*i; jCol[idx]=3+2+j*chain.getDOF(); idx++;
 
-                // avoid hitting torso
-                iRow[idx]=4+extra_ctrl_points_nr; jCol[idx]=3+1; idx++;
-                iRow[idx]=4+extra_ctrl_points_nr; jCol[idx]=3+2; idx++;
+                        // avoid hitting torso
+                        iRow[idx]=4+extra_ctrl_points_nr+6*i; jCol[idx]=3+1+j*chain.getDOF(); idx++;
+                        iRow[idx]=4+extra_ctrl_points_nr+6*i; jCol[idx]=3+2+j*chain.getDOF(); idx++;
 
-                // avoid hitting forearm
-                iRow[idx]=5+extra_ctrl_points_nr; jCol[idx]=3+3+0; idx++;
-                iRow[idx]=5+extra_ctrl_points_nr; jCol[idx]=3+3+1; idx++;
+                        // avoid hitting forearm
+                        iRow[idx]=5+extra_ctrl_points_nr+6*i; jCol[idx]=3+3+0+j*chain.getDOF(); idx++;
+                        iRow[idx]=5+extra_ctrl_points_nr+6*i; jCol[idx]=3+3+1+j*chain.getDOF(); idx++;
 
-                iRow[idx]=6+extra_ctrl_points_nr; jCol[idx]=3+3+0; idx++;
-                iRow[idx]=6+extra_ctrl_points_nr; jCol[idx]=3+3+1; idx++;
+                        iRow[idx]=6+extra_ctrl_points_nr+6*i; jCol[idx]=3+3+0+j*chain.getDOF(); idx++;
+                        iRow[idx]=6+extra_ctrl_points_nr+6*i; jCol[idx]=3+3+1+j*chain.getDOF(); idx++;
+                    }
+                }
             }
-            for (Ipopt::Index i=0; i<n; i++)
-            {
-                iRow[idx]=1+extra_ctrl_points_nr+hitting_constraints*6; jCol[idx]=i;
-                idx++;
+            if (smoothing_constraint) {
+                for (Ipopt::Index i = 0; i < chain.getDOF(); i++) {
+                    iRow[idx] = 1 + extra_ctrl_points_nr + hitting_constraints * 6; jCol[idx] = i; idx++;
+                }
             }
             
 //             yInfo("[ControllerNLP::eval_jac_g] \n");
@@ -596,9 +687,9 @@
             Ipopt::Index idx=0;
 
             // reaching in position
-            for (Ipopt::Index i=0; i<n; i++)
+            for (Ipopt::Index i=0; i<chain.getDOF(); i++)
             {
-                values[idx]=-2.0*dt*dot(err_xyz,J0_xyz.getCol(i));
+                values[idx]=pos_grad[i]; // -2.0*dt*dot(err_xyz,J0_xyz.getCol(i));
                 idx++;
             }
 
@@ -609,7 +700,7 @@
                     if(additional_control_point.type == "Elbow")
                     {
                          // reaching in position - elbow control point
-                        for (Ipopt::Index j=0; j<(n-4); j++)
+                        for (Ipopt::Index j=0; j<(chain.getDOF()-4); j++)
                         {
                             values[idx]=-2.0*dt*dot(err_xyz_elbow,additional_control_point.J0_xyz.getCol(j));
                             idx++;
@@ -624,33 +715,37 @@
             
             if (hitting_constraints)
             {
-                // shoulder's cables length
-                values[idx++]=1.71*dt;
-                values[idx++]=-1.71*dt;
+                for (int j = 0; j <= horizon; ++j) {
+                    for (int i = j; i <= horizon; ++i) {
+                        // shoulder's cables length
+                        values[idx++] = 1.71 * dt;
+                        values[idx++] = -1.71 * dt;
 
-                values[idx++]=1.71*dt;
-                values[idx++]=-1.71*dt;
-                values[idx++]=-1.71*dt;
+                        values[idx++] = 1.71 * dt;
+                        values[idx++] = -1.71 * dt;
+                        values[idx++] = -1.71 * dt;
 
-                values[idx++]=dt;
-                values[idx++]=dt;
+                        values[idx++] = dt;
+                        values[idx++] = dt;
 
-                // avoid hitting torso
-                values[idx++]=dt;
-                values[idx++]=-shou_m*dt;
+                        // avoid hitting torso
+                        values[idx++] = dt;
+                        values[idx++] = -shou_m * dt;
 
-                // avoid hitting forearm
-                values[idx++]=-elb_m*dt;
-                values[idx++]=dt;
+                        // avoid hitting forearm
+                        values[idx++] = -elb_m * dt;
+                        values[idx++] = dt;
 
-                values[idx++]=elb_m*dt;
-                values[idx++]=dt;
+                        values[idx++] = elb_m * dt;
+                        values[idx++] = dt;
+                    }
+                }
             }
-
-          for (Ipopt::Index i=0; i<n; i++)
-          {
-            values[idx++]=2.0*dt*(v[i]-v0[i]); // TODO: check sign
-          }
+            if (smoothing_constraint) {
+                for (Ipopt::Index i = 0; i < chain.getDOF(); i++) {
+                    values[idx++] = 2.0 * (v[i] - v0[i]);
+                }
+            }
 
 //             yInfo("[ControllerNLP::eval_jac_g]\n");
 //             for(int k=0; k<idx; k++)
@@ -670,7 +765,7 @@
                            Ipopt::Number obj_value, const Ipopt::IpoptData *ip_data,
                            Ipopt::IpoptCalculatedQuantities *ip_cq)
     {
-        for (Ipopt::Index i=0; i<n; i++)
+        for (Ipopt::Index i=0; i<chain.getDOF(); i++)
             v[i]=x[i];
     }
 
