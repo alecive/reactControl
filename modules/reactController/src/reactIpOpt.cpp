@@ -141,7 +141,7 @@
         v_lim.resize(chain.getDOF(),2);
         ori_grad.resize((chain.getDOF()), 0.0);
         pos_grad.resize(chain.getDOF(), 0.0);
-        new_pos_grad.resize((horizon_+1)*chain.getDOF(), 0.0);
+        new_pos_grad.resize((horizon+1)*chain.getDOF(), 0.0);
         for (size_t r=0; r<chain.getDOF(); r++)
         {
             q_lim(r,0)=chain(r).getMin();
@@ -260,7 +260,7 @@
                 for (int j = 0; j < chain.getDOF(); ++j) {
                     mat.setCol(j, chain.Hessian_ij(i, j));
                 }
-                Hess.push_back(mat);
+                Hess.push_back(mat.submatrix(0,2,0,chain.getDOF()-1));
             }
         }
         if (additional_control_points_flag)
@@ -497,6 +497,14 @@
                 }
                 Vector pe_next = pe + dt * (J_xyz_new * v_new);
                 err_xyz_next = pr_next - pe_next;
+                for (int i = 0; i < chain.getDOF(); ++i) {
+                    new_pos_grad[i] = - 2.0 * dt * 2.0 * dt * dot(err_xyz, Hess[i] * v_new);
+                }
+                for (int j = 1; j <= horizon; j++) {
+                    for (Ipopt::Index i = 0; i < chain.getDOF(); i++) {
+                        new_pos_grad[i+j*chain.getDOF()] = -2.0*dt*dot(err_xyz,J0_xyz.getCol(i)+2.0*dt*Hess[i]*v);
+                    }
+                }
             }
             Matrix L=-0.5*(skew_nr*skew(He.getCol(0))+
                            skew_sr*skew(He.getCol(1))+
@@ -507,22 +515,7 @@
                 ori_grad = 2.0*(Derr_ang.transposed() * err_ang);
 
             pos_grad = -2.0 * dt * (J0_xyz.transposed() * err_xyz);
-            if (horizon == 1) {
-                for (int i = 0; i < chain.getDOF(); ++i) {
-                    new_pos_grad[i] = 2.0 * dt * 2.0 * dt * dot(err_xyz, Hess[i] * v_new);
-                }
-                for (int j = 1; j <= horizon; j++) {
-                    for (Ipopt::Index i = 0; i < chain.getDOF(); i++) {
-                        new_pos_grad[i+j*chain.getDOF()] = -2.0*dt*dot(err_xyz,J0_xyz.getCol(i)+2.0*dt*Hess[i]*v);
-                    }
-                }
-            }
-//            printf("Dot: ");
-//            for (int i = 0; i < J0_xyz.cols(); ++i) {
-//                printf("%f ",dot(err_xyz,J0_xyz.getCol(i)));
-//            }
-//            printf("\t %s \n", (J0_xyz.transposed()*err_xyz).toString().c_str());
-            
+
             if (additional_control_points_flag)
             {
                 for (const auto & additional_control_point : additional_control_points)
@@ -557,7 +550,7 @@
     {
         computeQuantities(x,new_x);
         for (Ipopt::Index i=0; i<chain.getDOF(); i++)
-            grad_f[i]=ori_grad[i] + ((horizon== 1) ? (pos_grad[i] - new_pos_grad[i]) : 0.0);
+            grad_f[i] = ori_grad[i] + ((horizon== 1) ? (pos_grad[i] + new_pos_grad[i]) : 0.0);
         for (int j = 1; j <= horizon; j++) { // TODO check - derivative test says gradient is 0 for these variables
             for (Ipopt::Index i = 0; i < chain.getDOF(); i++) {
                 grad_f[i+j*chain.getDOF()] = new_pos_grad[i+j*chain.getDOF()];
