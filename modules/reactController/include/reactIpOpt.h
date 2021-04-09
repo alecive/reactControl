@@ -80,6 +80,7 @@ class ControllerNLP : public Ipopt::TNLP
     bool orientation_control;
     bool additional_control_points_flag;
     bool smoothing_constraint;
+    bool next_pos_as_constraint;
         
     Vector xr,pr, xr_next, pr_next, ori_grad, pos_grad, new_pos_grad;
     Matrix Hr,skew_nr,skew_sr,skew_ar, Hr_next;

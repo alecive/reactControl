@@ -157,6 +157,7 @@
         orientation_control=true;
         additional_control_points_flag = false;
         smoothing_constraint = false;
+        next_pos_as_constraint = false;
         
         dt=0.01;
     }
@@ -336,6 +337,7 @@
     /****************************************************************/
     Vector ControllerNLP::get_resultInDegPerSecond() const
     {
+        yDebug("Last err_xyz_next %f\n", norm2(err_xyz_next));
         return CTRL_RAD2DEG*v;
     }
 
@@ -372,7 +374,7 @@
 
         if (hitting_constraints)
         {
-            for (int i = 0; i <= horizon; ++i) { // TODO vyresit
+            for (int i = 0; i <= horizon; ++i) {
                 // shoulder's cables length
                 m += 3;
                 nnz_jac_g += 2 + 3 + 2;
@@ -392,8 +394,12 @@
             }
         }
         if (smoothing_constraint) {
-            m += 1; nnz_jac_g += chain.getDOF();
+            m += 1; nnz_jac_g += (horizon + 1) * chain.getDOF();
         }
+        if (horizon == 1 && next_pos_as_constraint) {
+            m += 1; nnz_jac_g += (horizon + 1) * chain.getDOF();
+        }
+
         nnz_h_lag=0;
         index_style=TNLP::C_STYLE;
         return true;
@@ -448,6 +454,10 @@
             g_l[1 + extra_ctrl_points_nr + 6 * (horizon + 1) * hitting_constraints] = 0.0;
             g_u[1 + extra_ctrl_points_nr + 6 * (horizon + 1) * hitting_constraints] = 0.7;
         }
+        if (horizon == 1 && next_pos_as_constraint) { // Upper bound for smoothness constraint - try different values
+            g_l[1 + extra_ctrl_points_nr + 6 * (horizon + 1) * hitting_constraints + smoothing_constraint] = 0.0;
+            g_u[1 + extra_ctrl_points_nr + 6 * (horizon + 1) * hitting_constraints + smoothing_constraint] = 0.0;
+        }
         return true;
     }
 
@@ -491,18 +501,18 @@
             err_ang*=err_ang[3];
             err_ang.pop_back();
             if (horizon == 1) {
-                Matrix J_xyz_new = Matrix(6, chain.getDOF());
+                Matrix J_xyz_new = Matrix(3, chain.getDOF());
                 for (int i = 0; i < chain.getDOF(); ++i) {
-                    J_xyz_new.setCol(i, J0_xyz.getCol(i) + dt * Hess[i] * v);
+                    J_xyz_new.setCol(i, J0_xyz.getCol(i) + dt * (Hess[i] * v));
                 }
                 Vector pe_next = pe + dt * (J_xyz_new * v_new);
                 err_xyz_next = pr_next - pe_next;
                 for (int i = 0; i < chain.getDOF(); ++i) {
-                    new_pos_grad[i] = - 2.0 * dt * 2.0 * dt * dot(err_xyz, Hess[i] * v_new);
+                    new_pos_grad[i] = - 2.0 * dt * dot(err_xyz_next, J0_xyz.getCol(i) + dt*(Hess[i] * v_new)); //- 2.0 * dt * 2.0 * dt * dot(err_xyz_next, Hess[i] * v_new);
                 }
                 for (int j = 1; j <= horizon; j++) {
                     for (Ipopt::Index i = 0; i < chain.getDOF(); i++) {
-                        new_pos_grad[i+j*chain.getDOF()] = -2.0*dt*dot(err_xyz,J0_xyz.getCol(i)+2.0*dt*Hess[i]*v);
+                        new_pos_grad[i+j*chain.getDOF()] = -2.0*dt*dot(err_xyz_next,J0_xyz.getCol(i)+dt*(Hess[i]*v));
                     }
                 }
             }
@@ -540,7 +550,7 @@
                 Ipopt::Number &obj_value)
     {
         computeQuantities(x,new_x);
-        obj_value=(orientation_control?norm2(err_ang):0.0);
+        obj_value=(orientation_control?norm2(err_ang):0.0) + ((horizon == 1 && !next_pos_as_constraint) ? norm2(err_xyz_next) : 0.0);
         return true;
     }
 
@@ -550,13 +560,13 @@
     {
         computeQuantities(x,new_x);
         for (Ipopt::Index i=0; i<chain.getDOF(); i++)
-            grad_f[i] = ori_grad[i] + ((horizon== 1) ? (pos_grad[i] + new_pos_grad[i]) : 0.0);
-        for (int j = 1; j <= horizon; j++) { // TODO check - derivative test says gradient is 0 for these variables
+            grad_f[i] = ori_grad[i] + ((horizon== 1 and !next_pos_as_constraint) ? (pos_grad[i] + new_pos_grad[i]) : 0.0);
+        for (int j = 1; j <= horizon; j++) {
             for (Ipopt::Index i = 0; i < chain.getDOF(); i++) {
-                grad_f[i+j*chain.getDOF()] = new_pos_grad[i+j*chain.getDOF()];
+                grad_f[i+j*chain.getDOF()] = (next_pos_as_constraint? 0 : new_pos_grad[i+j*chain.getDOF()]);
             }
         }
-        return true; 
+        return true;
     }
 
     /****************************************************************/
@@ -595,7 +605,9 @@
             }
         }
         if (smoothing_constraint)
-            g[1+6*(horizon+1)*hitting_constraints+extra_ctrl_points_nr]=norm2(v-v0); // smoothness constraint
+            g[1+6*(horizon+1)*hitting_constraints+extra_ctrl_points_nr]= (horizon == 1)? norm2(v_new-v):norm2(v-v0);
+        if (horizon == 1 && next_pos_as_constraint)
+            g[1+6*(horizon+1)*hitting_constraints+extra_ctrl_points_nr+smoothing_constraint] = norm2(err_xyz_next);
 
         return true;
     }
@@ -663,8 +675,20 @@
                 }
             }
             if (smoothing_constraint) {
-                for (Ipopt::Index i = 0; i < chain.getDOF(); i++) {
-                    iRow[idx] = 1 + extra_ctrl_points_nr + hitting_constraints * 6; jCol[idx] = i; idx++;
+                for (int j = 0; j <= horizon; j++) {
+                    for (Ipopt::Index i = 0; i < chain.getDOF(); i++) {
+                        iRow[idx] = 1 + extra_ctrl_points_nr + 6 * (horizon + 1) * hitting_constraints;
+                        jCol[idx] = i+j*chain.getDOF(); idx++;
+                    }
+                }
+            }
+
+            if (horizon == 1 && next_pos_as_constraint) {
+                for (int j = 0; j <= horizon; j++) {
+                    for (Ipopt::Index i = 0; i < chain.getDOF(); i++) {
+                        iRow[idx] = 1 + extra_ctrl_points_nr + 6 * (horizon + 1) * hitting_constraints + smoothing_constraint;
+                        jCol[idx] = i+j*chain.getDOF(); idx++;
+                    }
                 }
             }
             
@@ -735,8 +759,15 @@
                 }
             }
             if (smoothing_constraint) {
-                for (Ipopt::Index i = 0; i < chain.getDOF(); i++) {
-                    values[idx++] = 2.0 * (v[i] - v0[i]);
+                for (int j = 0; j <= horizon; ++j) {
+                    for (Ipopt::Index i = 0; i < chain.getDOF(); i++) {
+                        values[idx++] = ((horizon == 1) ? (v_new[i] - v[i]) : (v[i] - v0[i])) * ((j == 0) ? -2.0 : 2.0);
+                    }
+                }
+            }
+            if (horizon == 1 && next_pos_as_constraint) {
+                for (Ipopt::Index i = 0; i < (horizon+1)*chain.getDOF(); i++) {
+                    values[idx++] = new_pos_grad[i];
                 }
             }
 
