@@ -56,7 +56,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  bool _hittingConstraints, bool _orientationControl,
                                  bool _additionaControlPoints, 
                                  bool _visualizeTargetInSim, bool _visualizeParticleInSim, bool _visualizeCollisionPointsInSim,
-                                 particleThread *_pT, bool _smoothingConstraint, int _horizonMPC) :
+                                 particleThread *_pT, bool _smoothingConstraint, int _horizonMPC, bool _nextPosConstraint) :
                                  PeriodicThread((double)_rate/1000.0), name(_name), robot(_robot), part(_part),
                                  verbosity(_verbosity), useTorso(!_disableTorso), controlMode(_controlMode),
                                  trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol),
@@ -67,7 +67,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  additionalControlPoints(_additionaControlPoints),
                                  visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
                                  visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim), smoothingConstraint(_smoothingConstraint),
-                                 horizonMPC(_horizonMPC)
+                                 horizonMPC(_horizonMPC), nextPosConstraint(_nextPosConstraint)
 {
     dT=getPeriod();
     prtclThrd=_pT;  //in case of referenceGen != uniformParticle, NULL will be received
@@ -75,7 +75,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
 
 bool reactCtrlThread::threadInit()
 {
-   
+
     printMessage(2,"[reactCtrlThread] threadInit()\n");
     state=STATE_WAIT;
 
@@ -383,6 +383,32 @@ bool reactCtrlThread::threadInit()
         collisionPointsSimReservoirPos(2)=0.0;
     }    
     firstTarget = true;
+
+    app=new Ipopt::IpoptApplication;
+    app->Options()->SetNumericValue("tol",tol);
+    app->Options()->SetNumericValue("constr_viol_tol",1e-6);
+    app->Options()->SetIntegerValue("acceptable_iter",0);
+    app->Options()->SetStringValue("mu_strategy","adaptive");
+    app->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
+    app->Options()->SetNumericValue("max_cpu_time",0.75*dT);
+    app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
+    app->Options()->SetStringValue("hessian_approximation","limited-memory");
+    app->Options()->SetStringValue("derivative_test",verbosity?"first-order":"none");
+//    app->Options()->SetStringValue("derivative_test_print_all", "yes");
+    app->Options()->SetIntegerValue("print_level", verbosity?5:0);
+    app->Options()->SetNumericValue("derivative_test_tol", 1e-7);
+//    app->Options()->SetStringValue("print_timing_statistics", "yes");
+    app->Initialize();
+
+    if (controlMode == "positionDirect") //in this mode, ipopt will use the qIntegrated values to update its copy of chain
+        nlp=new ControllerNLP(*virtualArmChain,additionalControlPointsVector, hittingConstraints,
+                              orientationControl, additionalControlPoints, smoothingConstraint, dT, horizonMPC,
+                              nextPosConstraint);
+    else
+        nlp=new ControllerNLP(*(arm->asChain()),additionalControlPointsVector, hittingConstraints,
+                              orientationControl, additionalControlPoints, smoothingConstraint, dT, horizonMPC,
+                              nextPosConstraint);
+    firstSolve = true;
     printMessage(5,"[reactCtrlThread] threadInit() finished.\n");
     yarp::os::Time::delay(0.2);
     t_0=Time::now();
@@ -480,7 +506,7 @@ void reactCtrlThread::run()
         printMessage(5,"[reactCtrlThread::run()] will visualize collision points in simulator.\n");
         showCollisionPointsInSim();
     }
-    
+
     switch (state)
     {
         case STATE_WAIT:
@@ -562,7 +588,7 @@ void reactCtrlThread::run()
                 delete avhdl; avhdl = nullptr; //TODO this is not efficient, in the future find a way to reset the handler, not recreate
             }
             
-            yDebug("vLimAdapted = %s",vLimAdapted.toString(3,3).c_str());
+//            yDebug("vLimAdapted = %s",vLimAdapted.toString(3,3).c_str());
             //printMessage(2,"[reactCtrlThread::run()]: Will call solveIK.\n");
             double t_1=yarp::os::Time::now();
             q_dot = solveIK(ipoptExitCode); //this is the key function call where the reaching opt problem is solved 
@@ -640,7 +666,7 @@ void reactCtrlThread::run()
     if (tactileCollisionPointsOn || visualCollisionPointsOn)
         vLimAdapted = vLimNominal; //if it was changed by the avoidanceHandler, we reset it
     printMessage(2,"[reactCtrlThread::run()] finished, state: %d.\n\n\n",state);
-    
+
 }
 
 void reactCtrlThread::threadRelease()
@@ -992,8 +1018,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
    //yInfo()<<"   e_pos_real before opt step [m] = "<<norm(x_n-xee_pos_real);
    //yInfo()<<"   e_pos real using x_t       [m] = "<<norm(x_n-x_t); 
    //yInfo()<<"   e_pos_virtual before opt step [m] = "<<norm(x_n-xee_pos_virtual);
-        
-    Vector res(chainActiveDOF,0.0);
+
 
     Vector xr(6,0.0);
     xr.setSubvector(0,x_n);
@@ -1004,19 +1029,6 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
         xr_next.setSubvector(3, o_n);
     }
 
-    Ipopt::SmartPtr<Ipopt::IpoptApplication> app=new Ipopt::IpoptApplication;
-    app->Options()->SetNumericValue("tol",tol);
-    app->Options()->SetNumericValue("constr_viol_tol",1e-6);
-    app->Options()->SetIntegerValue("acceptable_iter",0);
-    app->Options()->SetStringValue("mu_strategy","adaptive");
-    app->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
-    app->Options()->SetNumericValue("max_cpu_time",0.75*dT);
-    app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
-    app->Options()->SetStringValue("hessian_approximation","limited-memory");
-    app->Options()->SetStringValue("derivative_test",verbosity?"first-order":"none");
-//    app->Options()->SetStringValue("derivative_test_print_all", "yes");
-    app->Options()->SetIntegerValue("print_level",verbosity?5:0);
-    app->Initialize();
 
     /*Matrix H5real=(*(arm->asChain())).getH(5);
     Vector elbow_pos_real = H5real.getCol(3).subVector(0,2);
@@ -1026,24 +1038,19 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     Vector elbow_pos_virtual = H5virtual.getCol(3).subVector(0,2);
     //printf("[reactCtrlThread::solveIK]: real chain getH(%d) - elbow: \n %s \n",*(arm->asChain()).getDOF()-4-1,H5real.toString(3,3).c_str());
     printf("[reactCtrlThread::solveIK]: virtual p0 - elbow: (%s)\n",elbow_pos_virtual.toString(3,3).c_str());    */
-    Ipopt::SmartPtr<ControllerNLP> nlp;
-    if (controlMode == "positionDirect") //in this mode, ipopt will use the qIntegrated values to update its copy of chain
-        nlp=new ControllerNLP(*virtualArmChain,additionalControlPointsVector, horizonMPC);
-    else
-        nlp=new ControllerNLP(*(arm->asChain()),additionalControlPointsVector, horizonMPC);
-    nlp->set_hitting_constraints(hittingConstraints);
-    nlp->set_smoothing_constraint(smoothingConstraint);
-    nlp->set_orientation_control(orientationControl);
-    nlp->set_additional_control_points(additionalControlPoints);
-    nlp->set_dt(dT);
+
     nlp->set_xr(xr);
     if (horizonMPC > 0) nlp->set_xr_next(xr_next);
     nlp->set_v_limInDegPerSecond(vLimAdapted);
     nlp->set_v0InDegPerSecond(q_dot);
     nlp->init();
-    _exit_code=app->OptimizeTNLP(GetRawPtr(nlp));
-
-    res=nlp->get_resultInDegPerSecond();
+    if (firstSolve) {
+        _exit_code = app->OptimizeTNLP(GetRawPtr(nlp));
+        firstSolve = false;
+    } else {
+        _exit_code = app->ReOptimizeTNLP(GetRawPtr(nlp));
+    }
+    Vector res=nlp->get_resultInDegPerSecond();
    
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
     if(verbosity >= 1){ 

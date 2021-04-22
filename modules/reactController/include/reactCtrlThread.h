@@ -63,7 +63,8 @@ public:
     // CONSTRUCTOR
     reactCtrlThread(int , const string & , const string & , const string &_ ,
                     int , bool , string , double , double , double , double , string , 
-                    bool , bool , bool , bool , bool, bool , bool , bool , bool , bool , particleThread * , bool, int);
+                    bool , bool , bool , bool , bool, bool , bool , bool , bool , bool ,
+                    particleThread * , bool, int, bool);
     // INIT
     bool threadInit() override;
     // RUN
@@ -166,8 +167,9 @@ protected:
     //to enable/disable the smooth changes of joint velocities bounds in optimizer
     bool smoothingConstraint; // inequality constraint for smoothing robot move (difference between following joint velocities)
     int horizonMPC; // horizon of model predictive control
-    
-    /***************************************************************************/
+    bool nextPosConstraint; // use position in next step as constraint (only if horizon == 1)
+
+  /***************************************************************************/
     // INTERNAL VARIABLES:
     double dT;  //period of the thread in seconds  =getPeriod();
 
@@ -268,6 +270,8 @@ protected:
     // IPOPT STUFF
     int ipoptExitCode;
     double timeToSolveProblem_s; //time taken by q_dot = solveIK(ipoptExitCode) ~ ipopt + avoidance handler
+    Ipopt::SmartPtr<Ipopt::IpoptApplication> app; // pointer to instance of main application class for making calls to Ipopt
+    Ipopt::SmartPtr<ControllerNLP> nlp; //pointer to IK solver instance
 
     // Mutex for handling things correctly
     std::mutex mut;
@@ -279,6 +283,7 @@ protected:
     bool visualizeTargetIniCubGui;
 
     bool firstRun; // compute x_n and x_n_next for t = 0, used for MPC horizon = 1
+    bool firstSolve; //ipopt OptimizeTNLP only for first time to allocate memory, then use ReOptimizeTNLP
     // objects in simulator will be created only for first target - with new targets they will be moved
     bool firstTarget;
     std::vector<collisionPoint_t> collisionPoints; //list of "avoidance vectors" from peripersonal space / safety margin

@@ -80,7 +80,7 @@ class ControllerNLP : public Ipopt::TNLP
     bool orientation_control;
     bool additional_control_points_flag;
     bool smoothing_constraint;
-    bool next_pos_as_constraint;
+    bool next_pos_constraint;
         
     Vector xr,pr, xr_next, pr_next, ori_grad, pos_grad, new_pos_grad;
     Matrix Hr,skew_nr,skew_sr,skew_ar, Hr_next;
@@ -91,8 +91,8 @@ class ControllerNLP : public Ipopt::TNLP
     Vector err_xyz,err_ang, err_xyz_next;
     Matrix bounds;
     double dt;
-    double grad_pos;
-    unsigned int horizon;
+    int horizon;
+    int chain_dof;
 
     std::vector<ControlPoint> &additional_control_points;
     int extra_ctrl_points_nr;
@@ -118,16 +118,13 @@ class ControllerNLP : public Ipopt::TNLP
     Matrix skew(const Vector &w);
 
     public:
-    ControllerNLP(iKinChain &chain_, std::vector<ControlPoint> &additional_control_points_, int horizon);
+    ControllerNLP(iKinChain &chain_, std::vector<ControlPoint> &additional_control_points_, bool hittingConstraints_,
+                  bool orientationControl_, bool additionalControlPoints_, bool smoothingConstraint_, double dT_,
+                  int horizon_, bool next_pos_constraint_);
     ~ControllerNLP() override;
     void set_xr(const Vector &_xr);
     void set_xr_next(const Vector &_xr_next);
     void set_v_limInDegPerSecond(const Matrix &_v_lim);
-    void set_hitting_constraints(const bool _hitting_constraints);
-    void set_smoothing_constraint(const bool _smoothing_constraint);
-    void set_orientation_control(const bool _orientation_control);
-    void set_additional_control_points(const bool _additional_control_points_flag);
-    void set_dt(const double _dt);
     void set_v0InDegPerSecond(const Vector &_v0);
     void init();
     Vector get_resultInDegPerSecond() const;

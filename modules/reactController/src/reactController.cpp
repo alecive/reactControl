@@ -116,6 +116,7 @@ private:
     bool orientationControl; //if orientation should be controlled as well
     bool additionalControlPoints; //if there are additional control points - Cartesian targets for others parts of the robot body - e.g. elbow
     bool smoothingConstraint; // inequality constraint for smoothing robot move (difference between following joint velocities)
+    bool nextPosConstraint; // use position in next step as constraint (only if horizon == 1)
     bool ipOptMemoryOn; // whether ipopt should account for the real motor model
     bool ipOptFilterOn; 
     //double ipOptFilter_tc;
@@ -691,6 +692,20 @@ public:
         else
             yInfo("[reactController] Could not find horizonMPC option in the config file; using %i as default",horizonMPC);
 
+        //*********** nextPos constraint *************************************************/
+        if (rf.check("nextPosConstraint"))
+        {
+            if(rf.find("nextPosConstraint").asString()=="on"){
+                nextPosConstraint = true;
+                yInfo("[reactController] nextPosConstraint flag set to on.");
+            }
+            else{
+                nextPosConstraint = false;
+                yInfo("[reactController] nextPosConstraint flag set to off.");
+          }
+        }
+        else
+            yInfo("[reactController] Could not find nextPosConstraint flag (on/off) in the config file; using %d as default",nextPosConstraint);
 
 
          //********************** Visualizations in simulator ***********************
@@ -779,7 +794,8 @@ public:
                                           gazeControl,stiffInteraction,
                                           hittingConstraints, orientationControl, additionalControlPoints,
                                           visualizeTargetInSim, visualizeParticleInSim,
-                                          visualizeCollisionPointsInSim, prtclThrd, smoothingConstraint, horizonMPC);
+                                          visualizeCollisionPointsInSim, prtclThrd, smoothingConstraint, horizonMPC,
+                                          nextPosConstraint);
         if (!rctCtrlThrd->start())
         {
             delete rctCtrlThrd;
