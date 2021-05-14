@@ -67,7 +67,7 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  additionalControlPoints(_additionaControlPoints),
                                  visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
                                  visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim), smoothingConstraint(_smoothingConstraint),
-                                 horizonMPC(_horizonMPC), nextPosConstraint(_nextPosConstraint)
+                                 horizonMPC(_horizonMPC), nextPosConstraint(_nextPosConstraint), start_experiment(0), counter(0), t_1(0)
 {
     dT=getPeriod();
     prtclThrd=_pT;  //in case of referenceGen != uniformParticle, NULL will be received
@@ -358,7 +358,6 @@ bool reactCtrlThread::threadInit()
     
     yInfo("Written to param file and closing..");    
     fout_param.close();
-         
     /**** visualizing targets and collision points in simulator ***************************/
     
     if((robot == "icubSim") && (visualizeTargetInSim || visualizeParticleInSim || visualizeCollisionPointsInSim) ){ 
@@ -390,7 +389,7 @@ bool reactCtrlThread::threadInit()
     app->Options()->SetIntegerValue("acceptable_iter",0);
     app->Options()->SetStringValue("mu_strategy","adaptive");
     app->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
-    app->Options()->SetNumericValue("max_cpu_time",0.75*dT);
+    app->Options()->SetNumericValue("max_cpu_time",0.6*dT);
     app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
     app->Options()->SetStringValue("hessian_approximation","limited-memory");
     app->Options()->SetStringValue("derivative_test",verbosity?"first-order":"none");
@@ -418,6 +417,10 @@ bool reactCtrlThread::threadInit()
 
 void reactCtrlThread::run()
 {
+    double t2 = yarp::os::Time::now();
+    if (state == STATE_REACH) {
+        std::cout << t2-t_0 << " ";
+    }
     bool controlSuccess =false;
     //printMessage(2,"[reactCtrlThread::run()] started, state: %d.\n",state);
     //std::lock_guard<std::mutex> lg(mut);
@@ -484,14 +487,32 @@ void reactCtrlThread::run()
     ID  x   y   z   n1  n2  n3
     207 -0.027228   -0.054786   -0.0191051  -0.886  0.14    -0.431 */
     
-    /*collisionPoint_t collisionPointStruct;
-    collisionPointStruct.skin_part = SKIN_LEFT_FOREARM;
-    collisionPointStruct.x.resize(3,0.0);
-    collisionPointStruct.n.resize(3,0.0);
-    collisionPointStruct.x(0) = -0.0002;  collisionPointStruct.x(1) = -0.0131; collisionPointStruct.x(2) = -0.0258434;
-    collisionPointStruct.n(0) = -0.005; collisionPointStruct.n(1) = 0.238; collisionPointStruct.n(2) = -0.971;
-    collisionPointStruct.magnitude = 0.1; //~ "probability of collision" */
-    
+
+    if (t_1 > 0)
+    {
+        collisionPoint_t collisionPointStruct;
+        collisionPointStruct.skin_part = SKIN_LEFT_FOREARM;
+        collisionPointStruct.x.resize(3,0.0);
+        collisionPointStruct.n.resize(3,0.0);
+        collisionPointStruct.magnitude = 0.1; //~ "probability of collision"
+
+        if (yarp::os::Time::now() - t_1 > 10 && counter < 50) {
+            collisionPointStruct.x(0) = -0.0002;  collisionPointStruct.x(1) = -0.0131; collisionPointStruct.x(2) = -0.0258434;
+            collisionPointStruct.n(0) = -0.005; collisionPointStruct.n(1) = 0.238; collisionPointStruct.n(2) = -0.971;
+            counter++;
+            collisionPoints.push_back(collisionPointStruct);
+        } else if (yarp::os::Time::now() - t_1 > 20 && counter < 100) {
+            collisionPointStruct.x(0) = 0.026828;  collisionPointStruct.x(1) = -0.054786; collisionPointStruct.x(2) = -0.0191051;
+            collisionPointStruct.n(0) = 0.883; collisionPointStruct.n(1) = 0.15; collisionPointStruct.n(2) = -0.385;
+            counter++;
+            collisionPoints.push_back(collisionPointStruct);
+        } else if (yarp::os::Time::now() - t_1 > 30 && counter < 150) {
+            collisionPointStruct.x(0) = -0.027228;  collisionPointStruct.x(1) = -0.054786; collisionPointStruct.x(2) = -0.0191051;
+            collisionPointStruct.n(0) = -0.886; collisionPointStruct.n(1) = 0.14; collisionPointStruct.n(2) = -0.431;
+            counter++;
+            collisionPoints.push_back(collisionPointStruct);
+        }
+    }
     if (tactileCollisionPointsOn){
         printMessage(9,"[reactCtrlThread::run()] Getting tactile collisions from port.\n");
         getCollisionPointsFromPort(aggregSkinEventsInPort, TACTILE_INPUT_GAIN, part_short,collisionPoints);
@@ -510,12 +531,22 @@ void reactCtrlThread::run()
     switch (state)
     {
         case STATE_WAIT:
+        {
             firstRun = true;
+            Vector v0(3,0.0);
+            switch(start_experiment) {
+                case 1: { v0[2] = 0.1; setNewRelativeTarget(v0); break; }
+                case 2: { v0[2] = -0.2; setNewRelativeTarget(v0); break; }
+                case 3: { v0[2] = 0.1; setNewRelativeTarget(v0); break; }
+                case 4: setNewCircularTarget(0.1,0.1); break;
+                default: break;
+            }
             break;
+        }
         case STATE_REACH:
         {
-            yInfo("[reactCtrlThread] norm(x_t-x_d) = %g",norm(x_t-x_d));
-            if ((norm(x_t-x_d) < globalTol)) //we keep solving until we reach the desired target
+//            yInfo("[reactCtrlThread] norm(x_t-x_d) = %g",norm(x_t-x_d));
+            if ((norm(x_t-x_d) < globalTol) || yarp::os::Time::now() > 60+t_0) //we keep solving until we reach the desired target
             {
                 yDebug("[reactCtrlThread] norm(x_t-x_d) %g\tglobalTol %g",norm(x_t-x_d),globalTol);
                 state=STATE_IDLE;
@@ -563,7 +594,7 @@ void reactCtrlThread::run()
             {
                 x_n = x_d;
             }
-            yDebug("[reactCtrlThread] x_n: %s,  x_n_next: %s",x_n.toString(3,3).c_str(), x_n_next.toString(3,3).c_str());
+//            yDebug("[reactCtrlThread] x_n: %s,  x_n_next: %s",x_n.toString(3,3).c_str(), x_n_next.toString(3,3).c_str());
  
             if(visualizeParticleIniCubGui){
                 sendiCubGuiObject("particle");
@@ -590,9 +621,9 @@ void reactCtrlThread::run()
             
 //            yDebug("vLimAdapted = %s",vLimAdapted.toString(3,3).c_str());
             //printMessage(2,"[reactCtrlThread::run()]: Will call solveIK.\n");
-            double t_1=yarp::os::Time::now();
+            double t_3=yarp::os::Time::now();
             q_dot = solveIK(ipoptExitCode); //this is the key function call where the reaching opt problem is solved 
-            timeToSolveProblem_s  = yarp::os::Time::now()-t_1;
+            timeToSolveProblem_s  = yarp::os::Time::now()-t_3;
                                 
             if (ipoptExitCode==Ipopt::Solve_Succeeded || ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
             {
@@ -660,13 +691,22 @@ void reactCtrlThread::run()
         default:
             yFatal("[reactCtrlThread] reactCtrlThread should never be here!!! Step: %d",state);
     }
-    
-    
+
+    if (state == STATE_REACH) {
+        std::cout << yarp::os::Time::now()-t_0 << " ";
+    }
     sendData();
     if (tactileCollisionPointsOn || visualCollisionPointsOn)
         vLimAdapted = vLimNominal; //if it was changed by the avoidanceHandler, we reset it
     printMessage(2,"[reactCtrlThread::run()] finished, state: %d.\n\n\n",state);
+    if (state == STATE_REACH) {
+        double t3 = yarp::os::Time::now();
 
+        std::cout << t3-t_0 << " " << t3-t2;
+        if (t3-t2 > 0.02)
+            std::cout <<" Alert!";
+        std::cout << "\n";
+    }
 }
 
 void reactCtrlThread::threadRelease()
@@ -884,6 +924,10 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
 {
     if (_x_d.size()==3)
     {
+        if (start_experiment == 0) {
+            t_0=Time::now();
+        }
+        start_experiment++;
         movingTargetCircle = _movingCircle;
         q_dot.zero();
         updateArmChain(); //updates chain, q and x_t
@@ -894,6 +938,9 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
         x_0=x_t;
         x_n=x_0;
         x_d=_x_d;
+        if (start_experiment == 1) {
+            x_d[0] = -0.289; x_d[1] = -0.164; x_d[2] = 0.1;
+        }
         
         if(visualizeTargetInSim){
             Vector x_d_sim(3,0.0);
@@ -966,7 +1013,7 @@ bool reactCtrlThread::setNewCircularTarget(const double _radius,const double _fr
     frequency = _frequency;
     updateArmChain(); //updates chain, q and x_t
     circleCenter = x_t; // set it to end-eff position at this point 
-    
+    t_1 = yarp::os::Time::now();
     setNewTarget(getPosMovingTargetOnCircle(),true);
     return true;
 }
@@ -1039,11 +1086,11 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     //printf("[reactCtrlThread::solveIK]: real chain getH(%d) - elbow: \n %s \n",*(arm->asChain()).getDOF()-4-1,H5real.toString(3,3).c_str());
     printf("[reactCtrlThread::solveIK]: virtual p0 - elbow: (%s)\n",elbow_pos_virtual.toString(3,3).c_str());    */
 
-    nlp->set_xr(xr);
+//    nlp->set_xr(xr);
     if (horizonMPC > 0) nlp->set_xr_next(xr_next);
-    nlp->set_v_limInDegPerSecond(vLimAdapted);
-    nlp->set_v0InDegPerSecond(q_dot);
-    nlp->init();
+//    nlp->set_v_limInDegPerSecond(vLimAdapted);
+//    nlp->set_v0InDegPerSecond(q_dot);
+    nlp->init(xr, q_dot, vLimAdapted);
     if (firstSolve) {
         _exit_code = app->OptimizeTNLP(GetRawPtr(nlp));
         firstSolve = false;
@@ -1090,7 +1137,7 @@ void reactCtrlThread::updateArmChain()
     //H=arm->getH();
     //x_t=H.subcol(0,3,3);
     x_t = arm->EndEffPosition();
-    o_t = arm->EndEffPose().subVector(3,5);
+    o_t = arm->EndEffPose().subVector(3,5)*arm->EndEffPose()[6];
 }
 
 bool reactCtrlThread::alignJointsBounds()
@@ -1146,7 +1193,7 @@ bool reactCtrlThread::areJointsHealthyAndSet(vector<int> &jointsToSet,
     else
         return false;
     
-    for (size_t i=0; i<modes.size(); i++) //TODO in addition, one might check if some joints are blocked like here:  ServerCartesianController::areJointsHealthyAndSet
+    for (int i=0; i<modes.size(); i++) //TODO in addition, one might check if some joints are blocked like here:  ServerCartesianController::areJointsHealthyAndSet
     {
         if ((modes[i]==VOCAB_CM_HW_FAULT) || (modes[i]==VOCAB_CM_IDLE))
             return false;
@@ -1333,8 +1380,8 @@ Vector reactCtrlThread::getPosMovingTargetOnCircle()
 {
       Vector _x_d=circleCenter; 
       //x-coordinate will stay constant; we set y, and z
-      _x_d[1]+=radius*cos(2.0*M_PI*frequency*yarp::os::Time::now());
-      _x_d[2]+=radius*sin(2.0*M_PI*frequency*yarp::os::Time::now());
+      _x_d[1]+=radius*cos(2.0*M_PI*frequency*(yarp::os::Time::now()-t_1));
+      _x_d[2]+=radius*sin(2.0*M_PI*frequency*(yarp::os::Time::now()-t_1));
 
       return _x_d;
 }
@@ -1599,7 +1646,6 @@ void reactCtrlThread::sendiCubGuiObject(const string& object_type)
         }
         else if(object_type == "additionalTargets")
         {        
-            int i=1;
             for (const auto & controlPoint : additionalControlPointsVector)
             {
                 obj.addString("object");

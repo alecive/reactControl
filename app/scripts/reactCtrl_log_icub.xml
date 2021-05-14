@@ -12,81 +12,81 @@
         <tag>dataDumperReactCtrl</tag>
     </module>
 
-    <module>
-        <name>yarpdatadumper</name>
-	<parameters>--name /data/skinEvAggreg --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperSkinEvAggreg</tag>
-    </module>
+<!--    <module>-->
+<!--        <name>yarpdatadumper</name>-->
+<!--	<parameters>&#45;&#45;name /data/skinEvAggreg &#45;&#45;txTime &#45;&#45;rxTime</parameters>-->
+<!--        <node>localhost</node>-->
+<!--        <stdio></stdio>-->
+<!--        <tag>dataDumperSkinEvAggreg</tag>-->
+<!--    </module>-->
 
-    <module>
-        <name>yarpdatadumper</name>
-	<parameters>--name /data/iCubGuiObjects --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperObjectsiCubGui</tag>
-    </module>
-       
-   <module>
-        <name>yarpdatadumper</name>
-	<parameters>--name /data/ppsAggregEventsForiCubGui --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperPPSeventsForiCubGui</tag>
-    </module>
-    
+<!--    <module>-->
+<!--        <name>yarpdatadumper</name>-->
+<!--	<parameters>&#45;&#45;name /data/iCubGuiObjects &#45;&#45;txTime &#45;&#45;rxTime</parameters>-->
+<!--        <node>localhost</node>-->
+<!--        <stdio></stdio>-->
+<!--        <tag>dataDumperObjectsiCubGui</tag>-->
+<!--    </module>-->
+<!--       -->
+<!--   <module>-->
+<!--        <name>yarpdatadumper</name>-->
+<!--	<parameters>&#45;&#45;name /data/ppsAggregEventsForiCubGui &#45;&#45;txTime &#45;&#45;rxTime</parameters>-->
+<!--        <node>localhost</node>-->
+<!--        <stdio></stdio>-->
+<!--        <tag>dataDumperPPSeventsForiCubGui</tag>-->
+<!--    </module>-->
+<!--    -->
 
-    <module>
-        <name>yarpdatadumper</name>
-	<parameters>--name /data/skin_events --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperSkinContact</tag>
-    </module>
-   
-    <module>
-        <name>yarpdatadumper</name>
-	<parameters>--name /data/skin_tactile_comp_left_hand --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperSkinLeftHandComp</tag>
-    </module>
-    <module>
-        <name>yarpdatadumper</name>
-	<parameters>--name /data/skin_tactile_comp_left_forearm --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperSkinLeftForearmComp</tag>
-    </module>
-    <module>
-        <name>yarpdatadumper</name>
-	<parameters>--name /data/skin_tactile_comp_left_arm --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperSkinLeftArmComp</tag>
-    </module>
-    <module>
-        <name>yarpdatadumper</name>
-	<parameters>--name /data/skin_tactile_comp_right_hand --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperSkinRightHandComp</tag>
-    </module>
-    <module>
-        <name>yarpdatadumper</name>
-	<parameters>--name /data/skin_tactile_comp_right_forearm --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperSkinRightForearmComp</tag>
-    </module>
-    <module>
-        <name>yarpdatadumper</name>
-	<parameters>--name /data/skin_tactile_comp_right_arm --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperSkinRightArmComp</tag>
-    </module>
+<!--    <module>-->
+<!--        <name>yarpdatadumper</name>-->
+<!--	<parameters>&#45;&#45;name /data/skin_events &#45;&#45;txTime &#45;&#45;rxTime</parameters>-->
+<!--        <node>localhost</node>-->
+<!--        <stdio></stdio>-->
+<!--        <tag>dataDumperSkinContact</tag>-->
+<!--    </module>-->
+<!--   -->
+<!--    <module>-->
+<!--        <name>yarpdatadumper</name>-->
+<!--	<parameters>&#45;&#45;name /data/skin_tactile_comp_left_hand &#45;&#45;txTime &#45;&#45;rxTime</parameters>-->
+<!--        <node>localhost</node>-->
+<!--        <stdio></stdio>-->
+<!--        <tag>dataDumperSkinLeftHandComp</tag>-->
+<!--    </module>-->
+<!--    <module>-->
+<!--        <name>yarpdatadumper</name>-->
+<!--	<parameters>&#45;&#45;name /data/skin_tactile_comp_left_forearm &#45;&#45;txTime &#45;&#45;rxTime</parameters>-->
+<!--        <node>localhost</node>-->
+<!--        <stdio></stdio>-->
+<!--        <tag>dataDumperSkinLeftForearmComp</tag>-->
+<!--    </module>-->
+<!--    <module>-->
+<!--        <name>yarpdatadumper</name>-->
+<!--	<parameters>&#45;&#45;name /data/skin_tactile_comp_left_arm &#45;&#45;txTime &#45;&#45;rxTime</parameters>-->
+<!--        <node>localhost</node>-->
+<!--        <stdio></stdio>-->
+<!--        <tag>dataDumperSkinLeftArmComp</tag>-->
+<!--    </module>-->
+<!--    <module>-->
+<!--        <name>yarpdatadumper</name>-->
+<!--	<parameters>&#45;&#45;name /data/skin_tactile_comp_right_hand &#45;&#45;txTime &#45;&#45;rxTime</parameters>-->
+<!--        <node>localhost</node>-->
+<!--        <stdio></stdio>-->
+<!--        <tag>dataDumperSkinRightHandComp</tag>-->
+<!--    </module>-->
+<!--    <module>-->
+<!--        <name>yarpdatadumper</name>-->
+<!--	<parameters>&#45;&#45;name /data/skin_tactile_comp_right_forearm &#45;&#45;txTime &#45;&#45;rxTime</parameters>-->
+<!--        <node>localhost</node>-->
+<!--        <stdio></stdio>-->
+<!--        <tag>dataDumperSkinRightForearmComp</tag>-->
+<!--    </module>-->
+<!--    <module>-->
+<!--        <name>yarpdatadumper</name>-->
+<!--	<parameters>&#45;&#45;name /data/skin_tactile_comp_right_arm &#45;&#45;txTime &#45;&#45;rxTime</parameters>-->
+<!--        <node>localhost</node>-->
+<!--        <stdio></stdio>-->
+<!--        <tag>dataDumperSkinRightArmComp</tag>-->
+<!--    </module>-->
     <!--module>
         <name>yarpdatadumper</name>
 	<parameters>--name /data/skin_tactile_comp_torso --txTime --rxTime</parameters>
@@ -95,34 +95,34 @@
         <tag>dataDumperSkinTorsoComp</tag>
     </module-->
      
-    <module>
-        <name>yarpdatadumper</name>
-	<parameters>--name /data/joints_head --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperHeadJoints</tag>
-    </module> 
-    <module>
-        <name>yarpdatadumper</name>
-        <parameters>--name /data/joints_torso --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperTorsoJoints</tag>
-    </module>
-    <module>
-        <name>yarpdatadumper</name>
-        <parameters>--name /data/joints_leftArm --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperLeftArmJoints</tag>
-    </module>
-    <module>
-        <name>yarpdatadumper</name>
-        <parameters>--name /data/joints_rightArm --txTime --rxTime</parameters>
-        <node>localhost</node>
-        <stdio></stdio>
-        <tag>dataDumperRightArmJoints</tag>
-    </module>
+<!--    <module>-->
+<!--        <name>yarpdatadumper</name>-->
+<!--	<parameters>&#45;&#45;name /data/joints_head &#45;&#45;txTime &#45;&#45;rxTime</parameters>-->
+<!--        <node>localhost</node>-->
+<!--        <stdio></stdio>-->
+<!--        <tag>dataDumperHeadJoints</tag>-->
+<!--    </module> -->
+<!--    <module>-->
+<!--        <name>yarpdatadumper</name>-->
+<!--        <parameters>&#45;&#45;name /data/joints_torso &#45;&#45;txTime &#45;&#45;rxTime</parameters>-->
+<!--        <node>localhost</node>-->
+<!--        <stdio></stdio>-->
+<!--        <tag>dataDumperTorsoJoints</tag>-->
+<!--    </module>-->
+<!--    <module>-->
+<!--        <name>yarpdatadumper</name>-->
+<!--        <parameters>&#45;&#45;name /data/joints_leftArm &#45;&#45;txTime &#45;&#45;rxTime</parameters>-->
+<!--        <node>localhost</node>-->
+<!--        <stdio></stdio>-->
+<!--        <tag>dataDumperLeftArmJoints</tag>-->
+<!--    </module>-->
+<!--    <module>-->
+<!--        <name>yarpdatadumper</name>-->
+<!--        <parameters>&#45;&#45;name /data/joints_rightArm &#45;&#45;txTime &#45;&#45;rxTime</parameters>-->
+<!--        <node>localhost</node>-->
+<!--        <stdio></stdio>-->
+<!--        <tag>dataDumperRightArmJoints</tag>-->
+<!--    </module>-->
    
     <!--module>
         <name>yarpdatadumper</name>
@@ -169,7 +169,7 @@
 	<to>/data/reactCtrl</to>
         <protocol>udp</protocol>
     </connection>
-    
+    <!--
     <connection>
     	<from>/skinEventsAggregator/skin_events_aggreg:o</from>
     	<to>/data/skinEvAggreg</to>
@@ -222,13 +222,13 @@
         <from>/icubSim/skin/right_arm_comp</from>
 	<to>/data/skin_tactile_comp_right_arm</to>
         <protocol>udp</protocol>
-    </connection>
+    </connection> -->
     <!--connection>
         <from>/icubSim/skin/torso_comp</from>
 	<to>/data/skin_tactile_comp_torso</to>
         <protocol>udp</protocol>
     </connection-->          
-     
+     <!--
     <connection>
         <from>/icubSim/head/state:o</from>
 	<to>/data/joints_head</to>
@@ -248,7 +248,7 @@
         <from>/icubSim/right_arm/state:o</from>
         <to>/data/joints_rightArm</to>
         <protocol>udp</protocol>
-    </connection>
+    </connection> -->
    
 
     <!--connection>

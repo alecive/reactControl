@@ -19,7 +19,6 @@
 
 #include "reactIpOpt.h"
 
-
     /****************************************************************/
     void ControllerNLP::computeSelfAvoidanceConstraints()
     {
@@ -98,6 +97,41 @@
     }
 
     /****************************************************************/
+    void ControllerNLP::computeDimensions()
+    {
+        // reaching in position
+        constr_num=1; nnz_jacobian=chain_dof;
+
+        if (hitting_constraints)
+        {
+            for (int i = 0; i <= horizon; ++i) {
+                // shoulder's cables length
+                constr_num += 3;
+                nnz_jacobian += 2 + 3 + 2;
+
+                // avoid hitting torso
+                constr_num += 1;
+                nnz_jacobian += 2;
+
+                // avoid hitting forearm
+                constr_num += 2;
+                nnz_jacobian += 2 + 2;
+            }
+            for (int i = 1; i <= horizon; i++) {
+                nnz_jacobian += 2 + 3 + 2;
+                nnz_jacobian += 2;
+                nnz_jacobian += 2 + 2;
+            }
+        }
+        if (smoothing_constraint) {
+            constr_num += 1; nnz_jacobian += (horizon + 1) * chain_dof;
+        }
+        if (horizon == 1 && next_pos_constraint) {
+            constr_num += 1; nnz_jacobian += (horizon + 1) * chain_dof;
+        }
+    }
+
+    /****************************************************************/
     Matrix ControllerNLP::v2m(const Vector &x)
     {
         yAssert(x.length()>=6)
@@ -132,9 +166,12 @@
                                  bool smoothingConstraint_, double dT_, int horizon_, bool next_pos_constraint_) :
     chain(chain_), additional_control_points(additional_control_points_), hitting_constraints(hittingConstraints_),
     orientation_control(orientationControl_), additional_control_points_flag(additionalControlPoints_),
-    smoothing_constraint(smoothingConstraint_), dt(dT_), horizon(horizon_), next_pos_constraint(next_pos_constraint_)
+    smoothing_constraint(smoothingConstraint_), dt(dT_), horizon(horizon_), next_pos_constraint(next_pos_constraint_),
+    nnz_jacobian(0), constr_num(0), extra_ctrl_points_nr(0), additional_control_points_tol(0.0001),
+    shou_m(0), shou_n(0), elb_m(0), elb_n(0), ang_mag(0), use_modified_ori_grad(false), use_v_min(false), use_ori_min(true),
+    k1(1)
     {
-        chain_dof = chain.getDOF();
+        chain_dof = static_cast<int>(chain.getDOF());
         xr.resize(6,0.0);
         xr_next.resize(6, 0.0);
         set_xr(xr);
@@ -158,6 +195,7 @@
         bounds=v_lim;
         computeSelfAvoidanceConstraints();
         computeGuard();
+        computeDimensions();
     }
 
     ControllerNLP::~ControllerNLP() = default;
@@ -181,13 +219,7 @@
     {
         yAssert(xr_next.length() == _xr_next.length())
         xr_next=_xr_next;
-
-        Hr_next=v2m(_xr_next);
         pr_next=_xr_next.subVector(0, 2);
-
-//        skew_nr_next=skew(Hr_next.getCol(0));
-//        skew_sr_next=skew(Hr_next.getCol(1));
-//        skew_ar_next=skew(Hr_next.getCol(2));
     }
 
     /****************************************************************/
@@ -209,8 +241,12 @@
     }
 
     /****************************************************************/
-    void ControllerNLP::init()
+    void ControllerNLP::init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim)
     {
+        set_xr(_xr);
+        set_v0InDegPerSecond(_v0);
+        set_v_limInDegPerSecond(_v_lim);
+
         q0=chain.getAng();
         H0=chain.getH();
         R0=H0.submatrix(0,2,0,2);
@@ -233,7 +269,7 @@
         }
         if (additional_control_points_flag)
         {
-            additional_control_points_tol = 0.0001; //norm2 is used in the g function, so this is the Eucl. distance error squared - actual distance is sqrt(additional_control_points_tol);
+//            additional_control_points_tol = 0.0001; //norm2 is used in the g function, so this is the Eucl. distance error squared - actual distance is sqrt(additional_control_points_tol);
             //e.g., 0.0001 corresponds to 0.01 m error in actual Euclidean distance 
             //N.B. for the end-effector, tolerance is 0
             if (additional_control_points.empty())
@@ -292,9 +328,8 @@
                     }
                     else
                         yWarning("[ControllerNLP::get_nlp_info]: other control points type than Elbow are not supported (this was %s).",additional_control_point.type.c_str());
-                    }
+                }
             }
-        
         }
         else
             extra_ctrl_points_nr = 0;
@@ -304,7 +339,6 @@
     /****************************************************************/
     Vector ControllerNLP::get_resultInDegPerSecond() const
     {
-//        yDebug("Last err_xyz_next %f\n", norm2(err_xyz_next));
         return CTRL_RAD2DEG*v;
     }
 
@@ -321,10 +355,9 @@
                       Ipopt::Index &nnz_h_lag, IndexStyleEnum &index_style)
     {
         n= (horizon+1) * chain_dof;
+        m = constr_num;
+        nnz_jac_g = nnz_jacobian;
 
-        // reaching in position
-        m=1; nnz_jac_g=chain_dof;
-        
         if(additional_control_points_flag)
         {
             for (const auto & additional_control_point : additional_control_points)
@@ -337,34 +370,6 @@
                     yWarning("[ControllerNLP::get_nlp_info]: other control points type than Elbow are not supported (this was %s).",
                              additional_control_point.type.c_str());
             }
-        }
-
-        if (hitting_constraints)
-        {
-            for (int i = 0; i <= horizon; ++i) {
-                // shoulder's cables length
-                m += 3;
-                nnz_jac_g += 2 + 3 + 2;
-
-                // avoid hitting torso
-                m += 1;
-                nnz_jac_g += 2;
-
-                // avoid hitting forearm
-                m += 2;
-                nnz_jac_g += 2 + 2;
-            }
-            for (int i = 1; i <= horizon; i++) {
-                nnz_jac_g += 2 + 3 + 2;
-                nnz_jac_g += 2;
-                nnz_jac_g += 2 + 2;
-            }
-        }
-        if (smoothing_constraint) {
-            m += 1; nnz_jac_g += (horizon + 1) * chain_dof;
-        }
-        if (horizon == 1 && next_pos_constraint) {
-            m += 1; nnz_jac_g += (horizon + 1) * chain_dof;
         }
 
         nnz_h_lag=0;
@@ -383,8 +388,8 @@
             }
         }
         // reaching in position - upper and lower bounds on the error (Euclidean square norm)
-        g_l[0]=0.0;
-        g_u[0]=0.0; 
+        g_l[0]=-1e-8;
+        g_u[0]=1e-8;
         
         if(additional_control_points_flag)
         {
@@ -419,9 +424,9 @@
         }
         if (smoothing_constraint) { // Upper bound for smoothness constraint - try different values
             g_l[1 + extra_ctrl_points_nr + 6 * (horizon + 1) * hitting_constraints] = 0.0;
-            g_u[1 + extra_ctrl_points_nr + 6 * (horizon + 1) * hitting_constraints] = 0.7;
+            g_u[1 + extra_ctrl_points_nr + 6 * (horizon + 1) * hitting_constraints] = use_v_min? 0.04: 0.005;
         }
-        if (horizon == 1 && next_pos_constraint) { // Upper bound for smoothness constraint - try different values
+        if (horizon == 1 && next_pos_constraint) {
             g_l[1 + extra_ctrl_points_nr + 6 * (horizon + 1) * hitting_constraints + smoothing_constraint] = 0.0;
             g_u[1 + extra_ctrl_points_nr + 6 * (horizon + 1) * hitting_constraints + smoothing_constraint] = 0.0;
         }
@@ -450,23 +455,46 @@
                 if (horizon == 1)
                     v_new[i] = x[i+v.length()];
             }
-
-            Vector w=J0_ang*v;
-            double theta=norm(w);
-            if (theta>0.0)
-                w/=theta;
-            w.push_back(theta*dt);
-            He.setSubmatrix(axis2dcm(w).submatrix(0,2,0,2)*R0,0,0);
-            
-            Vector pe=p0+dt*(J0_xyz*v);            
-            He(0,3)=pe[0];
-            He(1,3)=pe[1];
-            He(2,3)=pe[2];
-
+            Vector pe=p0+dt*(J0_xyz*v);
             err_xyz=pr-pe;
-            err_ang=dcm2axis(Hr*He.transposed());
-            err_ang*=err_ang[3];
-            err_ang.pop_back();
+            pos_grad = -2.0 * dt * (J0_xyz.transposed() * err_xyz);
+
+            if (orientation_control) {
+                Vector w=J0_ang*v;
+                double theta=norm(w);
+                if (theta>0.0)
+                    w/=theta;
+                w.push_back(theta*dt);
+
+                He.setSubmatrix(axis2dcm(w).submatrix(0,2,0,2)*R0,0,0);
+                He(0,3)=pe[0];
+                He(1,3)=pe[1];
+                He(2,3)=pe[2];
+
+                if (use_modified_ori_grad) {
+                    Matrix H = Hr*He.transposed();
+                    double r = sqrt((H(2,1)-H(1,2))*(H(2,1)-H(1,2))+(H(0,2)-H(2,0))
+                                                                     *(H(0,2)-H(2,0)) + (H(1,0)-H(0,1))* (H(1,0)-H(0,1)));
+                    double th=atan2(0.5*r,0.5*(H(0,0)+H(1,1)+H(2,2)-1));
+                    ang_mag = th;
+                    double coef = 2*ang_mag*dt/(2* sqrt(1-0.25*(pow(dot(He.getCol(0), Hr.getCol(0)) +
+                            dot(He.getCol(1), Hr.getCol(1)) + dot(He.getCol(2), Hr.getCol(2))-1,2))));
+
+                  ori_grad = coef*(Hr.getCol(0)*skew(He.getCol(0)) +
+                            Hr.getCol(1)*skew(He.getCol(1)) + Hr.getCol(2)*skew(He.getCol(2)))*J0_ang;
+                } else {
+                    err_ang=dcm2axis(Hr*He.transposed());
+                    ang_mag = err_ang[3];
+                    err_ang*=err_ang[3];
+                    err_ang.pop_back();
+                    Matrix L = -0.5 * (skew_nr * skew(He.getCol(0)) +
+                                       skew_sr * skew(He.getCol(1)) +
+                                       skew_ar * skew(He.getCol(2)));
+                    Matrix Derr_ang = -dt * (L * J0_ang);
+                    ori_grad = 2.0 * (Derr_ang.transposed() * err_ang);
+                }
+            }
+
             if (horizon == 1) {
                 Matrix J_xyz_new = Matrix(3, chain_dof);
                 for (int i = 0; i < chain_dof; ++i) {
@@ -475,7 +503,7 @@
                 Vector pe_next = pe + dt * (J_xyz_new * v_new);
                 err_xyz_next = pr_next - pe_next;
                 for (int i = 0; i < chain_dof; ++i) {
-                    new_pos_grad[i] = - 2.0 * dt * dot(err_xyz_next, J0_xyz.getCol(i) + dt*(Hess[i] * v_new)); //- 2.0 * dt * 2.0 * dt * dot(err_xyz_next, Hess[i] * v_new);
+                    new_pos_grad[i] = - 2.0 * dt * dot(err_xyz_next, J0_xyz.getCol(i) + dt*(Hess[i] * v_new));
                 }
                 for (int j = 1; j <= horizon; j++) {
                     for (Ipopt::Index i = 0; i < chain_dof; i++) {
@@ -483,15 +511,6 @@
                     }
                 }
             }
-            Matrix L=-0.5*(skew_nr*skew(He.getCol(0))+
-                           skew_sr*skew(He.getCol(1))+
-                           skew_ar*skew(He.getCol(2)));
-            Derr_ang=-dt*(L*J0_ang);
-
-            if (orientation_control)
-                ori_grad = 2.0*(Derr_ang.transposed() * err_ang);
-
-            pos_grad = -2.0 * dt * (J0_xyz.transposed() * err_xyz);
 
             if (additional_control_points_flag)
             {
@@ -517,7 +536,10 @@
                 Ipopt::Number &obj_value)
     {
         computeQuantities(x,new_x);
-        obj_value=(orientation_control?norm2(err_ang):0.0) + ((horizon == 1 && !next_pos_constraint) ? norm2(err_xyz_next) : 0.0);
+        if (!use_ori_min)
+            obj_value=norm2(v-v0);
+        else
+            obj_value = (orientation_control?ang_mag*ang_mag:0.0) + ((horizon == 1 && !next_pos_constraint) ? norm2(err_xyz_next) : 0.0) + use_v_min*k1*norm2(v-v0);
         return true;
     }
 
@@ -526,8 +548,12 @@
                      Ipopt::Number *grad_f) // TODO: improve orientation gradient (derivative test: error 1e-4 - 1e-5)
     {
         computeQuantities(x,new_x);
-        for (Ipopt::Index i=0; i < chain_dof; i++)
-            grad_f[i] = ori_grad[i] + ((horizon== 1 and !next_pos_constraint) ? (pos_grad[i] + new_pos_grad[i]) : 0.0);
+        for (Ipopt::Index i=0; i < chain_dof; i++) {
+            if (!use_ori_min)
+                grad_f[i] = (v[i] - v0[i]) * 2.0;
+            else
+                grad_f[i] = ori_grad[i] + ((horizon== 1 and !next_pos_constraint) ? (pos_grad[i] + new_pos_grad[i]) : 0.0)  + use_v_min*k1*(v[i] - v0[i]) * 2.0;
+        }
         for (int j = 1; j <= horizon; j++) {
             for (Ipopt::Index i = 0; i < chain_dof; i++) {
                 grad_f[i+ j * chain_dof] = (next_pos_constraint ? 0 : new_pos_grad[i + j * chain_dof]);
@@ -571,11 +597,14 @@
                 g[6 + extra_ctrl_points_nr + 6 * i] = elb_m * q1[3 + 3 + 0] + q1[3 + 3 + 1];
             }
         }
-        if (smoothing_constraint)
-            g[1+6*(horizon+1)*hitting_constraints+extra_ctrl_points_nr]= (horizon == 1)? norm2(v_new-v):norm2(v-v0);
+        if (smoothing_constraint) {
+            if (!use_ori_min)
+                g[1 + 6 * (horizon + 1) * hitting_constraints + extra_ctrl_points_nr] = ang_mag * ang_mag; // norm2(err_ang);
+            if (!use_v_min)
+                g[1 + 6 * (horizon + 1) * hitting_constraints + extra_ctrl_points_nr+1] = (horizon == 1)? norm2(v_new-v):norm2(v-v0);
+        }
         if (horizon == 1 && next_pos_constraint)
             g[1+6*(horizon+1)*hitting_constraints+extra_ctrl_points_nr+smoothing_constraint] = norm2(err_xyz_next);
-
         return true;
     }
 
@@ -673,7 +702,7 @@
             // reaching in position
             for (Ipopt::Index i=0; i < chain_dof; i++)
             {
-                values[idx]=pos_grad[i]; // -2.0*dt*dot(err_xyz,J0_xyz.getCol(i));
+                values[idx]=pos_grad[i];
                 idx++;
             }
 
@@ -728,7 +757,10 @@
             if (smoothing_constraint) {
                 for (int j = 0; j <= horizon; ++j) {
                     for (Ipopt::Index i = 0; i < chain_dof; i++) {
-                        values[idx++] = ((horizon == 1) ? (v_new[i] - v[i]) : (v[i] - v0[i])) * ((j == 0) ? -2.0 : 2.0);
+                        if (!use_ori_min)
+                            values[idx++] = ori_grad[i];
+                        if (!use_v_min)
+                            values[idx++] = ((horizon == 1) ? (v_new[i] - v[i]) : (v0[i] - v[i])) * ((j == 0) ? -2.0 : 2.0);
                     }
                 }
             }
@@ -737,12 +769,6 @@
                     values[idx++] = new_pos_grad[i];
                 }
             }
-
-//             yInfo("[ControllerNLP::eval_jac_g]\n");
-//             for(int k=0; k<idx; k++)
-//                 yInfo("    values[%d]=%f \n",k,values[k]);
-            
-            
         }
 
         return true;

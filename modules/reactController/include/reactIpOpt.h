@@ -81,18 +81,18 @@ class ControllerNLP : public Ipopt::TNLP
     bool additional_control_points_flag;
     bool smoothing_constraint;
     bool next_pos_constraint;
+    bool use_modified_ori_grad, use_v_min, use_ori_min;
         
     Vector xr,pr, xr_next, pr_next, ori_grad, pos_grad, new_pos_grad;
-    Matrix Hr,skew_nr,skew_sr,skew_ar, Hr_next;
+    Matrix Hr,skew_nr,skew_sr,skew_ar;
     std::vector<Matrix> Hess;
     Matrix q_lim,v_lim;    
     Vector q0,v0,v,p0,v_new;
-    Matrix H0,R0,He,J0_xyz,J0_ang,Derr_ang;
+    Matrix H0,R0,He,J0_xyz,J0_ang;
     Vector err_xyz,err_ang, err_xyz_next;
     Matrix bounds;
-    double dt;
-    int horizon;
-    int chain_dof;
+    double dt, ang_mag, k1;
+    int horizon, chain_dof, constr_num, nnz_jacobian;
 
     std::vector<ControlPoint> &additional_control_points;
     int extra_ctrl_points_nr;
@@ -114,8 +114,9 @@ class ControllerNLP : public Ipopt::TNLP
     void computeSelfAvoidanceConstraints();
     void computeGuard();
     void computeBounds();
-    Matrix v2m(const Vector &x);
-    Matrix skew(const Vector &w);
+    void computeDimensions();
+    static Matrix v2m(const Vector &x);
+    static Matrix skew(const Vector &w);
 
     public:
     ControllerNLP(iKinChain &chain_, std::vector<ControlPoint> &additional_control_points_, bool hittingConstraints_,
@@ -126,7 +127,7 @@ class ControllerNLP : public Ipopt::TNLP
     void set_xr_next(const Vector &_xr_next);
     void set_v_limInDegPerSecond(const Matrix &_v_lim);
     void set_v0InDegPerSecond(const Vector &_v0);
-    void init();
+    void init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim);
     Vector get_resultInDegPerSecond() const;
     Property getParameters() const;
     bool get_nlp_info(Ipopt::Index &n, Ipopt::Index &m, Ipopt::Index &nnz_jac_g,

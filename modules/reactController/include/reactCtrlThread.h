@@ -168,6 +168,7 @@ protected:
     bool smoothingConstraint; // inequality constraint for smoothing robot move (difference between following joint velocities)
     int horizonMPC; // horizon of model predictive control
     bool nextPosConstraint; // use position in next step as constraint (only if horizon == 1)
+    int start_experiment, counter;
 
   /***************************************************************************/
     // INTERNAL VARIABLES:
@@ -265,7 +266,7 @@ protected:
     ofstream fout_param; //log parameters that stay constant during the simulation, but are important for analysis - e.g. joint limits 
     // Stamp for the setEnvelope for the ports
     yarp::os::Stamp ts;
-    double t_0; 
+    double t_0, t_1;
  
     // IPOPT STUFF
     int ipoptExitCode;
