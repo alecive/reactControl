@@ -95,7 +95,6 @@ private:
     int     verbosity;  // Verbosity level
     int   rctCtrlRate;  // rate of the reactCtrlThread
     int     prtclRate;  // rate of the particleThread
-    int     horizonMPC;  // horizon of model predictive control
 
     bool disableTorso;  // flag to know if the torso has to be used or not
 
@@ -115,8 +114,7 @@ private:
     bool hittingConstraints; //inequality constraints for safety of shoudler assembly and to prevent self-collisions torso-upper arm, upper-arm - forearm  
     bool orientationControl; //if orientation should be controlled as well
     bool additionalControlPoints; //if there are additional control points - Cartesian targets for others parts of the robot body - e.g. elbow
-    bool smoothingConstraint; // inequality constraint for smoothing robot move (difference between following joint velocities)
-    bool nextPosConstraint; // use position in next step as constraint (only if horizon == 1)
+
     bool ipOptMemoryOn; // whether ipopt should account for the real motor model
     bool ipOptFilterOn; 
     //double ipOptFilter_tc;
@@ -154,13 +152,11 @@ public:
         tol          =  1e-5;
         globalTol    =  1e-2;
         vMax         =  20.0;
-        horizonMPC  =  0;
-        
+
         referenceGen = "minJerk";
         hittingConstraints = true;
         orientationControl = true;
         additionalControlPoints = false;
-        smoothingConstraint = true;
         ipOptMemoryOn = false;
         ipOptFilterOn = false;
         //ipOptFilter_tc = 0.25;
@@ -668,46 +664,6 @@ public:
         else yInfo("[reactController] Could not find boundSmoothnessValue in the config file; using %g as default",boundSmoothnessValue);
         */
 
-        //*********** smoothing constraint *************************************************/
-        if (rf.check("smoothingConstraint"))
-        {
-            if(rf.find("smoothingConstraint").asString()=="on"){
-                smoothingConstraint = true;
-                yInfo("[reactController] smoothingConstraint flag set to on.");
-            }
-            else{
-                smoothingConstraint = false;
-                yInfo("[reactController] smoothingConstraint flag set to off.");
-            }
-        }
-        else
-            yInfo("[reactController] Could not find smoothingConstraint flag (on/off) in the config file; using %d as default",smoothingConstraint);
-
-        //*********** MPC horizon *************************************************/
-        if (rf.check("horizonMPC"))
-        {
-            horizonMPC = rf.find("horizonMPC").asInt();
-            yInfo("[reactController] horizonMPC set to %i.",horizonMPC);
-        }
-        else
-            yInfo("[reactController] Could not find horizonMPC option in the config file; using %i as default",horizonMPC);
-
-        //*********** nextPos constraint *************************************************/
-        if (rf.check("nextPosConstraint"))
-        {
-            if(rf.find("nextPosConstraint").asString()=="on"){
-                nextPosConstraint = true;
-                yInfo("[reactController] nextPosConstraint flag set to on.");
-            }
-            else{
-                nextPosConstraint = false;
-                yInfo("[reactController] nextPosConstraint flag set to off.");
-          }
-        }
-        else
-            yInfo("[reactController] Could not find nextPosConstraint flag (on/off) in the config file; using %d as default",nextPosConstraint);
-
-
          //********************** Visualizations in simulator ***********************
             if (robot == "icubSim"){
                 if (rf.check("visualizeTargetInSim"))
@@ -794,8 +750,7 @@ public:
                                           gazeControl,stiffInteraction,
                                           hittingConstraints, orientationControl, additionalControlPoints,
                                           visualizeTargetInSim, visualizeParticleInSim,
-                                          visualizeCollisionPointsInSim, prtclThrd, smoothingConstraint, horizonMPC,
-                                          nextPosConstraint);
+                                          visualizeCollisionPointsInSim, prtclThrd);
         if (!rctCtrlThrd->start())
         {
             delete rctCtrlThrd;

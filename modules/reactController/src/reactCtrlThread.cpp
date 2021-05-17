@@ -50,13 +50,13 @@ using namespace iCub::skinDynLib;
 reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,  const string &_part,
                                  int _verbosity, bool _disableTorso,  string _controlMode, 
                                  double _trajSpeed, double _globalTol, double _vMax, double _tol,
-                                 string _referenceGen, 
+                                 string _referenceGen,
                                  bool _tactileCollisionPointsOn, bool _visualCollisionPointsOn,
                                  bool _gazeControl, bool _stiffInteraction,
                                  bool _hittingConstraints, bool _orientationControl,
-                                 bool _additionaControlPoints, 
+                                 bool _additionaControlPoints,
                                  bool _visualizeTargetInSim, bool _visualizeParticleInSim, bool _visualizeCollisionPointsInSim,
-                                 particleThread *_pT, bool _smoothingConstraint, int _horizonMPC, bool _nextPosConstraint) :
+                                 particleThread *_pT) :
                                  PeriodicThread((double)_rate/1000.0), name(_name), robot(_robot), part(_part),
                                  verbosity(_verbosity), useTorso(!_disableTorso), controlMode(_controlMode),
                                  trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol),
@@ -66,8 +66,8 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  hittingConstraints(_hittingConstraints),orientationControl(_orientationControl),
                                  additionalControlPoints(_additionaControlPoints),
                                  visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
-                                 visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim), smoothingConstraint(_smoothingConstraint),
-                                 horizonMPC(_horizonMPC), nextPosConstraint(_nextPosConstraint), start_experiment(0), counter(0), t_1(0)
+                                 visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim),
+                                 start_experiment(0), counter(0), t_1(0)
 {
     dT=getPeriod();
     prtclThrd=_pT;  //in case of referenceGen != uniformParticle, NULL will be received
@@ -401,12 +401,10 @@ bool reactCtrlThread::threadInit()
 
     if (controlMode == "positionDirect") //in this mode, ipopt will use the qIntegrated values to update its copy of chain
         nlp=new ControllerNLP(*virtualArmChain,additionalControlPointsVector, hittingConstraints,
-                              orientationControl, additionalControlPoints, smoothingConstraint, dT, horizonMPC,
-                              nextPosConstraint);
+                              orientationControl, additionalControlPoints, dT);
     else
         nlp=new ControllerNLP(*(arm->asChain()),additionalControlPointsVector, hittingConstraints,
-                              orientationControl, additionalControlPoints, smoothingConstraint, dT, horizonMPC,
-                              nextPosConstraint);
+                              orientationControl, additionalControlPoints, dT);
     firstSolve = true;
     printMessage(5,"[reactCtrlThread] threadInit() finished.\n");
     yarp::os::Time::delay(0.2);
@@ -532,7 +530,6 @@ void reactCtrlThread::run()
     {
         case STATE_WAIT:
         {
-            firstRun = true;
             Vector v0(3,0.0);
             switch(start_experiment) {
                 case 1: { v0[2] = 0.1; setNewRelativeTarget(v0); break; }
@@ -578,16 +575,7 @@ void reactCtrlThread::run()
             else if(referenceGen == "minJerk"){
                 minJerkTarget->computeNextValues(x_d);    
                 //refGenMinJerk->computeNextValues(x_t,x_d);
-                if (horizonMPC == 0) {
-                    x_n = minJerkTarget->getPos();
-                } else  {
-                    if (firstRun) {
-                        firstRun = false;
-                        x_n_next = minJerkTarget->getPos();  // TODO check it
-                    }
-                    x_n = x_n_next;
-                    x_n_next = minJerkTarget->getPos();
-                }
+                x_n = minJerkTarget->getPos();
             }
 
             else if(referenceGen == "none")
@@ -608,7 +596,7 @@ void reactCtrlThread::run()
                     moveSphere(2,x_n_sim); //sphere created as second (particle) will keep the index 2
                 }
             }
-            
+
             if(gazeControl)
                 igaze -> lookAtFixationPoint(x_d); //for now looking at final target (x_d), not at intermediate/next target x_n
             
@@ -618,7 +606,6 @@ void reactCtrlThread::run()
                 vLimAdapted=avhdl->getVLIM(CTRL_DEG2RAD * vLimNominal) * CTRL_RAD2DEG;
                 delete avhdl; avhdl = nullptr; //TODO this is not efficient, in the future find a way to reset the handler, not recreate
             }
-            
 //            yDebug("vLimAdapted = %s",vLimAdapted.toString(3,3).c_str());
             //printMessage(2,"[reactCtrlThread::run()]: Will call solveIK.\n");
             double t_3=yarp::os::Time::now();
@@ -702,7 +689,7 @@ void reactCtrlThread::run()
     if (state == STATE_REACH) {
         double t3 = yarp::os::Time::now();
 
-        std::cout << t3-t_0 << " " << t3-t2;
+        std::cout << t3-t_0 << " " << timeToSolveProblem_s << " " << t3-t2;
         if (t3-t2 > 0.02)
             std::cout <<" Alert!";
         std::cout << "\n";
@@ -1070,12 +1057,6 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     Vector xr(6,0.0);
     xr.setSubvector(0,x_n);
     xr.setSubvector(3,o_n);
-    Vector xr_next(6,0.0);
-    if (horizonMPC > 0) {
-        xr_next.setSubvector(0, x_n_next);
-        xr_next.setSubvector(3, o_n);
-    }
-
 
     /*Matrix H5real=(*(arm->asChain())).getH(5);
     Vector elbow_pos_real = H5real.getCol(3).subVector(0,2);
@@ -1086,10 +1067,6 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     //printf("[reactCtrlThread::solveIK]: real chain getH(%d) - elbow: \n %s \n",*(arm->asChain()).getDOF()-4-1,H5real.toString(3,3).c_str());
     printf("[reactCtrlThread::solveIK]: virtual p0 - elbow: (%s)\n",elbow_pos_virtual.toString(3,3).c_str());    */
 
-//    nlp->set_xr(xr);
-    if (horizonMPC > 0) nlp->set_xr_next(xr_next);
-//    nlp->set_v_limInDegPerSecond(vLimAdapted);
-//    nlp->set_v0InDegPerSecond(q_dot);
     nlp->init(xr, q_dot, vLimAdapted);
     if (firstSolve) {
         _exit_code = app->OptimizeTNLP(GetRawPtr(nlp));
@@ -1193,11 +1170,12 @@ bool reactCtrlThread::areJointsHealthyAndSet(vector<int> &jointsToSet,
     else
         return false;
     
-    for (int i=0; i<modes.size(); i++) //TODO in addition, one might check if some joints are blocked like here:  ServerCartesianController::areJointsHealthyAndSet
+    for (int i=0; i<modes.size(); i++)
     {
+        if (arm->isLinkBlocked(i))  //TODO in addition, one might check if some joints are blocked like here:  ServerCartesianController::areJointsHealthyAndSet
+            continue;
         if ((modes[i]==VOCAB_CM_HW_FAULT) || (modes[i]==VOCAB_CM_IDLE))
             return false;
-
         if (_s=="velocity")
         {
             if ((modes[i]!=VOCAB_CM_MIXED) && (modes[i]!=VOCAB_CM_VELOCITY)){ // we will set only those that are not in correct modes already

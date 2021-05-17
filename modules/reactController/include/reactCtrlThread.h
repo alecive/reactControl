@@ -64,7 +64,7 @@ public:
     reactCtrlThread(int , const string & , const string & , const string &_ ,
                     int , bool , string , double , double , double , double , string , 
                     bool , bool , bool , bool , bool, bool , bool , bool , bool , bool ,
-                    particleThread * , bool, int, bool);
+                    particleThread *);
     // INIT
     bool threadInit() override;
     // RUN
@@ -165,9 +165,6 @@ protected:
     // will use the yarp rpc /icubSim/world to visualize the potential collision points
     bool visualizeCollisionPointsInSim;
     //to enable/disable the smooth changes of joint velocities bounds in optimizer
-    bool smoothingConstraint; // inequality constraint for smoothing robot move (difference between following joint velocities)
-    int horizonMPC; // horizon of model predictive control
-    bool nextPosConstraint; // use position in next step as constraint (only if horizon == 1)
     int start_experiment, counter;
 
   /***************************************************************************/
@@ -254,8 +251,6 @@ protected:
     yarp::sig::Matrix vLimNominal;     //matrix with min/max velocity limits for the current chain
     yarp::sig::Matrix vLimAdapted;  //matrix with min/max velocity limits after adptation by avoidanceHandler
       
-    //yarp::sig::Matrix H;      // End-effector pose
-      
     // ports and files
     yarp::os::BufferedPort<yarp::os::Bottle> aggregSkinEventsInPort; //coming from /skinEventsAggregator/skin_events_aggreg:o
     yarp::os::BufferedPort<yarp::os::Bottle> aggregPPSeventsInPort; //coming from visuoTactileRF/pps_activations_aggreg:o 
@@ -283,7 +278,6 @@ protected:
     bool visualizeParticleIniCubGui;
     bool visualizeTargetIniCubGui;
 
-    bool firstRun; // compute x_n and x_n_next for t = 0, used for MPC horizon = 1
     bool firstSolve; //ipopt OptimizeTNLP only for first time to allocate memory, then use ReOptimizeTNLP
     // objects in simulator will be created only for first target - with new targets they will be moved
     bool firstTarget;

@@ -79,20 +79,17 @@ class ControllerNLP : public Ipopt::TNLP
     bool hitting_constraints;
     bool orientation_control;
     bool additional_control_points_flag;
-    bool smoothing_constraint;
-    bool next_pos_constraint;
-    bool use_modified_ori_grad, use_v_min, use_ori_min;
         
-    Vector xr,pr, xr_next, pr_next, ori_grad, pos_grad, new_pos_grad;
+    Vector xr,pr, ori_grad, pos_grad;
     Matrix Hr,skew_nr,skew_sr,skew_ar;
     std::vector<Matrix> Hess;
     Matrix q_lim,v_lim;    
     Vector q0,v0,v,p0,v_new;
     Matrix H0,R0,He,J0_xyz,J0_ang;
-    Vector err_xyz,err_ang, err_xyz_next;
+    Vector err_xyz,err_ang;
     Matrix bounds;
-    double dt, ang_mag, k1;
-    int horizon, chain_dof, constr_num, nnz_jacobian;
+    double dt, ang_mag, weight;
+    int chain_dof, constr_num, nnz_jacobian;
 
     std::vector<ControlPoint> &additional_control_points;
     int extra_ctrl_points_nr;
@@ -120,11 +117,9 @@ class ControllerNLP : public Ipopt::TNLP
 
     public:
     ControllerNLP(iKinChain &chain_, std::vector<ControlPoint> &additional_control_points_, bool hittingConstraints_,
-                  bool orientationControl_, bool additionalControlPoints_, bool smoothingConstraint_, double dT_,
-                  int horizon_, bool next_pos_constraint_);
+                  bool orientationControl_, bool additionalControlPoints_, double dT_);
     ~ControllerNLP() override;
     void set_xr(const Vector &_xr);
-    void set_xr_next(const Vector &_xr_next);
     void set_v_limInDegPerSecond(const Matrix &_v_lim);
     void set_v0InDegPerSecond(const Vector &_v0);
     void init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim);
