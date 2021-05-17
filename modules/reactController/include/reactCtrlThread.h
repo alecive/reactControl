@@ -220,7 +220,6 @@ protected:
     yarp::sig::Vector x_0;  // Initial end-effector position
     yarp::sig::Vector x_t;  // Current end-effector position
     yarp::sig::Vector x_n;  // Desired next end-effector position
-    yarp::sig::Vector x_n_next;  // Desired end-effector position after next one
     yarp::sig::Vector x_d;  // Vector that stores the new target
 
     //All orientation in Euler angle format

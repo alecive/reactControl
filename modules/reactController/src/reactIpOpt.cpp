@@ -162,7 +162,7 @@
         chain_dof = static_cast<int>(chain.getDOF());
         xr.resize(6,0.0);
         set_xr(xr);
-        v0.resize(chain_dof, 0.0); v=v0; v_new = v0;
+        v0.resize(chain_dof, 0.0); v=v0;
         He=zeros(4,4); He(3,3)=1.0;
         q_lim.resize(chain_dof, 2);
         v_lim.resize(chain_dof, 2);
@@ -572,7 +572,7 @@
                 iRow[idx]=6+extra_ctrl_points_nr; jCol[idx]=3+3+1; idx++;
 
                 iRow[idx]=7+extra_ctrl_points_nr; jCol[idx]=3+3+0; idx++;
-                iRow[idx]=7+extra_ctrl_points_nr; jCol[idx]=3+3+1; idx++;
+                iRow[idx]=7+extra_ctrl_points_nr; jCol[idx]=3+3+1;
             }
 
             
@@ -639,7 +639,7 @@
                 values[idx++] = dt;
 
                 values[idx++] = elb_m * dt;
-                values[idx++] = dt;
+                values[idx] = dt;
             }
         }
         return true;

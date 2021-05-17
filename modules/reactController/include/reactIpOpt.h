@@ -82,9 +82,8 @@ class ControllerNLP : public Ipopt::TNLP
         
     Vector xr,pr, ori_grad, pos_grad;
     Matrix Hr,skew_nr,skew_sr,skew_ar;
-    std::vector<Matrix> Hess;
     Matrix q_lim,v_lim;    
-    Vector q0,v0,v,p0,v_new;
+    Vector q0,v0,v,p0;
     Matrix H0,R0,He,J0_xyz,J0_ang;
     Vector err_xyz,err_ang;
     Matrix bounds;
