@@ -206,8 +206,8 @@ AvoidanceHandlerTactile::AvoidanceHandlerTactile(const iCub::iKin::iKinChain &_c
 {
     type="tactile";
 
-    avoidingSpeed = 50;
-    // produce collisionPoint.magnitude * avoidingSpeed deg/s repulsive speed 
+    avoidingSpeed = 1;
+    // produce collisionPoint.magnitude * avoidingSpeed rad/s repulsive speed
         
     parameters.unput("avoidingSpeed");
     parameters.put("avoidingSpeed",avoidingSpeed);
