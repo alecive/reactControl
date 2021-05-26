@@ -64,7 +64,7 @@ public:
     reactCtrlThread(int , string  , string  , string _ ,
                     int , bool , string , double , double , double , double , string , 
                     bool , bool , bool , bool , bool, bool , bool , bool , bool , bool ,
-                    particleThread *);
+                    particleThread *, double);
     // INIT
     bool threadInit() override;
     // RUN
@@ -146,6 +146,8 @@ protected:
     double globalTol;
     // Max velocity set for the joints
     double vMax;
+    // Weight of the reaching joint rest position task (disabled if 0.0)
+    double restPosWeight;
     string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk"
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o

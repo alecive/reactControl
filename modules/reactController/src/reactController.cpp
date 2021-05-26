@@ -104,6 +104,7 @@ private:
     double        tol;  // Tolerance of the ipopt task. The solver exits if norm2(x_d-x)<tol.
     double  globalTol;  // global tolerance of the task. The controller exits if norm(x_d-x)<globalTol
     double       vMax;  // max velocity set for the joints
+    double restPosWeight; // Weight of the reaching joint rest position task (disabled if 0.0)
     
     string referenceGen; // either "uniformParticle" (constant velocity with particleThread) or "minJerk" 
     //or "none" (will directly apply the target - used especially in the mode when targets are streamed)  
@@ -142,6 +143,7 @@ public:
         tol          =  1e-5;
         globalTol    =  1e-2;
         vMax         =  20.0;
+        restPosWeight = 0.0;
 
         referenceGen = "minJerk";
         hittingConstraints = true;
@@ -581,7 +583,15 @@ public:
             else
             {
                 yInfo("[reactController] Could not find additionalControlPoints flag (on/off) in the config file; using %d as default",additionalControlPoints);
-            }  
+            }
+
+            //****************** restPosWeight ******************
+            if (rf.check("restPosWeight"))
+            {
+                restPosWeight = rf.find("restPosWeight").asDouble();
+                yInfo("[reactController] restPosWeight set to %g m.",restPosWeight);
+            }
+            else yInfo("[reactController] Could not find restPosWeight in the config file; using %g as default",restPosWeight);
 
          //********************** Visualizations in simulator ***********************
             if (robot == "icubSim"){
@@ -669,7 +679,7 @@ public:
                                           gazeControl,stiffInteraction,
                                           hittingConstraints, orientationControl, additionalControlPoints,
                                           visualizeTargetInSim, visualizeParticleInSim,
-                                          visualizeCollisionPointsInSim, prtclThrd);
+                                          visualizeCollisionPointsInSim, prtclThrd, restPosWeight);
         if (!rctCtrlThrd->start())
         {
             delete rctCtrlThrd;

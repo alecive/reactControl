@@ -56,7 +56,7 @@ reactCtrlThread::reactCtrlThread(int _rate, string _name, string _robot,  string
                                  bool _hittingConstraints, bool _orientationControl,
                                  bool _additionaControlPoints,
                                  bool _visualizeTargetInSim, bool _visualizeParticleInSim, bool _visualizeCollisionPointsInSim,
-                                 particleThread *_pT) :
+                                 particleThread *_pT, double _restPosWeight) :
                                  PeriodicThread((double)_rate/1000.0), name(std::move(_name)), robot(std::move(_robot)), part(std::move(_part)),
                                  verbosity(_verbosity), useTorso(!_disableTorso), controlMode(std::move(_controlMode)),
                                  trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol),
@@ -67,7 +67,7 @@ reactCtrlThread::reactCtrlThread(int _rate, string _name, string _robot,  string
                                  additionalControlPoints(_additionaControlPoints),
                                  visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
                                  visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim),
-                                 start_experiment(0), counter(0), t_1(0)
+                                 start_experiment(0), counter(0), t_1(0), restPosWeight(_restPosWeight)
 {
     dT=getPeriod();
     prtclThrd=_pT;  //in case of referenceGen != uniformParticle, NULL will be received
@@ -397,12 +397,10 @@ bool reactCtrlThread::threadInit()
 //    app->Options()->SetStringValue("print_timing_statistics", "yes");
     app->Initialize();
 
-    if (controlMode == "positionDirect") //in this mode, ipopt will use the qIntegrated values to update its copy of chain
-        nlp=new ControllerNLP(*virtualArmChain,additionalControlPointsVector, hittingConstraints,
-                              orientationControl, additionalControlPoints, dT);
-    else
-        nlp=new ControllerNLP(*(arm->asChain()),additionalControlPointsVector, hittingConstraints,
-                              orientationControl, additionalControlPoints, dT);
+    //in positionDirect mode, ipopt will use the qIntegrated values to update its copy of chain
+    nlp=new ControllerNLP((controlMode == "positionDirect")? *virtualArmChain:*(arm->asChain()),
+                          additionalControlPointsVector, hittingConstraints, orientationControl,
+                          additionalControlPoints, dT, restPosWeight);
     //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
     avhdl = std::make_unique<AvoidanceHandlerTactile>(*arm->asChain(),collisionPoints,verbosity);
     firstSolve = true;

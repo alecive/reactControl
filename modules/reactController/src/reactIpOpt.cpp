@@ -153,11 +153,11 @@
     /****************************************************************/
     ControllerNLP::ControllerNLP(iKinChain &chain_, std::vector<ControlPoint> &additional_control_points_,
                                  bool hittingConstraints_, bool orientationControl_, bool additionalControlPoints_,
-                                 double dT_) :
+                                 double dT_, double restPosWeight_) :
         chain(chain_), additional_control_points(additional_control_points_), hitting_constraints(hittingConstraints_),
         orientation_control(orientationControl_), additional_control_points_flag(additionalControlPoints_),
         dt(dT_), nnz_jacobian(0), constr_num(0), extra_ctrl_points_nr(0), additional_control_points_tol(0.0001),
-        shou_m(0), shou_n(0), elb_m(0), elb_n(0), ang_mag(0), weight(1)
+        shou_m(0), shou_n(0), elb_m(0), elb_n(0), ang_mag(0), weight(1), weight2(restPosWeight_)
     {
         chain_dof = static_cast<int>(chain.getDOF());
         xr.resize(6,0.0);
@@ -166,7 +166,7 @@
         He=zeros(4,4); He(3,3)=1.0;
         q_lim.resize(chain_dof, 2);
         v_lim.resize(chain_dof, 2);
-        ori_grad.resize((chain_dof), 0.0);
+        ori_grad.resize(chain_dof, 0.0);
         pos_grad.resize(chain_dof, 0.0);
         for (size_t r=0; r < chain_dof; r++)
         {
@@ -180,6 +180,9 @@
         computeSelfAvoidanceConstraints();
         computeGuard();
         computeDimensions();
+        rest_jnt_pos = {0, 0, 0, -25*CTRL_DEG2RAD, 20*CTRL_DEG2RAD, 0, 50*CTRL_DEG2RAD, 0, -20*CTRL_DEG2RAD, 0};
+        rest_weights = {1,1,1,0,0,0,0,0,0,0};
+        rest_err.resize(chain_dof, 0.0);
     }
 
     ControllerNLP::~ControllerNLP() = default;
@@ -354,7 +357,7 @@
         }
         // reaching in position - upper and lower bounds on the error (Euclidean square norm)
         g_l[0]=-1e-8;
-        g_u[0]=1e-8;
+        g_u[0]= 1e-8;
 
         // reaching orientation
         g_l[1] = 0.0;
@@ -407,9 +410,13 @@
     {
         if (new_x)
         {
-            for (size_t i=0; i<v.length(); i++) {
+            q1 = q0;
+            for (size_t i = 0; i < chain_dof; i++) {
                 v[i] = x[i];
+                q1[i] += dt * v[i];
             }
+            rest_err = rest_weights * (rest_jnt_pos-q1);
+
             Vector pe=p0+dt*(J0_xyz*v);
             err_xyz=pr-pe;
             pos_grad = -2.0 * dt * (J0_xyz.transposed() * err_xyz);
@@ -459,7 +466,7 @@
                 Ipopt::Number &obj_value)
     {
         computeQuantities(x,new_x);
-        obj_value = (orientation_control ? weight * ang_mag * ang_mag : 0.0) + norm2(v - v0);
+        obj_value = (orientation_control ? weight * ang_mag * ang_mag : 0.0) + norm2(v - v0) + weight2 * norm2(rest_err);
         return true;
     }
 
@@ -469,7 +476,7 @@
     {
         computeQuantities(x,new_x);
         for (Ipopt::Index i=0; i < chain_dof; i++) {
-            grad_f[i] = (orientation_control ? weight * ori_grad[i] : 0.0) + (v[i] - v0[i]) * 2.0;
+            grad_f[i] = (orientation_control ? weight * ori_grad[i] : 0.0) + (v[i] - v0[i]) * 2.0 - 2.0 * dt * weight2 * rest_weights[i] * rest_err[i];
         }
         return true;
     }
@@ -493,10 +500,6 @@
         }
         if (hitting_constraints)
         {
-            Vector q1 = q0;
-            for (int j = 0; j < 5; ++j) {
-                q1[3 + j] += dt * x[3 + j];
-            }
             // shoulder's cables length
             g[2 + extra_ctrl_points_nr] = 1.71 * (q1[3 + 0] - q1[3 + 1]);
             g[3 + extra_ctrl_points_nr] = 1.71 * (q1[3 + 0] - q1[3 + 1] - q1[3 + 2]);
@@ -574,12 +577,6 @@
                 iRow[idx]=7+extra_ctrl_points_nr; jCol[idx]=3+3+0; idx++;
                 iRow[idx]=7+extra_ctrl_points_nr; jCol[idx]=3+3+1;
             }
-
-            
-//             yInfo("[ControllerNLP::eval_jac_g] \n");
-//             for(int k=0; k<idx; k++)
-//                 yInfo("    iRow[%d]=%d jCol[%d]=%d \n",k,iRow[k],k,jCol[k]);
-            
         }
         else
         {

@@ -83,11 +83,11 @@ class ControllerNLP : public Ipopt::TNLP
     Vector xr,pr, ori_grad, pos_grad;
     Matrix Hr,skew_nr,skew_sr,skew_ar;
     Matrix q_lim,v_lim;    
-    Vector q0,v0,v,p0;
+    Vector q0,v0,v,p0, rest_jnt_pos, q1, rest_weights, rest_err;
     Matrix H0,R0,He,J0_xyz,J0_ang;
     Vector err_xyz,err_ang;
     Matrix bounds;
-    double dt, ang_mag, weight;
+    double dt, ang_mag, weight, weight2;
     int chain_dof, constr_num, nnz_jacobian;
 
     std::vector<ControlPoint> &additional_control_points;
@@ -116,7 +116,7 @@ class ControllerNLP : public Ipopt::TNLP
 
     public:
     ControllerNLP(iKinChain &chain_, std::vector<ControlPoint> &additional_control_points_, bool hittingConstraints_,
-                  bool orientationControl_, bool additionalControlPoints_, double dT_);
+                  bool orientationControl_, bool additionalControlPoints_, double dT_, double restPosWeight=0.0);
     ~ControllerNLP() override;
     void set_xr(const Vector &_xr);
     void set_v_limInDegPerSecond(const Matrix &_v_lim);
@@ -131,7 +131,7 @@ class ControllerNLP : public Ipopt::TNLP
     bool get_starting_point(Ipopt::Index n, bool init_x, Ipopt::Number *x,
                             bool init_z, Ipopt::Number *z_L, Ipopt::Number *z_U,
                             Ipopt::Index m, bool init_lambda, Ipopt::Number *lambda) override;
-    void computeQuantities(const Ipopt::Number *x, const bool new_x);
+    void computeQuantities(const Ipopt::Number *x, bool new_x);
     bool eval_f(Ipopt::Index n, const Ipopt::Number *x, bool new_x, Ipopt::Number &obj_value) override;
     bool eval_grad_f(Ipopt::Index n, const Ipopt::Number* x, bool new_x, Ipopt::Number *grad_f) override;
     bool eval_g(Ipopt::Index n, const Ipopt::Number *x, bool new_x,Ipopt::Index m, Ipopt::Number *g) override;
