@@ -17,6 +17,7 @@
  * Public License for more details.
 */
 
+#include <utility>
 #include <vector>
 #include <sstream>
 
@@ -32,7 +33,6 @@ using namespace yarp::os;
 using namespace yarp::math;
 using namespace iCub::ctrl;
 using namespace iCub::skinDynLib;
-//using namespace iCub::motionPlan;
 
 #define TACTILE_INPUT_GAIN 1.5
 #define VISUAL_INPUT_GAIN 0.5
@@ -47,7 +47,7 @@ using namespace iCub::skinDynLib;
 
 /*********** public methods ****************************************************************************/ 
 
-reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_robot,  const string &_part,
+reactCtrlThread::reactCtrlThread(int _rate, string _name, string _robot,  string _part,
                                  int _verbosity, bool _disableTorso,  string _controlMode, 
                                  double _trajSpeed, double _globalTol, double _vMax, double _tol,
                                  string _referenceGen,
@@ -57,10 +57,10 @@ reactCtrlThread::reactCtrlThread(int _rate, const string &_name, const string &_
                                  bool _additionaControlPoints,
                                  bool _visualizeTargetInSim, bool _visualizeParticleInSim, bool _visualizeCollisionPointsInSim,
                                  particleThread *_pT) :
-                                 PeriodicThread((double)_rate/1000.0), name(_name), robot(_robot), part(_part),
-                                 verbosity(_verbosity), useTorso(!_disableTorso), controlMode(_controlMode),
+                                 PeriodicThread((double)_rate/1000.0), name(std::move(_name)), robot(std::move(_robot)), part(std::move(_part)),
+                                 verbosity(_verbosity), useTorso(!_disableTorso), controlMode(std::move(_controlMode)),
                                  trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol),
-                                 referenceGen(_referenceGen), 
+                                 referenceGen(std::move(_referenceGen)),
                                  tactileCollisionPointsOn(_tactileCollisionPointsOn), visualCollisionPointsOn(_visualCollisionPointsOn),
                                  gazeControl(_gazeControl), stiffInteraction(_stiffInteraction),
                                  hittingConstraints(_hittingConstraints),orientationControl(_orientationControl),
@@ -137,8 +137,6 @@ bool reactCtrlThread::threadInit()
         vLimNominal(2,0)=vLimNominal(2,1)=0.0;
         vLimAdapted(2,0)=vLimAdapted(2,1)=0.0;
     }
-         
-    //H.resize(4,4);
 
     T_world_root = zeros(4,4); 
     T_world_root(0,1)=-1;
@@ -405,6 +403,8 @@ bool reactCtrlThread::threadInit()
     else
         nlp=new ControllerNLP(*(arm->asChain()),additionalControlPointsVector, hittingConstraints,
                               orientationControl, additionalControlPoints, dT);
+    //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
+    avhdl = std::make_unique<AvoidanceHandlerTactile>(*arm->asChain(),collisionPoints,verbosity);
     firstSolve = true;
     printMessage(5,"[reactCtrlThread] threadInit() finished.\n");
     yarp::os::Time::delay(0.2);
@@ -419,7 +419,6 @@ void reactCtrlThread::run()
     if (state == STATE_REACH) {
         std::cout << t2-t_0 << " ";
     }
-    bool controlSuccess =false;
     //printMessage(2,"[reactCtrlThread::run()] started, state: %d.\n",state);
     //std::lock_guard<std::mutex> lg(mut);
     updateArmChain();
@@ -484,7 +483,6 @@ void reactCtrlThread::run()
     3) right, outermost, proximal triangle - ID 207, row 1 in triangle_centers_CAD_upperPatch_wristFoR8
     ID  x   y   z   n1  n2  n3
     207 -0.027228   -0.054786   -0.0191051  -0.886  0.14    -0.431 */
-    
 
     if (t_1 > 0)
     {
@@ -601,10 +599,7 @@ void reactCtrlThread::run()
                 igaze -> lookAtFixationPoint(x_d); //for now looking at final target (x_d), not at intermediate/next target x_n
             
             if (tactileCollisionPointsOn || visualCollisionPointsOn){
-                AvoidanceHandlerAbstract *avhdl; 
-                avhdl = new AvoidanceHandlerTactile(*arm->asChain(),collisionPoints,verbosity); //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
                 vLimAdapted=avhdl->getVLIM(CTRL_DEG2RAD * vLimNominal) * CTRL_RAD2DEG;
-                delete avhdl; avhdl = nullptr; //TODO this is not efficient, in the future find a way to reset the handler, not recreate
             }
 //            yDebug("vLimAdapted = %s",vLimAdapted.toString(3,3).c_str());
             //printMessage(2,"[reactCtrlThread::run()]: Will call solveIK.\n");
@@ -632,10 +627,6 @@ void reactCtrlThread::run()
                 //yInfo()<<"   xee_pos_real before                    control [m] = "<<x_t.toString(3,3);         
                 if (!controlArm(controlMode,qIntegrated)){
                     yError("I am not able to properly control the arm in positionDirect!");
-                    controlSuccess = false;
-                }
-                else{
-                    controlSuccess = true; 
                 }
                //Vector xee_pos_virtual_before=virtualArmChain->EndEffPosition();
                //yInfo()<<"   xee_pos_virtual before updating virtual chain [m] = "<<xee_pos_virtual_before.toString(3,3);         
@@ -649,10 +640,7 @@ void reactCtrlThread::run()
             else if (controlMode == "velocity"){
                 if (!controlArm(controlMode,q_dot)){
                     yError("I am not able to properly control the arm in velocity!");
-                    controlSuccess = false;   
                 }
-                else
-                    controlSuccess = true;
             }
             
             updateArmChain(); //N.B. This is the second call within run(); may give more precise data for the logging; may also cost time
@@ -882,11 +870,6 @@ double reactCtrlThread::getVMax() const
     return vMax;
 }
 
-bool reactCtrlThread::setTrajTime(const double _traj_time)
-{
-    yWarning("[reactCtrlThread]trajTime is deprecated! Use trajSpeed instead.");
-    return false;
-}
 
 bool reactCtrlThread::setTrajSpeed(const double _traj_speed)
 {
@@ -1421,7 +1404,7 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
 {
     //printMessage(9,"[reactCtrlThread::getCollisionPointsFromPort].\n");
     collisionPoint_t collPoint;    
-    SkinPart sp = SKIN_PART_UNKNOWN;
+    SkinPart sp;
     
     collPoint.skin_part = SKIN_PART_UNKNOWN;
     collPoint.x.resize(3,0.0);
@@ -1469,7 +1452,7 @@ void reactCtrlThread::sendData()
             b.clear();
 
             //col 1
-            b.addInt(chainActiveDOF);
+            b.addInt(static_cast<int>(chainActiveDOF));
             //position
             //cols 2-4: the desired final target (for end-effector)
             vectorIntoBottle(x_d,b);
@@ -1526,9 +1509,9 @@ bool reactCtrlThread::readMotionPlan(std::vector<Vector> &x_desired)
     bool hasPlan = false;
     if(inPlan!=nullptr) {
         yInfo() << "received motionPlan";
-        int nbCtrlPts = inPlan->size();
+        size_t nbCtrlPts = inPlan->size();
 
-        for (int8_t i=0; i<nbCtrlPts; i++)
+        for (size_t i=0; i<nbCtrlPts; i++)
         {
             if (Bottle* inListTraj = inPlan->get(i).asList())
             {
@@ -1543,7 +1526,7 @@ bool reactCtrlThread::readMotionPlan(std::vector<Vector> &x_desired)
                         {
                             if (coordinate->size()==nDim)
                             {
-                                for (int8_t k=0; k<nDim; k++)
+                                for (size_t k=0; k<nDim; k++)
                                     xCtrlPt[k]=coordinate->get(k).asDouble();
                                 yInfo("\tControl point of %s\t: %s\n",ctrlPtName.c_str(),xCtrlPt.toString(3,3).c_str());
                                 x_desired.push_back(xCtrlPt);
@@ -1658,7 +1641,7 @@ void reactCtrlThread::sendiCubGuiObject(const string& object_type)
     }
 }
 
-void reactCtrlThread::deleteiCubGuiObject(const string object_type)
+void reactCtrlThread::deleteiCubGuiObject(const string& object_type)
 {
     if (outPortiCubGui.getOutputCount()>0)
     {
@@ -1737,7 +1720,7 @@ void reactCtrlThread::moveBox(int index, const Vector &pos)
 
 void reactCtrlThread::showCollisionPointsInSim()
 {
-    int nrCollisionPoints = collisionPoints.size();
+    size_t nrCollisionPoints = collisionPoints.size();
     Vector pos(3,0.0);  
     if (nrCollisionPoints > collisionPointsVisualizedCount){
         for(int i=1; i<= (nrCollisionPoints - collisionPointsVisualizedCount);i++){
@@ -1747,7 +1730,6 @@ void reactCtrlThread::showCollisionPointsInSim()
             createStaticBox(pos);   
             collisionPointsVisualizedCount++;
         }
-        
     }
     
     int j=1;

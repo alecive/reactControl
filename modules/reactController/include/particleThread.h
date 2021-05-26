@@ -33,6 +33,7 @@
 #include <iCub/ctrl/pids.h>
 
 #include <cstdarg>
+#include <utility>
 
 using namespace std;
 
@@ -64,11 +65,11 @@ protected:
     * @param l is the level of verbosity: if level > verbosity, something is printed
     * @param f is the text. Please use c standard (like printf)
     */
-    int printMessage(const int l, const char *f, ...) const;
+    int printMessage(int l, const char *f, ...) const;
 
 public:
     // CONSTRUCTOR
-    particleThread(int , const string & , int );
+    particleThread(int , string , int );
     // RUN
     void run() override;
     // RELEASE

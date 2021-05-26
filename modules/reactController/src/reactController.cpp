@@ -62,9 +62,6 @@ None for now.
 #include <yarp/os/RFModule.h>
 
 #include <yarp/math/Math.h>
- 
-#include <iostream>
-#include <string.h> 
 
 #include "reactCtrlThread.h"
 #include "particleThread.h"
@@ -114,17 +111,10 @@ private:
     bool hittingConstraints; //inequality constraints for safety of shoudler assembly and to prevent self-collisions torso-upper arm, upper-arm - forearm  
     bool orientationControl; //if orientation should be controlled as well
     bool additionalControlPoints; //if there are additional control points - Cartesian targets for others parts of the robot body - e.g. elbow
-
-    bool ipOptMemoryOn; // whether ipopt should account for the real motor model
-    bool ipOptFilterOn; 
-    //double ipOptFilter_tc;
     
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
-    
-    bool boundSmoothnessFlag; //for ipopt - whether changes in velocity commands need to be smooth
-    //double boundSmoothnessValue; //actual allowed change in every joint velocity commands in deg/s from one time step to the next. Note: this is not adapted to the thread rate set by the rctCtrlRate param
-    
+
     //setting visualization in iCub simulator; the visualizations in iCubGui constitute an independent pipeline
     // (currently the iCubGui ones are on and cannot be toggled on/off from the outside)
     bool visualizeTargetInSim; // will use the yarp rpc /icubSim/world to visualize the target
@@ -157,15 +147,9 @@ public:
         hittingConstraints = true;
         orientationControl = true;
         additionalControlPoints = false;
-        ipOptMemoryOn = false;
-        ipOptFilterOn = false;
-        //ipOptFilter_tc = 0.25;
         
         tactileCollisionPointsOn = true;
         visualCollisionPointsOn = true;
-        
-        boundSmoothnessFlag = false;
-        //boundSmoothnessValue = 30; // 30 deg/s change in a time step is huge - would have no effect 
         
         if(robot == "icubSim"){
             visualizeTargetInSim = true;
@@ -179,7 +163,7 @@ public:
         }
     }
 
-    bool set_xd(const yarp::sig::Vector& _xd)
+    bool set_xd(const yarp::sig::Vector& _xd) override
     {
         if (_xd.size()>=3)
         {
@@ -190,7 +174,7 @@ public:
         return false;
     }
 
-    bool set_relative_xd(const yarp::sig::Vector& _rel_xd)
+    bool set_relative_xd(const yarp::sig::Vector& _rel_xd) override
     {
         if (_rel_xd.size()>=3)
         {
@@ -201,7 +185,7 @@ public:
         return false;
     }
 
-    bool set_relative_circular_xd(const double _radius, const double _frequency)
+    bool set_relative_circular_xd(const double _radius, const double _frequency) override
     {
         yInfo(" ");
         yInfo("[reactController] received new relative circular x_d: radius %f, frequency: %f.",_radius,_frequency);
@@ -213,55 +197,55 @@ public:
         }
     }
     
-    bool set_streaming_xd()
+    bool set_streaming_xd() override
     {
         yInfo(" ");
         yInfo("[reactController] will be reading reaching targets from a port.");
         return rctCtrlThrd->setStreamingTarget();   
     }
     
-    bool set_tol(const double _tol)
+    bool set_tol(const double _tol) override
     {
         return rctCtrlThrd->setTol(_tol);
     }
 
-    double get_tol()
+    double get_tol() override
     {
         return rctCtrlThrd->getTol();
     }
 
-    bool set_v_max(const double _v_max)
+    bool set_v_max(const double _v_max) override
     {
         return rctCtrlThrd->setVMax(_v_max);
     }
 
-    double get_v_max()
+    double get_v_max() override
     {
         return rctCtrlThrd->getVMax();
     }
 
-    bool set_traj_speed(const double _traj_speed)
+    bool set_traj_speed(const double _traj_speed) override
     {
         return rctCtrlThrd->setTrajSpeed(_traj_speed);
     }
 
-    int get_verbosity()
+    int get_verbosity() override
     {
         return rctCtrlThrd->getVerbosity();
     }
 
-    int get_state()
+    int get_state() override
     {
         return rctCtrlThrd->getState();
     }
 
-    bool set_verbosity(const int32_t _verbosity)
+    bool set_verbosity(const int32_t _verbosity) override
     {
         yInfo("[reactController] Setting verbosity to %i",_verbosity);
         return rctCtrlThrd->setVerbosity(_verbosity);
     }
 
-    bool setup_new_particle(const yarp::sig::Vector& _x_0_vel)
+    bool setup_new_particle(const yarp::sig::Vector& _x_0_vel) override
     {
         if (referenceGen == "uniformParticle"){
             yarp::sig::Vector _x_0 = _x_0_vel.subVector(0,2);
@@ -276,7 +260,7 @@ public:
         }
     }
 
-    bool reset_particle(const yarp::sig::Vector& _x_0)
+    bool reset_particle(const yarp::sig::Vector& _x_0) override
     {
         if (referenceGen == "uniformParticle"){
             if (_x_0.size()<3)
@@ -292,7 +276,7 @@ public:
         }
     }
 
-    bool stop_particle()
+    bool stop_particle() override
     {
         if (referenceGen == "uniformParticle"){
             yInfo("[reactController] Stopping particle..");
@@ -304,7 +288,7 @@ public:
         }
     }
 
-    yarp::sig::Vector get_particle()
+    yarp::sig::Vector get_particle() override
     {
         if (referenceGen == "uniformParticle"){
             yInfo("[reactController] Getting particle..");
@@ -317,19 +301,19 @@ public:
         }
     }
 
-    bool enable_torso()
+    bool enable_torso() override
     {
         yInfo("[reactController] Enabling torso..");
         return rctCtrlThrd->enableTorso();
     }
 
-    bool disable_torso()
+    bool disable_torso() override
     {
         yInfo("[reactController] Disabling torso..");
         return rctCtrlThrd->disableTorso();
     }
 
-    bool stop()
+    bool stop() override
     {
         yInfo("[reactController] Stopping control by going to position mode..");
         return rctCtrlThrd->stopControlAndSwitchToPositionMode();
@@ -598,71 +582,6 @@ public:
             {
                 yInfo("[reactController] Could not find additionalControlPoints flag (on/off) in the config file; using %d as default",additionalControlPoints);
             }  
-            
-            //********************** ipopt using memory - motor model ***********************
-            if (rf.check("ipOptMemory"))
-            {
-                if(rf.find("ipOptMemory").asString()=="on"){
-                    ipOptMemoryOn = false;
-                    yWarning("[reactController] ipOptMemory flag on requested, but setting to off - currently not supported.");
-                }
-                else{
-                    ipOptMemoryOn = false;
-                    yInfo("[reactController] ipOptMemory flag set to off.");
-                }
-            }
-            else
-            {
-                 yInfo("[reactController] Could not find ipOptMemory flag (on/off) in the config file; using %d as default",ipOptMemoryOn);
-            }  
-        
-            //********************** ipopt using filter ***********************
-            if (rf.check("ipOptFilter"))
-            {
-                if(rf.find("ipOptFilter").asString()=="on"){
-                    ipOptFilterOn = false;
-                    yWarning("[reactController] ipOptFilter flag on requested, but setting to off - currently not supported.");
-                }
-                else{
-                    ipOptFilterOn = false;
-                    yInfo("[reactController] ipOptFilter flag set to off.");
-                }
-            }
-            else
-            {
-                 yInfo("[reactController] Could not find ipOptFilter flag (on/off) in the config file; using %d as default",ipOptFilterOn);
-            }  
-//             if (rf.check("ipOptFilter_tc"))
-//                 {
-//                 ipOptFilter_tc = rf.find("ipOptFilter_tc").asDouble();
-//                 yInfo("[reactController] ipopt: ipOptFilter_tc set to %g.",ipOptFilter_tc);
-//             }
-//             else yInfo("[reactController] Could not find ipOptFilter_tc in the config file; using %g as default",ipOptFilter_tc);
-//        
-        
-        if (rf.check("boundSmoothnessFlag"))
-        {
-            if(rf.find("boundSmoothnessFlag").asString()=="on"){
-                boundSmoothnessFlag = false;
-                yWarning("[reactController] ipopt: boundSmoothnessFlag flag on requested, but setting to off - currently not supported.");
-                
-            }
-            else{
-                boundSmoothnessFlag = false;
-                yInfo("[reactController] ipopt: boundSmoothnessFlag flag set to off.");
-            }
-        }
-        else
-        {
-            yInfo("[reactController] Could not find boundSmoothnessFlag flag (on/off) in the config file; using %d as default",boundSmoothnessFlag);
-        }
-        /*if (rf.check("boundSmoothnessValue"))
-        {
-              boundSmoothnessValue = rf.find("boundSmoothnessValue").asDouble();
-               yInfo("[reactController] ipopt: boundSmoothnessValue set to %g deg/s (allowed change in joint vel in a time step).",boundSmoothnessValue);
-        }
-        else yInfo("[reactController] Could not find boundSmoothnessValue in the config file; using %g as default",boundSmoothnessValue);
-        */
 
          //********************** Visualizations in simulator ***********************
             if (robot == "icubSim"){
@@ -724,10 +643,10 @@ public:
             }
 
         //************* THREAD ******************************
-        if((controlMode == "positionDirect") && (ipOptMemoryOn)){
-            ipOptMemoryOn = false;
-            yWarning("You're using controlMode positionDirect. Switching ipOptMemoryOn to false, as it is compatible with velocity controlMode only. ");
-        }
+//        if((controlMode == "positionDirect") && (ipOptMemoryOn)){
+//            ipOptMemoryOn = false;
+//            yWarning("You're using controlMode positionDirect. Switching ipOptMemoryOn to false, as it is compatible with velocity controlMode only. ");
+//        }
         
         if(referenceGen == "uniformParticle"){
             prtclThrd = new particleThread(prtclRate, name, verbosity);

@@ -50,7 +50,7 @@ class AvoidanceHandlerAbstract
 
 
 public:
-    AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_collisionPoints, const unsigned int _verbosity=0);
+    AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_collisionPoints, unsigned int _verbosity=0);
     
     std::string getType() const;
 
@@ -79,7 +79,7 @@ protected:
     * @param l is the level of verbosity: if verbosity >= l, something is printed
     * @param f is the text. Please use c standard (like printf)
     */
-    int printMessage(const unsigned int l, const char *f, ...) const;
+    int printMessage(unsigned int l, const char *f, ...) const;
     
 };
 
@@ -90,7 +90,7 @@ class AvoidanceHandlerTactile : public virtual AvoidanceHandlerAbstract
 {
 
 public:
-    AvoidanceHandlerTactile(const iCub::iKin::iKinChain &_chain,const std::vector<collisionPoint_t> &_collisionPoints,const unsigned int _verbosity=0);
+    AvoidanceHandlerTactile(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_collisionPoints, unsigned int _verbosity=0);
     void setParameters(const yarp::os::Property &params) override;
     yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim) override;
 

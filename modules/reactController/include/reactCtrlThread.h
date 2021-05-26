@@ -61,7 +61,7 @@ class reactCtrlThread: public yarp::os::PeriodicThread
     
 public:
     // CONSTRUCTOR
-    reactCtrlThread(int , const string & , const string & , const string &_ ,
+    reactCtrlThread(int , string  , string  , string _ ,
                     int , bool , string , double , double , double , double , string , 
                     bool , bool , bool , bool , bool, bool , bool , bool , bool , bool ,
                     particleThread *);
@@ -79,37 +79,34 @@ public:
     bool disableTorso();
 
     // Sets the new target
-    bool setNewTarget(const yarp::sig::Vector& _x_d, const bool _movingCircle);
+    bool setNewTarget(const yarp::sig::Vector& _x_d, bool _movingCircle);
 
     // Sets the new target relative to the current position
     bool setNewRelativeTarget(const yarp::sig::Vector&);
 
     // Sets a moving target along a circular trajectory in the y and z axes, relative to the current end-effector position
-    bool setNewCircularTarget(const double _radius,const double _frequency);
+    bool setNewCircularTarget(double _radius, double _frequency);
 
     //Will be reading reaching targets from a port
     bool setStreamingTarget();
     
     // Sets the tolerance
-    bool setTol(const double );
+    bool setTol(double );
 
     // Gets the tolerance
     double getTol() const;
 
     // Sets the vMax
-    bool setVMax(const double );
+    bool setVMax(double );
 
     // Gets the vMax
     double getVMax() const;
 
-    // [DEPRECATED] Sets the trajectory time 
-    bool setTrajTime(const double );
-
     // Sets the trajectory speed
-    bool setTrajSpeed(const double );
+    bool setTrajSpeed(double );
 
     // Sets the verbosity
-    bool setVerbosity(const int );
+    bool setVerbosity(int );
 
     // gets the verbosity
     int getVerbosity() const { return verbosity; };
@@ -157,7 +154,7 @@ protected:
     bool stiffInteraction; //stiff vs. compliant interaction mode
         
     bool hittingConstraints; //inequality constraints for safety of shoudler assembly and to prevent self-collisions torso-upper arm, upper-arm - forearm
-    bool orientationControl; //if orientation should be controlled as well
+    bool orientationControl; //if orientation should be minimized as well
     bool additionalControlPoints; //if there are additional control points - Cartesian targets for others parts of the robot body - e.g. elbow
     bool visualizeTargetInSim;  // will use the yarp rpc /icubSim/world to visualize the target
     // will use the yarp rpc /icubSim/world to visualize the particle (trajectory - intermediate targets)
@@ -165,7 +162,6 @@ protected:
     // will use the yarp rpc /icubSim/world to visualize the potential collision points
     bool visualizeCollisionPointsInSim;
     //to enable/disable the smooth changes of joint velocities bounds in optimizer
-    int start_experiment, counter;
 
   /***************************************************************************/
     // INTERNAL VARIABLES:
@@ -261,6 +257,7 @@ protected:
     // Stamp for the setEnvelope for the ports
     yarp::os::Stamp ts;
     double t_0, t_1;
+    int start_experiment, counter;
  
     // IPOPT STUFF
     int ipoptExitCode;
@@ -269,7 +266,7 @@ protected:
     Ipopt::SmartPtr<ControllerNLP> nlp; //pointer to IK solver instance
 
     // Mutex for handling things correctly
-    std::mutex mut;
+//    std::mutex mut;
     yarp::os::Bottle    cmd; 
     yarp::sig::Matrix T_world_root; //homogenous transf. matrix expressing the rotation and translation of FoR from world (simulator) to from robot (Root) FoR
     
@@ -283,6 +280,7 @@ protected:
     std::vector<collisionPoint_t> collisionPoints; //list of "avoidance vectors" from peripersonal space / safety margin
     int collisionPointsVisualizedCount; //objects will be created in simulator and then their positions updated every iteration
     yarp::sig::Vector collisionPointsSimReservoirPos; //inactive collision points will be stored in the world
+    std::unique_ptr<AvoidanceHandlerAbstract> avhdl;
         
     /**
     * Solves the Inverse Kinematic task
@@ -351,7 +349,7 @@ protected:
 
     void convertPosFromRootToSimFoR(const yarp::sig::Vector &pos, yarp::sig::Vector &outPos);
     
-    void convertPosFromLinkToRootFoR(const yarp::sig::Vector &pos,const iCub::skinDynLib::SkinPart skinPart, yarp::sig::Vector &outPos);
+    void convertPosFromLinkToRootFoR(const yarp::sig::Vector &pos, iCub::skinDynLib::SkinPart skinPart, yarp::sig::Vector &outPos);
         
 
    /************************** communication through ports in/out ***********************************/
@@ -374,7 +372,7 @@ protected:
     //uses corresponding global variables for target pos (x_d) or particle pos (x_n) and creates bottles for the port to iCubGui
     void sendiCubGuiObject(const std::string& object_type);
     
-    void deleteiCubGuiObject(const std::string object_type);
+    void deleteiCubGuiObject(const std::string& object_type);
     
     /****************** visualizations in icub simulator   *************************************/
     /**
@@ -398,7 +396,7 @@ protected:
     * @param l will be checked against the global var verbosity: if verbosity >= l, something is printed
     * @param f is the text. Please use c standard (like printf)
     */
-    int printMessage(const int l, const char *f, ...) const;
+    int printMessage(int l, const char *f, ...) const;
 
 
 };
