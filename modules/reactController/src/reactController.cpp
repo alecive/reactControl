@@ -112,6 +112,7 @@ private:
     bool hittingConstraints; //inequality constraints for safety of shoudler assembly and to prevent self-collisions torso-upper arm, upper-arm - forearm  
     bool orientationControl; //if orientation should be controlled as well
     bool additionalControlPoints; //if there are additional control points - Cartesian targets for others parts of the robot body - e.g. elbow
+    bool selfColPoints; // add robot body parts as the collision points to the avoidance handler
     
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
@@ -149,6 +150,7 @@ public:
         hittingConstraints = true;
         orientationControl = true;
         additionalControlPoints = false;
+        selfColPoints = true;
         
         tactileCollisionPointsOn = true;
         visualCollisionPointsOn = true;
@@ -592,6 +594,23 @@ public:
                 yInfo("[reactController] restPosWeight set to %g m.",restPosWeight);
             }
             else yInfo("[reactController] Could not find restPosWeight in the config file; using %g as default",restPosWeight);
+            //****************** self-collision points ******************
+            if (rf.check("selfColPoints"))
+            {
+                if(rf.find("selfColPoints").asString()=="on"){
+                    selfColPoints = true;
+                    yInfo("[reactController] selfColPoints flag set to on.");
+                }
+                else{
+                    selfColPoints = false;
+                    yInfo("[reactController] selfColPoints flag set to off.");
+                }
+            }
+            else
+            {
+                yInfo("[reactController] Could not find selfColPoints flag (on/off) in the config file; using %d as default",selfColPoints);
+            }
+
 
          //********************** Visualizations in simulator ***********************
             if (robot == "icubSim"){
@@ -679,7 +698,7 @@ public:
                                           gazeControl,stiffInteraction,
                                           hittingConstraints, orientationControl, additionalControlPoints,
                                           visualizeTargetInSim, visualizeParticleInSim,
-                                          visualizeCollisionPointsInSim, prtclThrd, restPosWeight);
+                                          visualizeCollisionPointsInSim, prtclThrd, restPosWeight, selfColPoints);
         if (!rctCtrlThrd->start())
         {
             delete rctCtrlThrd;

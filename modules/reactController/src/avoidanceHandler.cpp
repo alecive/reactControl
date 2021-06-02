@@ -28,8 +28,39 @@ using namespace yarp::os;
 using namespace iCub::iKin;
 using namespace iCub::skinDynLib;
 
-AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_collisionPoints,const unsigned int _verbosity):
-                                                   chain(_chain), collisionPoints(_collisionPoints), verbosity(_verbosity), type("none") {}
+AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_collisionPoints,
+                                                   bool _useSelfColPoints, const unsigned int _verbosity):
+                                                   chain(_chain), collisionPoints(_collisionPoints), verbosity(_verbosity), type("none")
+{
+    selfColPoints = {};
+    if (_useSelfColPoints) {
+        std::vector<std::vector<double>> normals{{0, 0, -1}, {-0.739, 0.078, 0.105}};
+        // front chest, back, face, back of head, ears (2x), hip (3x)
+        std::vector<std::vector<double>> posx{{-0.13, -0.122, -0.104}, {0.05,  0.065, 0.08}, {-0.12, -0.112, -0.082},
+                                              {0.07,  0.105,  0.115}, {-0.03, 0., 0.03}, {-0.03, -0.01, 0.01},
+                                              {-0.03, 0.}, {-0.03, 0.}, {-0.03, 0.}};
+        std::vector<std::vector<double>> posy{{0.02, -0.05, -0.12, -0.19}, {0.02, -0.05, -0.12, -0.19}, {0.09, 0.17, 0.25},
+                                              {0.09, 0.17,  0.25}, {0.09, 0.18}, {0.27},
+                                              {-0.05}, {-0.12}, {-0.19}};
+        std::vector<std::vector<double>> posz{{-0.025, 0.03,   0.085}, {-0.085, -0.025, 0.045}, {-0.04, 0.025, 0.09},
+                                              {-0.1, -0.035, 0.03}, {-0.095, -0.005, 0.085}, {-0.075, -0.005, 0.065},
+                                              {-0.09, 0.09}, {-0.1, 0.1}, {-0.11, 0.11}};
+
+        for (int k = 0; k < normals.size(); ++k) {
+            for (int l = 0; l < posz.size(); ++l) {
+                for (int i = 0; i < posy[l].size(); ++i) {
+                    for (int j = 0; j < posz[l].size(); ++j) {
+                        if (l == 4 && i == 1 && j == 1) continue;
+                        collisionPoint_t colPoint{k == 0 ? SKIN_LEFT_HAND : SKIN_LEFT_FOREARM};
+                        colPoint.n = {normals[k][0], normals[k][1], normals[k][2]};
+                        colPoint.x = {posx[l][j], posy[l][i], posz[l][j]};
+                        selfColPoints.push_back(colPoint);
+                    }
+                }
+            }
+        }
+    }
+}
     
 /****************************************************************/
 string AvoidanceHandlerAbstract::getType() const
@@ -126,12 +157,13 @@ bool AvoidanceHandlerAbstract::computeFoR(const yarp::sig::Vector &pos, const ya
 
 
 /****************************************************************/
-AvoidanceHandlerTactile::AvoidanceHandlerTactile(const iCub::iKin::iKinChain &_chain,const std::vector<collisionPoint_t> &_collisionPoints,const unsigned int _verbosity): AvoidanceHandlerAbstract(_chain,_collisionPoints,_verbosity)
+AvoidanceHandlerTactile::AvoidanceHandlerTactile(const iCub::iKin::iKinChain &_chain,const std::vector<collisionPoint_t> &_collisionPoints,
+                                                 bool _useSelfColPoints, const unsigned int _verbosity):
+                                                 AvoidanceHandlerAbstract(_chain,_collisionPoints, _useSelfColPoints, _verbosity)
 {
     type="tactile";
-
     avoidingSpeed = 1;  // produce collisionPoint.magnitude * avoidingSpeed rad/s repulsive speed
-        
+
     parameters.unput("avoidingSpeed");
     parameters.put("avoidingSpeed",avoidingSpeed);
 }
@@ -156,19 +188,32 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim)
     int i = 0;
     int dim_offset = dim-7;  // 3 if dim == 10; 0 if dim == 7
     ctrlPointChains.clear();
-    for(const auto & colPoint : collisionPoints) {
+    totalColPoints = collisionPoints;
+    std::vector<Matrix> transforms;
+    transforms.push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_HAND].linkNum + 3))*chain.getH(2));
+    transforms.push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_FOREARM].linkNum + 3))*chain.getH(2));
+    int index = 0;
+    for (const auto & colPoint : selfColPoints) {
+        Vector temp_pos = colPoint.x;
+        temp_pos.resize(4);
+        temp_pos(3) = 1.0;
+        Vector pos =  transforms[colPoint.skin_part == SKIN_LEFT_FOREARM]*temp_pos;
+        double n = yarp::math::norm2(pos.subVector(0,2));
+        if (n < 0.0025) { // distance lower than 0.05 m
+            totalColPoints.push_back(colPoint);
+            totalColPoints.back().x = pos;
+            totalColPoints.back().magnitude = (1-n*100);
+            printf("colPoint %d with pos = %s\n", index, totalColPoints.back().x.toString().c_str());
+        }
+        index++;
+    }
+    printf("Total col point size = %lu\n", totalColPoints.size());
+    for(const auto & colPoint : totalColPoints) {
         iKinChain customChain= chain; //instantiates a new chain, copying from the old (full) one
         if (verbosity >= 5){
             printf("Full chain has %d DOF \n",dim);
             printf("chain.getH() (end-effector): \n %s \n",chain.getH().toString(3,3).c_str());
             printf("SkinPart %s, linkNum %d, chain.getH() (skin part frame): \n %s \n", SkinPart_s[colPoint.skin_part].c_str(), SkinPart_2_LinkNum[colPoint.skin_part].linkNum + dim_offset , chain.getH(SkinPart_2_LinkNum[colPoint.skin_part].linkNum + dim_offset).toString(3, 3).c_str());
-
-            if (dim ==7){
-                printf("SkinPart %s, linkNum %d, chain.getH() (skin part frame): \n %s \n", SkinPart_s[colPoint.skin_part].c_str(), SkinPart_2_LinkNum[colPoint.skin_part].linkNum, chain.getH(SkinPart_2_LinkNum[colPoint.skin_part].linkNum).toString(3, 3).c_str());
-            }
-            else if (dim == 10){
-                printf("SkinPart %s, linkNum %d + 3, chain.getH() (skin part frame): \n %s \n", SkinPart_s[colPoint.skin_part].c_str(), SkinPart_2_LinkNum[colPoint.skin_part].linkNum, chain.getH(SkinPart_2_LinkNum[colPoint.skin_part].linkNum + 3).toString(3, 3).c_str());
-            }
         }
 
         // Remove all the more distal links after the collision point

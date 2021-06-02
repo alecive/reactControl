@@ -56,7 +56,7 @@ reactCtrlThread::reactCtrlThread(int _rate, string _name, string _robot,  string
                                  bool _hittingConstraints, bool _orientationControl,
                                  bool _additionaControlPoints,
                                  bool _visualizeTargetInSim, bool _visualizeParticleInSim, bool _visualizeCollisionPointsInSim,
-                                 particleThread *_pT, double _restPosWeight) :
+                                 particleThread *_pT, double _restPosWeight, bool _selfColPoints) :
                                  PeriodicThread((double)_rate/1000.0), name(std::move(_name)), robot(std::move(_robot)), part(std::move(_part)),
                                  verbosity(_verbosity), useTorso(!_disableTorso), controlMode(std::move(_controlMode)),
                                  trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax), tol(_tol),
@@ -66,8 +66,8 @@ reactCtrlThread::reactCtrlThread(int _rate, string _name, string _robot,  string
                                  hittingConstraints(_hittingConstraints),orientationControl(_orientationControl),
                                  additionalControlPoints(_additionaControlPoints),
                                  visualizeTargetInSim(_visualizeTargetInSim), visualizeParticleInSim(_visualizeParticleInSim),
-                                 visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim),
-                                 start_experiment(0), counter(0), t_1(0), restPosWeight(_restPosWeight)
+                                 visualizeCollisionPointsInSim(_visualizeCollisionPointsInSim), start_experiment(0),
+                                 counter(0), t_1(0), restPosWeight(_restPosWeight), selfColPoints(_selfColPoints)
 {
     dT=getPeriod();
     prtclThrd=_pT;  //in case of referenceGen != uniformParticle, NULL will be received
@@ -387,7 +387,7 @@ bool reactCtrlThread::threadInit()
     app->Options()->SetIntegerValue("acceptable_iter",0);
     app->Options()->SetStringValue("mu_strategy","adaptive");
     app->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
-    app->Options()->SetNumericValue("max_cpu_time",0.6*dT);
+    app->Options()->SetNumericValue("max_cpu_time",0.7*dT);
     app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
     app->Options()->SetStringValue("hessian_approximation","limited-memory");
     app->Options()->SetStringValue("derivative_test",verbosity?"first-order":"none");
@@ -402,7 +402,7 @@ bool reactCtrlThread::threadInit()
                           additionalControlPointsVector, hittingConstraints, orientationControl,
                           additionalControlPoints, dT, restPosWeight);
     //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
-    avhdl = std::make_unique<AvoidanceHandlerTactile>(*arm->asChain(),collisionPoints,verbosity);
+    avhdl = std::make_unique<AvoidanceHandlerTactile>(*arm->asChain(),collisionPoints,selfColPoints,verbosity);
     firstSolve = true;
     printMessage(5,"[reactCtrlThread] threadInit() finished.\n");
     yarp::os::Time::delay(0.2);
@@ -488,21 +488,20 @@ void reactCtrlThread::run()
         collisionPointStruct.skin_part = SKIN_LEFT_FOREARM;
         collisionPointStruct.x.resize(3,0.0);
         collisionPointStruct.n.resize(3,0.0);
-        collisionPointStruct.magnitude = 0.1; //~ "probability of collision"
-
-        if (yarp::os::Time::now() - t_1 > 10 && counter < 50) {
-            collisionPointStruct.x(0) = -0.0002;  collisionPointStruct.x(1) = -0.0131; collisionPointStruct.x(2) = -0.0258434;
-            collisionPointStruct.n(0) = -0.005; collisionPointStruct.n(1) = 0.238; collisionPointStruct.n(2) = -0.971;
+        collisionPointStruct.magnitude = 1.5; //~ "probability of collision"
+        if (yarp::os::Time::now() - t_1 > 10 && counter < 150) {
+            collisionPointStruct.x = {-0.0002, -0.0131,-0.0258434}; // {-0.031, -0.079, 0.005};
+            collisionPointStruct.n = {-0.005, 0.238, -0.971}; // {-0.739, 0.078, 0.105};
             counter++;
             collisionPoints.push_back(collisionPointStruct);
-        } else if (yarp::os::Time::now() - t_1 > 20 && counter < 100) {
-            collisionPointStruct.x(0) = 0.026828;  collisionPointStruct.x(1) = -0.054786; collisionPointStruct.x(2) = -0.0191051;
-            collisionPointStruct.n(0) = 0.883; collisionPointStruct.n(1) = 0.15; collisionPointStruct.n(2) = -0.385;
+        } else if (yarp::os::Time::now() - t_1 > 20 && counter < 450) {
+            collisionPointStruct.x = {0.026828, -0.054786, -0.0191051}; // {0.014, 0.081, 0.029};
+            collisionPointStruct.n = {0.883, 0.15, -0.385}; // {0.612, 0.066, 0.630};
             counter++;
             collisionPoints.push_back(collisionPointStruct);
-        } else if (yarp::os::Time::now() - t_1 > 30 && counter < 150) {
-            collisionPointStruct.x(0) = -0.027228;  collisionPointStruct.x(1) = -0.054786; collisionPointStruct.x(2) = -0.0191051;
-            collisionPointStruct.n(0) = -0.886; collisionPointStruct.n(1) = 0.14; collisionPointStruct.n(2) = -0.431;
+        } else if (yarp::os::Time::now() - t_1 > 30 && counter < 500) {
+            collisionPointStruct.x = {-0.027228, -0.054786, -0.0191051}; // {0.018, 0.095, 0.024};
+            collisionPointStruct.n = {-0.886, 0.14, -0.431 }; // {0.568, -0.18, 0.406};
             counter++;
             collisionPoints.push_back(collisionPointStruct);
         }
@@ -595,7 +594,7 @@ void reactCtrlThread::run()
 
             if(gazeControl)
                 igaze -> lookAtFixationPoint(x_d); //for now looking at final target (x_d), not at intermediate/next target x_n
-            
+
             if (tactileCollisionPointsOn || visualCollisionPointsOn){
                 vLimAdapted=avhdl->getVLIM(CTRL_DEG2RAD * vLimNominal) * CTRL_RAD2DEG;
             }
@@ -604,14 +603,11 @@ void reactCtrlThread::run()
             double t_3=yarp::os::Time::now();
             q_dot = solveIK(ipoptExitCode); //this is the key function call where the reaching opt problem is solved 
             timeToSolveProblem_s  = yarp::os::Time::now()-t_3;
-                                
-            if (ipoptExitCode==Ipopt::Solve_Succeeded || ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
-            {
-                if (ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
-                    yWarning("[reactCtrlThread] Ipopt cpu time was higher than the rate of the thread!");
-            }
-            else
-                  yWarning("[reactCtrlThread] Ipopt solve did not succeed!");
+
+            if (ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
+                yWarning("[reactCtrlThread] Ipopt cpu time was higher than the rate of the thread!");
+            else if (ipoptExitCode!=Ipopt::Solve_Succeeded)
+                yWarning("[reactCtrlThread] Ipopt solve did not succeed!");
 
             if(controlMode == "positionDirect"){
                 //yInfo()<<"   t after opt, before control [s] = "<<yarp::os::Time::now() -t_0;
@@ -1379,16 +1375,14 @@ void reactCtrlThread::convertPosFromLinkToRootFoR(const Vector &pos,const SkinPa
 {
     Matrix T_root_to_link = yarp::math::zeros(4,4);
     int torsoDOF = 3;
+    T_root_to_link = arm->getH(SkinPart_2_LinkNum[skinPart].linkNum + (skinPart != SKIN_FRONT_TORSO)*torsoDOF);
+    //e.g. skinPart LEFT_UPPER_ARM gives link number 2, which means we ask iKin for getH(2+3), which gives us  FoR 6 - at the first elbow joint, which is the FoR for the upper arm
 
-     T_root_to_link = arm->getH(SkinPart_2_LinkNum[skinPart].linkNum + torsoDOF);
-     //e.g. skinPart LEFT_UPPER_ARM gives link number 2, which means we ask iKin for getH(2+3), which gives us  FoR 6 - at the first elbow joint, which is the FoR for the upper arm 
-     
     Vector pos_temp = pos;
     pos_temp.resize(4); 
     pos_temp(3) = 1.0;
     //printf("convertPosFromLinkToRootFoR: need to convert %s in the %dth link FoR, skin part %s into iCub root FoR.\n",pos.toString().c_str(),SkinPart_2_LinkNum[skinPart].linkNum,SkinPart_s[skinPart].c_str());
     //printf("convertPosFromRootToSimFoR: pos in icub root resized to 4, with last value set to 1:%s\n",pos_temp.toString().c_str());
-    
     outPos.resize(4,0.0);
     outPos = T_root_to_link * pos_temp;
     outPos.resize(3);
@@ -1417,8 +1411,8 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
              printMessage(5,"Bottle %d contains %s \n", i,collPointBottle->toString().c_str());
              sp =  (SkinPart)(collPointBottle->get(0).asInt());
              //we take only those collision points that are relevant for the chain we are controlling
-             if( ((which_chain == "left") && ( (sp==SKIN_LEFT_HAND) || (sp==SKIN_LEFT_FOREARM) || (sp==SKIN_LEFT_UPPER_ARM) ) )
-              || ((which_chain == "right") && ( (sp==SKIN_RIGHT_HAND) || (sp==SKIN_RIGHT_FOREARM) || (sp==SKIN_RIGHT_UPPER_ARM) ) ) ){ 
+             if( ((which_chain == "left") && ( (sp==SKIN_LEFT_HAND) || (sp==SKIN_LEFT_FOREARM) || (sp==SKIN_LEFT_UPPER_ARM)) ) || (sp==SKIN_FRONT_TORSO)
+                 || ((which_chain == "right") && ( (sp==SKIN_RIGHT_HAND) || (sp==SKIN_RIGHT_FOREARM) || (sp==SKIN_RIGHT_UPPER_ARM) ) ) ){
                 collPoint.skin_part = sp;
                 collPoint.x(0) = collPointBottle->get(1).asDouble();
                 collPoint.x(1) = collPointBottle->get(2).asDouble();
@@ -1691,13 +1685,13 @@ void reactCtrlThread::createStaticBox(const Vector &pos)
     cmd.addString("world");
     cmd.addString("mk");
     cmd.addString("sbox");
-    cmd.addDouble(0.02); cmd.addDouble(0.02); cmd.addDouble(0.02); //fixed size
+    cmd.addDouble(0.01); cmd.addDouble(0.01); cmd.addDouble(0.01); //fixed size
     
     cmd.addDouble(pos(0));
     cmd.addDouble(pos(1));
     cmd.addDouble(pos(2));
-    // color 
-    cmd.addInt(0);cmd.addInt(0);cmd.addInt(1); //blue
+    // color
+    cmd.addInt(1);cmd.addInt(1);cmd.addInt(0); //blue
     cmd.addString("false"); //no collisions
     printMessage(5,"createBox(): sending %s \n",cmd.toString().c_str());
     portToSimWorld.write(cmd);
@@ -1718,8 +1712,8 @@ void reactCtrlThread::moveBox(int index, const Vector &pos)
 
 void reactCtrlThread::showCollisionPointsInSim()
 {
-    size_t nrCollisionPoints = collisionPoints.size();
-    Vector pos(3,0.0);  
+    size_t nrCollisionPoints = collisionPoints.size(); //+avhdl->selfColPoints.size();
+    Vector pos(3,0.0);
     if (nrCollisionPoints > collisionPointsVisualizedCount){
         for(int i=1; i<= (nrCollisionPoints - collisionPointsVisualizedCount);i++){
             pos = collisionPointsSimReservoirPos; 
@@ -1740,6 +1734,15 @@ void reactCtrlThread::showCollisionPointsInSim()
         j++;
         posRoot.zero(); posSim.zero();
     }
+
+
+//    for(const auto & collisionPoint : avhdl->selfColPoints) {
+//        convertPosFromLinkToRootFoR(collisionPoint.x,SKIN_FRONT_TORSO,posRoot);
+//        convertPosFromRootToSimFoR(posRoot,posSim);
+//        moveBox(j,posSim); //just move a box from the sim world
+//        j++;
+//        posRoot.zero(); posSim.zero();
+//    }
     
     //if there have been more boxes allocated, just move them to the reservoir in the world
     //(icubSim does not support deleting individual objects)

@@ -42,6 +42,19 @@ struct collisionPoint_t{
         yarp::sig::Vector x; //position (x,y,z) in the FoR of the respective skin part
         yarp::sig::Vector n; //direction of normal vector at that point - derived from taxel normals, pointing out of the skin
         double magnitude; // ~ activation level from probabilistic representation in pps - likelihood of collision
+
+    collisionPoint_t(): magnitude(1), skin_part(iCub::skinDynLib::SKIN_PART_UNKNOWN)
+    {
+        x.resize(3);
+        n.resize(3);
+    }
+
+    explicit collisionPoint_t(iCub::skinDynLib::SkinPart _skinPart, double mag=1): skin_part(_skinPart), magnitude(mag)
+    {
+        x.resize(3);
+        n.resize(3);
+    }
+
 };
 
 /****************************************************************/
@@ -50,7 +63,7 @@ class AvoidanceHandlerAbstract
 
 
 public:
-    AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_collisionPoints, unsigned int _verbosity=0);
+    AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_collisionPoints, bool _useSelfColPoints, unsigned int _verbosity=0);
     
     std::string getType() const;
 
@@ -63,16 +76,19 @@ public:
     virtual yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim);
     
     virtual ~AvoidanceHandlerAbstract();
-    
+
+    std::vector<collisionPoint_t> selfColPoints;
+
 protected:
     unsigned int verbosity;
     std::string type;
     iCub::iKin::iKinChain chain;
     const std::vector<collisionPoint_t> &collisionPoints;
     std::deque<iCub::iKin::iKinChain> ctrlPointChains;
+    std::vector<collisionPoint_t> totalColPoints;
     yarp::os::Property parameters;
     
-    bool computeFoR(const yarp::sig::Vector &pos, const yarp::sig::Vector &norm, yarp::sig::Matrix &FoR);
+    static bool computeFoR(const yarp::sig::Vector &pos, const yarp::sig::Vector &norm, yarp::sig::Matrix &FoR);
     
     /**
     * Prints a message according to the verbosity level:
@@ -90,7 +106,7 @@ class AvoidanceHandlerTactile : public virtual AvoidanceHandlerAbstract
 {
 
 public:
-    AvoidanceHandlerTactile(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_collisionPoints, unsigned int _verbosity=0);
+    AvoidanceHandlerTactile(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_collisionPoints, bool _useSelfColPoints, unsigned int _verbosity=0);
     void setParameters(const yarp::os::Property &params) override;
     yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim) override;
 
