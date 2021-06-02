@@ -119,11 +119,8 @@ class ControllerNLP : public Ipopt::TNLP
                   bool orientationControl_, bool additionalControlPoints_, double dT_, double restPosWeight=0.0);
     ~ControllerNLP() override;
     void set_xr(const Vector &_xr);
-    void set_v_limInDegPerSecond(const Matrix &_v_lim);
-    void set_v0InDegPerSecond(const Vector &_v0);
     void init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim);
-    Vector get_resultInDegPerSecond() const;
-    Property getParameters() const;
+    Vector get_resultInDegPerSecond() const { return CTRL_RAD2DEG*v; }
     bool get_nlp_info(Ipopt::Index &n, Ipopt::Index &m, Ipopt::Index &nnz_jac_g,
                       Ipopt::Index &nnz_h_lag, IndexStyleEnum &index_style) override;
     bool get_bounds_info(Ipopt::Index n, Ipopt::Number *x_l, Ipopt::Number *x_u,

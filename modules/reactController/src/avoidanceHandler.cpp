@@ -61,24 +61,6 @@ AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &
         }
     }
 }
-    
-/****************************************************************/
-string AvoidanceHandlerAbstract::getType() const
-{
-    return type;
-}
-
-/****************************************************************/
-Property AvoidanceHandlerAbstract::getParameters() const
-{
-    return parameters;
-}
-
-/****************************************************************/
-void AvoidanceHandlerAbstract::setParameters(const Property &params)
-{
-    parameters=params;
-}
 
 
 /****************************************************************/
@@ -88,18 +70,6 @@ deque<Vector> AvoidanceHandlerAbstract::getCtrlPointsPosition()
     for (auto & ctrlPointChain : ctrlPointChains)
         ctrlPoints.push_back(ctrlPointChain.EndEffPosition());
     return ctrlPoints;
-}
-
-/****************************************************************/
-Matrix AvoidanceHandlerAbstract::getVLIM(const Matrix &v_lim)
-{
-    return v_lim;
-}
-
-/****************************************************************/
-AvoidanceHandlerAbstract::~AvoidanceHandlerAbstract()
-{
-    ctrlPointChains.clear();
 }
 
 

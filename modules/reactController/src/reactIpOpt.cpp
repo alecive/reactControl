@@ -202,30 +202,16 @@
     }
 
     /****************************************************************/
-    void ControllerNLP::set_v_limInDegPerSecond(const Matrix &_v_lim)
-    {
-        yAssert((v_lim.rows() == _v_lim.rows()) &&
-                (v_lim.cols() == _v_lim.cols()))
-        for (int r=0; r < _v_lim.rows(); r++)
-            yAssert(_v_lim(r, 0) <= _v_lim(r, 1))
-
-        v_lim= CTRL_DEG2RAD * _v_lim;
-    }
-        
-    /****************************************************************/
-    void ControllerNLP::set_v0InDegPerSecond(const Vector &_v0)
-    {
-        yAssert(v0.length() == _v0.length())
-        v0= CTRL_DEG2RAD * _v0;
-    }
-
-    /****************************************************************/
     void ControllerNLP::init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim)
     {
-        set_xr(_xr);
-        set_v0InDegPerSecond(_v0);
-        set_v_limInDegPerSecond(_v_lim);
+        yAssert(v0.length() == _v0.length())
+        yAssert((v_lim.rows() == _v_lim.rows()) && (v_lim.cols() == _v_lim.cols()))
+        for (int r=0; r < _v_lim.rows(); r++)
+            yAssert(_v_lim(r, 0) <= _v_lim(r, 1));
 
+        v_lim= CTRL_DEG2RAD * _v_lim;
+        v0= CTRL_DEG2RAD * _v0;
+        set_xr(_xr);
         q0=chain.getAng();
         H0=chain.getH();
         R0=H0.submatrix(0,2,0,2);
@@ -306,19 +292,6 @@
         computeBounds();
     }
 
-    /****************************************************************/
-    Vector ControllerNLP::get_resultInDegPerSecond() const
-    {
-        return CTRL_RAD2DEG*v;
-    }
-
-    /****************************************************************/
-    Property ControllerNLP::getParameters() const
-    {
-        Property parameters;
-        parameters.put("dt",dt);
-        return parameters;
-    }
 
     /****************************************************************/
     bool ControllerNLP::get_nlp_info(Ipopt::Index &n, Ipopt::Index &m, Ipopt::Index &nnz_jac_g,

@@ -38,10 +38,10 @@
 
 
 struct collisionPoint_t{
-        iCub::skinDynLib::SkinPart skin_part;
-        yarp::sig::Vector x; //position (x,y,z) in the FoR of the respective skin part
-        yarp::sig::Vector n; //direction of normal vector at that point - derived from taxel normals, pointing out of the skin
-        double magnitude; // ~ activation level from probabilistic representation in pps - likelihood of collision
+    iCub::skinDynLib::SkinPart skin_part;
+    yarp::sig::Vector x; //position (x,y,z) in the FoR of the respective skin part
+    yarp::sig::Vector n; //direction of normal vector at that point - derived from taxel normals, pointing out of the skin
+    double magnitude; // ~ activation level from probabilistic representation in pps - likelihood of collision
 
     collisionPoint_t(): magnitude(1), skin_part(iCub::skinDynLib::SKIN_PART_UNKNOWN)
     {
@@ -65,19 +65,19 @@ class AvoidanceHandlerAbstract
 public:
     AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_collisionPoints, bool _useSelfColPoints, unsigned int _verbosity=0);
     
-    std::string getType() const;
+    std::string getType() const { return type; }
 
-    virtual yarp::os::Property getParameters() const;
+    virtual yarp::os::Property getParameters() const { return parameters; }
     
-    virtual void setParameters(const yarp::os::Property &parameters);
+    virtual void setParameters(const yarp::os::Property &params) { parameters = params; }
     
     std::deque<yarp::sig::Vector> getCtrlPointsPosition();
     
-    virtual yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim);
+    virtual yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim) { return v_lim; }
     
-    virtual ~AvoidanceHandlerAbstract();
+    virtual ~AvoidanceHandlerAbstract() { ctrlPointChains.clear(); }
 
-    std::vector<collisionPoint_t> selfColPoints;
+    const std::vector<collisionPoint_t>& getSelfColPoints() { return selfColPoints; }
 
 protected:
     unsigned int verbosity;
@@ -87,6 +87,7 @@ protected:
     std::deque<iCub::iKin::iKinChain> ctrlPointChains;
     std::vector<collisionPoint_t> totalColPoints;
     yarp::os::Property parameters;
+    std::vector<collisionPoint_t> selfColPoints;
     
     static bool computeFoR(const yarp::sig::Vector &pos, const yarp::sig::Vector &norm, yarp::sig::Matrix &FoR);
     
@@ -96,7 +97,7 @@ protected:
     * @param f is the text. Please use c standard (like printf)
     */
     int printMessage(unsigned int l, const char *f, ...) const;
-    
+
 };
 
 
@@ -113,7 +114,7 @@ public:
 protected:
     double avoidingSpeed;
 
-    
+
 };
 
 

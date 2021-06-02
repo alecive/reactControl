@@ -88,25 +88,31 @@ public:
     bool setNewCircularTarget(double _radius, double _frequency);
 
     //Will be reading reaching targets from a port
-    bool setStreamingTarget();
+    bool setStreamingTarget() {streamingTarget = true; return true; }
     
     // Sets the tolerance
-    bool setTol(double );
+    bool setTol(const double _tol) {
+        if (_tol < 0) return false;
+        tol = _tol; return true;
+    }
 
     // Gets the tolerance
-    double getTol() const;
+    double getTol() const { return tol; }
 
     // Sets the vMax
     bool setVMax(double );
 
     // Gets the vMax
-    double getVMax() const;
+    double getVMax() const { return vMax; }
 
     // Sets the trajectory speed
-    bool setTrajSpeed(double );
+    bool setTrajSpeed(const double _traj_speed) {
+       if (_traj_speed < 0) return false;
+       trajSpeed = _traj_speed; return true;
+    }
 
     // Sets the verbosity
-    bool setVerbosity(int );
+    bool setVerbosity(int _verbosity) { verbosity = (_verbosity>=0) ? _verbosity : 0; return true;}
 
     // gets the verbosity
     int getVerbosity() const { return verbosity; };
@@ -114,11 +120,7 @@ public:
     // gets the state of the controller
     int getState() const { return state; };
 
-    /**
-    * Stops the control of the robot
-    */
-    bool stopControl();
-
+    // Stops the control of the robot
     bool stopControlAndSwitchToPositionMode();
     
 protected:
@@ -332,7 +334,7 @@ protected:
                       const string &_p, const string &_s);
 
 
-    bool stopControlHelper();
+    bool stopControlHelper() { return ivelA->stop() && ivelT->stop(); }
 
     bool stopControlAndSwitchToPositionModeHelper();
 
@@ -343,12 +345,6 @@ protected:
     * @return new target position
     **/
     yarp::sig::Vector  getPosMovingTargetOnCircle();
-
-    /**
-    * Computes the spatial step that will be performed by the robot
-    **/
-    yarp::sig::Vector computeDeltaX();
-
 
     void convertPosFromRootToSimFoR(const yarp::sig::Vector &pos, yarp::sig::Vector &outPos);
     

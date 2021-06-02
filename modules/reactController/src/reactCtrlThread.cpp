@@ -118,9 +118,6 @@ bool reactCtrlThread::threadInit()
         vLimAdapted(r,1)=vMax;
     }
     if (useTorso){
-        // disable torso pitch
-        //vLimNominal(0,0)=vLimNominal(0,1)=0.0;
-        //vLimAdapted(0,0)=vLimAdapted(0,1)=0.0;
         // disable torso roll
         vLimNominal(1,0)=vLimNominal(1,1)=0.0;
         vLimAdapted(1,0)=vLimAdapted(1,1)=0.0;
@@ -159,11 +156,11 @@ bool reactCtrlThread::threadInit()
         return false;
     }
 
-    bool okA = true;
+    bool okA = false;
     
     if (ddA.isValid())
     {
-        okA = okA && ddA.view(iencsA);
+        okA = ddA.view(iencsA);
         okA = okA && ddA.view(ivelA);
         okA = okA && ddA.view(iposDirA);
         okA = okA && ddA.view(imodA);
@@ -192,11 +189,11 @@ bool reactCtrlThread::threadInit()
         return false;
     }
 
-    bool okT = true;
+    bool okT = false;
     
     if (ddT.isValid())
     {
-        okT = okT && ddT.view(iencsT);
+        okT = ddT.view(iencsT);
         okT = okT && ddT.view(ivelT);
         okT = okT && ddT.view(iposDirT);
         okT = okT && ddT.view(imodT);
@@ -569,7 +566,6 @@ void reactCtrlThread::run()
             }
             else if(referenceGen == "minJerk"){
                 minJerkTarget->computeNextValues(x_d);    
-                //refGenMinJerk->computeNextValues(x_t,x_d);
                 x_n = minJerkTarget->getPos();
             }
 
@@ -577,19 +573,16 @@ void reactCtrlThread::run()
             {
                 x_n = x_d;
             }
-//            yDebug("[reactCtrlThread] x_n: %s,  x_n_next: %s",x_n.toString(3,3).c_str(), x_n_next.toString(3,3).c_str());
- 
+
             if(visualizeParticleIniCubGui){
                 sendiCubGuiObject("particle");
             }
     
-            if (referenceGen != "none")
+            if (referenceGen != "none" && visualizeParticleInSim)
             {
-                if(visualizeParticleInSim){
-                    Vector x_n_sim(3,0.0);
-                    convertPosFromRootToSimFoR(x_n,x_n_sim);
-                    moveSphere(2,x_n_sim); //sphere created as second (particle) will keep the index 2
-                }
+                Vector x_n_sim(3,0.0);
+                convertPosFromRootToSimFoR(x_n,x_n_sim);
+                moveSphere(2,x_n_sim); //sphere created as second (particle) will keep the index 2
             }
 
             if(gazeControl)
@@ -599,7 +592,6 @@ void reactCtrlThread::run()
                 vLimAdapted=avhdl->getVLIM(CTRL_DEG2RAD * vLimNominal) * CTRL_RAD2DEG;
             }
 //            yDebug("vLimAdapted = %s",vLimAdapted.toString(3,3).c_str());
-            //printMessage(2,"[reactCtrlThread::run()]: Will call solveIK.\n");
             double t_3=yarp::os::Time::now();
             q_dot = solveIK(ipoptExitCode); //this is the key function call where the reaching opt problem is solved 
             timeToSolveProblem_s  = yarp::os::Time::now()-t_3;
@@ -610,45 +602,18 @@ void reactCtrlThread::run()
                 yWarning("[reactCtrlThread] Ipopt solve did not succeed!");
 
             if(controlMode == "positionDirect"){
-                //yInfo()<<"   t after opt, before control [s] = "<<yarp::os::Time::now() -t_0;
-                //yInfo()<<"   q_dot [deg/s] = ("<<q_dot.toString(3,3)<<")";
-                //yInfo()<<"   integrate joint pos with time step: "<<dT;
-                //yInfo("E.g., %f + %f*%f = %f",qIntegrated(0),q_dot(0),dT,qIntegrated(0)+q_dot(0)*dT);
-                //yInfo()<<"   qIntegrated before integration [deg] = ("<<qIntegrated.toString(3,3)<<")";
-                qIntegrated = I->integrate(q_dot);    
-                //yInfo()<<"   qIntegrated after integration [deg] = ("<<qIntegrated.toString(3,3)<<")";
-                //yInfo()<<"   joint positions real before control [deg] ("<<q.toString(3,3)<<")";
-                //yInfo()<<"   xee_pos_real before                    control [m] = "<<x_t.toString(3,3);         
+                qIntegrated = I->integrate(q_dot);
                 if (!controlArm(controlMode,qIntegrated)){
                     yError("I am not able to properly control the arm in positionDirect!");
                 }
-               //Vector xee_pos_virtual_before=virtualArmChain->EndEffPosition();
-               //yInfo()<<"   xee_pos_virtual before updating virtual chain [m] = "<<xee_pos_virtual_before.toString(3,3);         
-               //Vector qVirtualChainReturn = CTRL_RAD2DEG*
                virtualArmChain->setAng(qIntegrated*CTRL_DEG2RAD);
-               //yInfo()<<"   virtualChain setAng return [deg] = ("<<qVirtualChainReturn.toString(3,3)<<")";
-                
-               
-            }
-        
-            else if (controlMode == "velocity"){
+            } else if (controlMode == "velocity"){
                 if (!controlArm(controlMode,q_dot)){
                     yError("I am not able to properly control the arm in velocity!");
                 }
             }
             
             updateArmChain(); //N.B. This is the second call within run(); may give more precise data for the logging; may also cost time
-            //Vector xee_pos_virtual_after=virtualArmChain->EndEffPosition();
-            //yInfo()<<"   t after opt and control [s] = "<<yarp::os::Time::now() -t_0;
-            //yInfo()<<"   xee_pos_virtual after updating virtual chain [m] = "<<xee_pos_virtual_after.toString(3,3);         
-            //yInfo()<<"   xee_pos_real after                    control [m] = "<<x_t.toString(3,3);         
-            //yInfo("  virtualChain.getAng() [deg] (%s)",(virtualArmChain->getAng()*CTRL_RAD2DEG).toString().c_str());
-            //yInfo("  arm->getAng()         [deg] (%s)",(arm->getAng()*CTRL_RAD2DEG).toString().c_str());
-            //yInfo()<<"   joint positions real after control [deg] ("<<q.toString(3,3)<<")";
-            //yInfo()<<"   e_pos_real after opt step and control [m] = "<<norm(x_n-x_t);
-            //yInfo()<<"   e_pos_virtual after opt step and control [m] = "<<norm(x_n-xee_pos_virtual_after);
-            //yInfo()<<"";
-          
             break;
         }
         case STATE_IDLE:
@@ -811,21 +776,6 @@ bool reactCtrlThread::disableTorso()
     return true;
 }
 
-bool reactCtrlThread::setTol(const double _tol)
-{
-    if (_tol>=0.0)
-    {
-        tol=_tol;
-        return true;
-    }
-    return false;
-}
-
-double reactCtrlThread::getTol() const
-{
-    return tol;
-}
-
 bool reactCtrlThread::setVMax(const double _vMax)
 {
     if (_vMax>=0.0)
@@ -857,31 +807,6 @@ bool reactCtrlThread::setVMax(const double _vMax)
         return true;
     }
     return false;
-}
-
-double reactCtrlThread::getVMax() const
-{
-    return vMax;
-}
-
-
-bool reactCtrlThread::setTrajSpeed(const double _traj_speed)
-{
-    if (_traj_speed>=0.0)
-    {
-        trajSpeed=_traj_speed;
-        return true;
-    }
-    return false;
-}
-
-bool reactCtrlThread::setVerbosity(const int _verbosity)
-{
-    if (_verbosity>=0)
-        verbosity=_verbosity;
-    else
-        verbosity=0;
-    return true;
 }
 
 bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
@@ -982,26 +907,8 @@ bool reactCtrlThread::setNewCircularTarget(const double _radius,const double _fr
     return true;
 }
 
-bool reactCtrlThread::setStreamingTarget()
-{
-    streamingTarget = true;
-    return true;
-}
-
-bool reactCtrlThread::stopControl()
-{
-    //std::lock_guard<std::mutex> lg(mut);
-    bool stoppedOk = stopControlHelper();
-    if (stoppedOk)
-        yInfo("reactCtrlThread::stopControl(): Sucessfully stopped controllers");
-    else
-        yWarning("reactCtrlThread::stopControl(): Controllers not stopped sucessfully"); 
-    return stoppedOk;
-}
-
 bool reactCtrlThread::stopControlAndSwitchToPositionMode()
 {
-    //std::lock_guard<std::mutex> lg(mut);
     bool stoppedOk = stopControlAndSwitchToPositionModeHelper();
     if (stoppedOk)
         yInfo("reactCtrlThread::stopControlAndSwitchToPositionMode(): Sucessfully stopped controllers");
@@ -1088,8 +995,6 @@ void reactCtrlThread::updateArmChain()
     q.setSubvector(NR_TORSO_JOINTS,qA);
 
     arm->setAng(q*CTRL_DEG2RAD);
-    //H=arm->getH();
-    //x_t=H.subcol(0,3,3);
     x_t = arm->EndEffPosition();
     o_t = arm->EndEffPose().subVector(3,5)*arm->EndEffPose()[6];
 }
@@ -1104,11 +1009,6 @@ bool reactCtrlThread::alignJointsBounds()
     limits.push_back(ilimA);
 
     if (!arm->alignJointsBounds(limits)) return false;
-
-    // iCub::iKin::iKinChain &chain=*arm->asChain();
-    // chain(0).setMin(-22.0*CTRL_DEG2RAD);    chain(0).setMin(-84.0*CTRL_DEG2RAD);
-    // chain(1).setMin(-39.0*CTRL_DEG2RAD);    chain(0).setMin(-39.0*CTRL_DEG2RAD);
-    // chain(2).setMin(-59.0*CTRL_DEG2RAD);    chain(0).setMin(-59.0*CTRL_DEG2RAD);
 
     yDebug("[reactCtrlThread][alignJointsBounds] post alignment:");
     printJointsBounds();
@@ -1305,13 +1205,6 @@ bool reactCtrlThread::controlArm(const string& _controlMode, const yarp::sig::Ve
     return true;
 }
 
-
-bool reactCtrlThread::stopControlHelper()
-{
-    return ivelA->stop() && ivelT->stop();
-}
-
-
 bool reactCtrlThread::stopControlAndSwitchToPositionModeHelper()
 {
     state=STATE_IDLE;
@@ -1340,20 +1233,6 @@ Vector reactCtrlThread::getPosMovingTargetOnCircle()
 
       return _x_d;
 }
-
-
-Vector reactCtrlThread::computeDeltaX()
-{
-    iCub::iKin::iKinChain &chain=*arm->asChain();
-    yarp::sig::Matrix J1=chain.GeoJacobian();
-    yarp::sig::Matrix J_cst;
-    J_cst.resize(3,chainActiveDOF);
-    J_cst.zero();
-    submatrix(J1,J_cst,0,2,0,chainActiveDOF-1);
-    return getPeriod()*J_cst*q_dot;
-}
-
-
 
 void reactCtrlThread::convertPosFromRootToSimFoR(const Vector &pos, Vector &outPos)
 {
@@ -1410,7 +1289,7 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
              Bottle* collPointBottle = collPointsMultiBottle->get(i).asList();
              printMessage(5,"Bottle %d contains %s \n", i,collPointBottle->toString().c_str());
              sp =  (SkinPart)(collPointBottle->get(0).asInt());
-             //we take only those collision points that are relevant for the chain we are controlling
+             //we take only those collision points that are relevant for the chain we are controlling + torso
              if( ((which_chain == "left") && ( (sp==SKIN_LEFT_HAND) || (sp==SKIN_LEFT_FOREARM) || (sp==SKIN_LEFT_UPPER_ARM)) ) || (sp==SKIN_FRONT_TORSO)
                  || ((which_chain == "right") && ( (sp==SKIN_RIGHT_HAND) || (sp==SKIN_RIGHT_FOREARM) || (sp==SKIN_RIGHT_UPPER_ARM) ) ) ){
                 collPoint.skin_part = sp;
@@ -1712,7 +1591,7 @@ void reactCtrlThread::moveBox(int index, const Vector &pos)
 
 void reactCtrlThread::showCollisionPointsInSim()
 {
-    size_t nrCollisionPoints = collisionPoints.size(); //+avhdl->selfColPoints.size();
+    size_t nrCollisionPoints = collisionPoints.size()+avhdl->getSelfColPoints().size();
     Vector pos(3,0.0);
     if (nrCollisionPoints > collisionPointsVisualizedCount){
         for(int i=1; i<= (nrCollisionPoints - collisionPointsVisualizedCount);i++){
@@ -1736,13 +1615,13 @@ void reactCtrlThread::showCollisionPointsInSim()
     }
 
 
-//    for(const auto & collisionPoint : avhdl->selfColPoints) {
-//        convertPosFromLinkToRootFoR(collisionPoint.x,SKIN_FRONT_TORSO,posRoot);
-//        convertPosFromRootToSimFoR(posRoot,posSim);
-//        moveBox(j,posSim); //just move a box from the sim world
-//        j++;
-//        posRoot.zero(); posSim.zero();
-//    }
+    for(const auto & collisionPoint : avhdl->getSelfColPoints()) {
+        convertPosFromLinkToRootFoR(collisionPoint.x,SKIN_FRONT_TORSO,posRoot);
+        convertPosFromRootToSimFoR(posRoot,posSim);
+        moveBox(j,posSim); //just move a box from the sim world
+        j++;
+        posRoot.zero(); posSim.zero();
+    }
     
     //if there have been more boxes allocated, just move them to the reservoir in the world
     //(icubSim does not support deleting individual objects)
