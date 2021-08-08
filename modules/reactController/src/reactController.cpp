@@ -91,9 +91,7 @@ private:
 
     bool gazeControl; //will follow target with gaze
     bool stiffInteraction; //stiff vs. compliant interaction mode
-    
-    string controlMode; //either "velocity" (original) or "positionDirect" (new option after problems with oscillations)
-    
+
     double  trajSpeed;  // trajectory speed
     double        tol;  // Tolerance of the ipopt task. The solver exits if norm2(x_d-x)<tol.
     double  globalTol;  // global tolerance of the task. The controller exits if norm(x_d-x)<globalTol
@@ -133,7 +131,6 @@ public:
         disableTorso = false;
         gazeControl = false;
         stiffInteraction = true;
-        controlMode = "positionDirect";        
         trajSpeed    =   0.1;
         tol          =  1e-5;
         globalTol    =  1e-2;
@@ -506,20 +503,6 @@ public:
             }
             else yInfo("[reactController] Could not find vMax (max joint vel) in the config file; using %g [deg/s] as default",vMax);
 
-     
-          //*** we will command the robot in velocity or in positionDirect
-            if (rf.check("controlMode"))
-            {
-                controlMode = rf.find("controlMode").asString();
-                if(controlMode!="positionDirect")
-                {
-                    controlMode="positionDirect";
-                    yWarning("[reactController] The only admissible value for controlMode is positionDirect; using positionDirect as default.");
-                }
-                else 
-                    yInfo("[reactController] controlMode to use is: %s", controlMode.c_str());
-            }
-            else yInfo("[reactController] Could not find controlMode option in the config file; using %s as default",controlMode.c_str());
             
             //****************** tol ******************
             if (rf.check("tol"))
@@ -682,7 +665,7 @@ public:
             prtclThrd = nullptr;
             
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
-                                          disableTorso, controlMode, trajSpeed, 
+                                          disableTorso, trajSpeed,
                                           globalTol, vMax, tol, referenceGen, 
                                           tactileCollisionPointsOn,visualCollisionPointsOn,
                                           gazeControl,stiffInteraction,

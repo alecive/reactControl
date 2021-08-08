@@ -49,7 +49,7 @@ class reactCtrlThread: public yarp::os::PeriodicThread
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , string  , string  , string _ ,
-                    int , bool , string , double , double , double , double , string , 
+                    int , bool , double , double , double , double , string ,
                     bool , bool , bool , bool , bool, bool , bool , bool , bool , bool ,
                     particleThread *, double, bool);
     // INIT
@@ -125,8 +125,6 @@ protected:
     string part_short;
     // Flag to know if the torso shall be used or not
     bool useTorso;
-    // robot will be commanded in velocity or in positionDirect
-    string controlMode;
     // Trajectory speed (default 0.1 m/s)
     double trajSpeed;
     // Tolerance of the ipopt task. The solver exits if norm2(x_d-x)<tol.
@@ -198,7 +196,6 @@ protected:
     size_t chainActiveDOF;
     //parallel virtual arm and chain on which ipopt will be working in the positionDirect mode case
     iCub::iKin::iCubArm    *virtualArm;
-//    iCub::iKin::iKinChain *virtualArmChain;
     
     yarp::sig::Vector x_0;  // Initial end-effector position
     yarp::sig::Vector x_t;  // Current end-effector position

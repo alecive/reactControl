@@ -34,7 +34,7 @@
 /*********** public methods ****************************************************************************/ 
 
 reactCtrlThread::reactCtrlThread(int _rate, string _name, string _robot,  string _part,
-                                 int _verbosity, bool _disableTorso,  string _controlMode, 
+                                 int _verbosity, bool _disableTorso,
                                  double _trajSpeed, double _globalTol, double _vMax, double _tol,
                                  string _referenceGen, bool _tactileCPOn, bool _visualCPOn,
                                  bool _gazeControl, bool _stiffInteraction,
@@ -43,9 +43,8 @@ reactCtrlThread::reactCtrlThread(int _rate, string _name, string _robot,  string
                                  bool _visTargetInSim, bool _visParticleInSim, bool _visCollisionPointsInSim,
                                  particleThread *_pT, double _restPosWeight, bool _selfColPoints) :
                                  PeriodicThread((double)_rate/1000.0), name(std::move(_name)), robot(std::move(_robot)),
-                                 part(std::move(_part)), verbosity(_verbosity), useTorso(!_disableTorso),
-                                 controlMode(std::move(_controlMode)), trajSpeed(_trajSpeed), globalTol(_globalTol),
-                                 vMax(_vMax), tol(_tol), referenceGen(std::move(_referenceGen)),
+                                 part(std::move(_part)), verbosity(_verbosity), useTorso(!_disableTorso), trajSpeed(_trajSpeed),
+                                 globalTol(_globalTol), vMax(_vMax), tol(_tol), referenceGen(std::move(_referenceGen)),
                                  tactileCollisionPointsOn(_tactileCPOn), visualCollisionPointsOn(_visualCPOn),
                                  gazeControl(_gazeControl), stiffInteraction(_stiffInteraction),
                                  hittingConstraints(_hittingConstraints),orientationControl(_orientationControl),
@@ -263,10 +262,8 @@ bool reactCtrlThread::threadInit()
     o_n.resize(3,0.0);  o_n(1)=-0.707*M_PI;     o_n(2)=+0.707*M_PI;
     o_d.resize(3,0.0);  o_d(1)=-0.707*M_PI;     o_d(2)=+0.707*M_PI;
 
-    if(controlMode == "positionDirect"){
-        virtualArm = new iCubArm(*arm);  //Creates a new Limb from an already existing Limb object - but they will be too independent limbs from now on
-        I = new Integrator(dT,q,lim);
-    }
+    virtualArm = new iCubArm(*arm);  //Creates a new Limb from an already existing Limb object - but they will be too independent limbs from now on
+    I = new Integrator(dT,q,lim);
 
 
     /***************** ports and files*************************************************************************************/
@@ -289,8 +286,7 @@ bool reactCtrlThread::threadInit()
     fout_param<<-1<<" "<<trajSpeed<<" "<<tol<<" "<<globalTol<<" "<<dT<<" "<<0<<" "<<0<<" ";
     // the -1 used to be trajTime, keep it for compatibility with matlab scripts
     //the 0s used to be boundSmoothnessFlag and boundSmoothnessValue
-    if(controlMode == "velocity") fout_param<<"1 ";
-    else if(controlMode == "positionDirect") fout_param<<"2 ";
+    fout_param<<"2 "; // positionDirect
     fout_param<<"0 0 0 "; //used to be ipOptMemoryOn, ipOptFilterOn, filterTc
     if(stiffInteraction) fout_param<<"1 "; else fout_param<<"0 ";
     if(additionalControlPoints) fout_param<<"1 "; else fout_param<<"0 ";
@@ -319,7 +315,7 @@ bool reactCtrlThread::threadInit()
     app->Initialize();
 
     //in positionDirect mode, ipopt will use the qIntegrated values to update its copy of chain
-    nlp=new ControllerNLP((controlMode == "positionDirect")? *virtualArm:*(arm->asChain()),
+    nlp=new ControllerNLP(*virtualArm,
                           additionalControlPointsVector, hittingConstraints, orientationControl,
                           additionalControlPoints, dT, restPosWeight);
     //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
@@ -496,17 +492,11 @@ void reactCtrlThread::run()
             else if (ipoptExitCode!=Ipopt::Solve_Succeeded)
                 yWarning("[reactCtrlThread] Ipopt solve did not succeed!");
 
-            if(controlMode == "positionDirect"){
-                qIntegrated = I->integrate(q_dot);
-                if (!controlArm(controlMode,qIntegrated)){
-                    yError("I am not able to properly control the arm in positionDirect!");
-                }
-                virtualArm->setAng(qIntegrated*CTRL_DEG2RAD);
-            } else if (controlMode == "velocity"){
-                if (!controlArm(controlMode,q_dot)){
-                    yError("I am not able to properly control the arm in velocity!");
-                }
+            qIntegrated = I->integrate(q_dot);
+            if (!controlArm("positionDirect",qIntegrated)){
+                yError("I am not able to properly control the arm in positionDirect!");
             }
+            virtualArm->setAng(qIntegrated*CTRL_DEG2RAD);
 
             updateArmChain(); //N.B. This is the second call within run(); may give more precise data for the logging; may also cost time
             break;
@@ -690,8 +680,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
         q_dot.zero();
         updateArmChain(); //updates chain, q and x_t
         virtualArm->setAng(q*CTRL_DEG2RAD); //with new target, we make the two chains identical at the start
-        if(controlMode == "positionDirect")
-           I->reset(q);
+        I->reset(q);
                 
         x_0=x_t;
         x_n=x_0;
@@ -1150,9 +1139,8 @@ void reactCtrlThread::sendData()
             matrixIntoBottle(vLimAdapted,b); // assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
             b.addInt(ipoptExitCode);
             b.addDouble(timeToSolveProblem_s);
-            if (controlMode == "positionDirect")
-                //joint pos from virtual chain IPopt is operating onl variable - if torso on: 60:69
-                vectorIntoBottle(qIntegrated,b);
+            //joint pos from virtual chain IPopt is operating onl variable - if torso on: 60:69
+            vectorIntoBottle(qIntegrated,b);
             if(additionalControlPoints && (!additionalControlPointsVector.empty()))
             {
                //we assume there will be only one - elbow - now
