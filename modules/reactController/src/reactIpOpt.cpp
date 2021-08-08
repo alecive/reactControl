@@ -100,10 +100,10 @@
     void ControllerNLP::computeDimensions()
     {
         // reaching in position
-        constr_num=1; nnz_jacobian=chain_dof;
+        constr_num=3; nnz_jacobian=chain_dof*3;
 
         // reaching in orientation
-        constr_num += 1; nnz_jacobian += chain_dof;
+        constr_num += 3; nnz_jacobian += chain_dof*3;
 
         if (hitting_constraints)
         {
@@ -154,20 +154,17 @@
     ControllerNLP::ControllerNLP(iKinChain &chain_, std::vector<ControlPoint> &additional_control_points_,
                                  bool hittingConstraints_, bool orientationControl_, bool additionalControlPoints_,
                                  double dT_, double restPosWeight_) :
-        chain(chain_), additional_control_points(additional_control_points_), hitting_constraints(hittingConstraints_),
-        orientation_control(orientationControl_), additional_control_points_flag(additionalControlPoints_),
-        dt(dT_), nnz_jacobian(0), constr_num(0), extra_ctrl_points_nr(0), additional_control_points_tol(0.0001),
-        shou_m(0), shou_n(0), elb_m(0), elb_n(0), ang_mag(0), weight(1), weight2(restPosWeight_)
+            chain(chain_), additional_control_points(additional_control_points_), hitting_constraints(hittingConstraints_),
+            ori_control(orientationControl_), additional_control_points_flag(additionalControlPoints_),
+            dt(dT_), nnz_jacobian(0), constr_num(0), extra_ctrl_points_nr(0), additional_control_points_tol(0.0001),
+            shou_m(0), shou_n(0), elb_m(0), elb_n(0), w1(1), w2(restPosWeight_), w3(1), w4(0)
     {
         chain_dof = static_cast<int>(chain.getDOF());
         xr.resize(6,0.0);
-        set_xr(xr);
+        pr.resize(3,0.0);
         v0.resize(chain_dof, 0.0); v=v0;
-        He=zeros(4,4); He(3,3)=1.0;
         q_lim.resize(chain_dof, 2);
         v_lim.resize(chain_dof, 2);
-        ori_grad.resize(chain_dof, 0.0);
-        pos_grad.resize(chain_dof, 0.0);
         for (size_t r=0; r < chain_dof; r++)
         {
             q_lim(r,0)=chain(r).getMin();
@@ -186,24 +183,11 @@
     }
 
     ControllerNLP::~ControllerNLP() = default;
-    
-    /****************************************************************/
-    void ControllerNLP::set_xr(const Vector &_xr)
-    {
-        yAssert(xr.length() == _xr.length())
-        xr=_xr;
-
-        Hr=v2m(_xr);
-        pr=_xr.subVector(0, 2);
-
-        skew_nr=skew(Hr.getCol(0));
-        skew_sr=skew(Hr.getCol(1));
-        skew_ar=skew(Hr.getCol(2));
-    }
 
     /****************************************************************/
     void ControllerNLP::init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim)
     {
+        yAssert(xr.length() == _xr.length())
         yAssert(v0.length() == _v0.length())
         yAssert((v_lim.rows() == _v_lim.rows()) && (v_lim.cols() == _v_lim.cols()))
         for (int r=0; r < _v_lim.rows(); r++)
@@ -211,18 +195,21 @@
 
         v_lim= CTRL_DEG2RAD * _v_lim;
         v0= CTRL_DEG2RAD * _v0;
-        set_xr(_xr);
         q0=chain.getAng();
         H0=chain.getH();
-        R0=H0.submatrix(0,2,0,2);
         p0=H0.getCol(3).subVector(0,2);
+        xr=_xr;
+        pr=_xr.subVector(0, 2);
+
+        Matrix R = v2m(_xr).submatrix(0,2,0,2)*H0.submatrix(0,2,0,2).transposed();
+        v_des.resize(6,0);
+        v_des.setSubvector(0, (pr-p0) / dt);
+        v_des.setSubvector(3, dcm2rpy(R) / dt);
 
         //printf("[ControllerNLP::init()]: getH() - end-effector: \n %s\n",H0.toString(3,3).c_str());
         //printf("[ControllerNLP::init()]: p0 - end-effector: (%s)\n",p0.toString(3,3).c_str());
           
-        Matrix J0=chain.GeoJacobian();
-        J0_xyz=J0.submatrix(0, 2, 0, chain_dof - 1);
-        J0_ang=J0.submatrix(3, 5, 0, chain_dof - 1);
+        J0=chain.GeoJacobian();
         if (additional_control_points_flag)
         {
 //            additional_control_points_tol = 0.0001; //norm2 is used in the g function, so this is the Eucl. distance error squared - actual distance is sqrt(additional_control_points_tol);
@@ -297,9 +284,9 @@
     bool ControllerNLP::get_nlp_info(Ipopt::Index &n, Ipopt::Index &m, Ipopt::Index &nnz_jac_g,
                       Ipopt::Index &nnz_h_lag, IndexStyleEnum &index_style)
     {
-        n = chain_dof;
+        n = chain_dof + 6;
         m = constr_num;
-        nnz_jac_g = nnz_jacobian;
+        nnz_jac_g = nnz_jacobian+6;
 
         if(additional_control_points_flag)
         {
@@ -315,54 +302,79 @@
             }
         }
 
-        nnz_h_lag=0;
+        nnz_h_lag= chain_dof;
         index_style=TNLP::C_STYLE;
         return true;
     }
 
     /****************************************************************/
     bool ControllerNLP::get_bounds_info(Ipopt::Index n, Ipopt::Number *x_l, Ipopt::Number *x_u,
-                         Ipopt::Index m, Ipopt::Number *g_l, Ipopt::Number *g_u)
-    {
+                         Ipopt::Index m, Ipopt::Number *g_l, Ipopt::Number *g_u) {
         for (Ipopt::Index i = 0; i < chain_dof; i++) {
-            x_l[i] = bounds(i, 0);
-            x_u[i] = bounds(i, 1);
+            if (bounds(i,0) < bounds(i,1)) {
+                x_l[i] = bounds(i, 0);
+                x_u[i] = bounds(i, 1);
+            } else {
+                if (bounds(i,1) < 0 && bounds(i,0) > 0)
+                    x_l[i] = x_u[i] = 0;
+                else if (abs(bounds(i,0)) < abs(bounds(i,1)) )
+                    x_l[i] = x_u[i] = bounds(i,0);
+                else
+                    x_l[i] = x_u[i] = bounds(i,1);
+            }
         }
+        for (int i = 0; i < 3; ++i) {
+            x_l[chain_dof+i] = 0.0;
+            x_u[chain_dof+i] = 0.0; // 1.5
+        }
+
+        for (int i = 3; i < 6; ++i) {
+            x_l[chain_dof+i] = 0.0; // -std::numeric_limits<double>::max();
+            x_u[chain_dof+i] = 0.0; // std::numeric_limits<double>::max(); // 10; // 0.04;
+        }
+
         // reaching in position - upper and lower bounds on the error (Euclidean square norm)
-        g_l[0]=-1e-8;
-        g_u[0]= 1e-8;
+//        g_l[0]= -std::numeric_limits<double>::max();
+//        g_u[0]= 1e-6;
+        for (int i = 0; i < 3; ++i) {
+            g_l[i] = -1e-4;
+            g_u[i] = 1e-4;
+        }
 
         // reaching orientation
-        g_l[1] = 0.0;
-        g_u[1] = 0.01;
+        for (int i = 3; i < 6; ++i) {
+            g_l[i] = -0.4; //-1e-2
+            g_u[i] = 0.4; //-1e-2 // 10; // 0.04;
+        }
+
 
         if(additional_control_points_flag)
         {
-            for(Ipopt::Index j=2; j<=extra_ctrl_points_nr+1; j++){
-                g_l[j]=0.0;
-                g_u[j]= additional_control_points_tol;
+            for(Ipopt::Index j=0; j<extra_ctrl_points_nr; j++){
+                g_l[6+j]=0.0;
+                g_u[6+j]= additional_control_points_tol;
             }
         }
 
         if (hitting_constraints)
         {
             // shoulder's cables length
-            g_l[2+extra_ctrl_points_nr]=-347.00*CTRL_DEG2RAD;
-            g_u[2+extra_ctrl_points_nr]=std::numeric_limits<double>::max();
-            g_l[3+extra_ctrl_points_nr]=-366.57*CTRL_DEG2RAD;
-            g_u[3+extra_ctrl_points_nr]=112.42*CTRL_DEG2RAD;
-            g_l[4+extra_ctrl_points_nr]=-66.60*CTRL_DEG2RAD;
-            g_u[4+extra_ctrl_points_nr]=213.30*CTRL_DEG2RAD;
+            g_l[6+extra_ctrl_points_nr]=-347.00*CTRL_DEG2RAD;
+            g_u[6+extra_ctrl_points_nr]=std::numeric_limits<double>::max();
+            g_l[7+extra_ctrl_points_nr]=-366.57*CTRL_DEG2RAD;
+            g_u[7+extra_ctrl_points_nr]=112.42*CTRL_DEG2RAD;
+            g_l[8+extra_ctrl_points_nr]=-66.60*CTRL_DEG2RAD;
+            g_u[8+extra_ctrl_points_nr]=213.30*CTRL_DEG2RAD;
 
             // avoid hitting torso
-            g_l[5+extra_ctrl_points_nr]=shou_n;
-            g_u[5+extra_ctrl_points_nr]=std::numeric_limits<double>::max();
+            g_l[9+extra_ctrl_points_nr]=shou_n;
+            g_u[9+extra_ctrl_points_nr]=std::numeric_limits<double>::max();
 
             // avoid hitting forearm
-            g_l[6+extra_ctrl_points_nr]=-std::numeric_limits<double>::max();
-            g_u[6+extra_ctrl_points_nr]=elb_n;
-            g_l[7+extra_ctrl_points_nr]=-elb_n;
-            g_u[7+extra_ctrl_points_nr]=std::numeric_limits<double>::max();
+            g_l[10+extra_ctrl_points_nr]=-std::numeric_limits<double>::max();
+            g_u[10+extra_ctrl_points_nr]=elb_n;
+            g_l[11+extra_ctrl_points_nr]=-elb_n;
+            g_u[11+extra_ctrl_points_nr]=std::numeric_limits<double>::max();
         }
 
         return true;
@@ -375,6 +387,9 @@
     {
         for (Ipopt::Index i = 0; i < chain_dof; i++)
             x[i] = std::min(std::max(bounds(i, 0), v0[i]), bounds(i, 1));
+        for (Ipopt::Index i = 0; i < 6; i++) {
+            x[chain_dof+i] = 0.0;
+        }
         return true;
     }
 
@@ -390,30 +405,7 @@
             }
             rest_err = rest_weights * (rest_jnt_pos-q1);
 
-            Vector pe=p0+dt*(J0_xyz*v);
-            err_xyz=pr-pe;
-            pos_grad = -2.0 * dt * (J0_xyz.transposed() * err_xyz);
-
-            Vector w=J0_ang*v;
-            double theta=norm(w);
-            if (theta>0.0)
-                w/=theta;
-            w.push_back(theta*dt);
-
-            He.setSubmatrix(axis2dcm(w).submatrix(0,2,0,2)*R0,0,0);
-            He(0,3)=pe[0];
-            He(1,3)=pe[1];
-            He(2,3)=pe[2];
-
-            err_ang=dcm2axis(Hr*He.transposed());
-            ang_mag = err_ang[3];
-            err_ang*=err_ang[3];
-            err_ang.pop_back();
-            Matrix L = -0.5 * (skew_nr * skew(He.getCol(0)) +
-                               skew_sr * skew(He.getCol(1)) +
-                               skew_ar * skew(He.getCol(2)));
-            Matrix Derr_ang = -dt * (L * J0_ang);
-            ori_grad = 2.0 * (Derr_ang.transposed() * err_ang);
+            v_x = J0 *v;
 
             if (additional_control_points_flag)
             {
@@ -430,7 +422,6 @@
                         yWarning("[ControllerNLP::computeQuantities]: other control points type than Elbow are not supported (this was %s).",additional_control_point.type.c_str());
                 }
             }
-        
         }
     }
 
@@ -439,7 +430,12 @@
                 Ipopt::Number &obj_value)
     {
         computeQuantities(x,new_x);
-        obj_value = (orientation_control ? weight * ang_mag * ang_mag : 0.0) + norm2(v - v0) + weight2 * norm2(rest_err);
+        obj_value = w1 * (dot(v,v)-2*dot(v,v0)) +  // changed norm(v1-v0)^2 to dot(v1,v1) - 2dot(v1,v0)
+                w3 * (abs(x[chain_dof]) + abs(x[chain_dof + 1]) + abs(x[chain_dof + 2])) +
+                (ori_control ? w4 * (abs(x[chain_dof + 3]) + abs(x[chain_dof + 4]) + abs(x[chain_dof + 5])) : 0.0);
+        for (Ipopt::Index i=0; i < chain_dof; i++) {
+            obj_value+= w2 * rest_weights[i]* rest_weights[i]* dt*v[i] * (2*(q0[i] - rest_jnt_pos[i]) + dt * v[i]);
+        }
         return true;
     }
 
@@ -449,8 +445,30 @@
     {
         computeQuantities(x,new_x);
         for (Ipopt::Index i=0; i < chain_dof; i++) {
-            grad_f[i] = (orientation_control ? weight * ori_grad[i] : 0.0) + (v[i] - v0[i]) * 2.0 - 2.0 * dt * weight2 * rest_weights[i] * rest_err[i];
+            grad_f[i] =  2.0 * w1 * (v[i] - v0[i]) - 2.0 * dt * w2 * rest_weights[i] * rest_err[i];
         }
+        grad_f[chain_dof] = w3; grad_f[chain_dof+1] = w3; grad_f[chain_dof+2] = w3;
+        grad_f[chain_dof+3] = (ori_control ? w4 : 0.0); grad_f[chain_dof+4] = (ori_control ? w4 : 0.0);
+        grad_f[chain_dof+5] = (ori_control ? w4 : 0.0);
+        return true;
+    }
+
+    bool ControllerNLP::eval_h(Ipopt::Index n, const Ipopt::Number *x, bool new_x, Ipopt::Number obj_factor, Ipopt::Index m, const Ipopt::Number *lambda,
+                               bool new_lambda, Ipopt::Index nele_hess, Ipopt::Index *iRow, Ipopt::Index *jCol, Ipopt::Number *values)
+    {
+        if (values==nullptr)
+        {
+            for (Ipopt::Index row=0; row<chain_dof; row++)
+            {
+                iRow[row]=row; jCol[row]=row;
+            }
+        }
+        else
+        {
+            for (int i = 0; i < chain_dof; ++i)
+                values[i] = obj_factor*(2.0 * w1 + 2.0 * dt * dt * w2 * rest_weights[i] * rest_weights[i]);
+        }
+
         return true;
     }
 
@@ -460,30 +478,30 @@
     {
         computeQuantities(x,new_x);
 
-        // reaching in position - end-effector
-        g[0]=norm2(err_xyz);
-        // reaching in orientation - end-effector
-        g[1] = ang_mag * ang_mag;
+        // reaching - end-effector
+        for (int i = 0; i < 6; ++i) {
+            g[i] = v_des(i) - v_x(i) + x[chain_dof+i]; // norm2(err_xyz)-x[chain_dof]; // ang_mag*ang_mag-x[chain_dof+1];
+        }
 
         if (additional_control_points_flag)
         {
             //yInfo("ControllerNLP::eval_g(): additional_control_points_flag on, extra_ctrl_points_nr: %d",extra_ctrl_points_nr);
-            g[2] = norm2(err_xyz_elbow); //this is hard-coded for the elbow as the only extra control point
+            g[6] = norm2(err_xyz_elbow); //this is hard-coded for the elbow as the only extra control point
             //yInfo("\t g[0]: %.5f, g[1]: %.5f",g[0],g[1]);
         }
         if (hitting_constraints)
         {
             // shoulder's cables length
-            g[2 + extra_ctrl_points_nr] = 1.71 * (q1[3 + 0] - q1[3 + 1]);
-            g[3 + extra_ctrl_points_nr] = 1.71 * (q1[3 + 0] - q1[3 + 1] - q1[3 + 2]);
-            g[4 + extra_ctrl_points_nr] = q1[3 + 1] + q1[3 + 2];
+            g[6 + extra_ctrl_points_nr] = 1.71 * (q1[3 + 0] - q1[3 + 1]);
+            g[7 + extra_ctrl_points_nr] = 1.71 * (q1[3 + 0] - q1[3 + 1] - q1[3 + 2]);
+            g[8 + extra_ctrl_points_nr] = q1[3 + 1] + q1[3 + 2];
 
             // avoid hitting torso
-            g[5 + extra_ctrl_points_nr] = q1[3 + 1] - shou_m * q1[3 + 2];
+            g[9 + extra_ctrl_points_nr] = q1[3 + 1] - shou_m * q1[3 + 2];
 
             // avoid hitting forearm
-            g[6 + extra_ctrl_points_nr] = -elb_m * q1[3 + 3 + 0] + q1[3 + 3 + 1];
-            g[7 + extra_ctrl_points_nr] = elb_m * q1[3 + 3 + 0] + q1[3 + 3 + 1];
+            g[10 + extra_ctrl_points_nr] = -elb_m * q1[3 + 3 + 0] + q1[3 + 3 + 1];
+            g[11 + extra_ctrl_points_nr] = elb_m * q1[3 + 3 + 0] + q1[3 + 3 + 1];
         }
         return true;
     }
@@ -497,15 +515,12 @@
         {
             Ipopt::Index idx=0;
 
-            // reaching in position - end-effector
-            for (Ipopt::Index i=0; i < chain_dof; i++)
-            {
-                iRow[idx] = 0; jCol[idx] = i; idx++;
-            }
-            // reaching in orientation - end-effector
-            for (Ipopt::Index i = 0; i < chain_dof; i++)
-            {
-                iRow[idx] = 1; jCol[idx] = i; idx++;
+            // reaching in position and orientation - end-effector
+            for (int j = 0; j < 6; ++j) {
+                for (Ipopt::Index i = 0; i < chain_dof; i++) {
+                    iRow[idx] = j; jCol[idx] = i; idx++;
+                }
+                iRow[idx] = j; jCol[idx] = chain_dof+j; idx++;
             }
 
             if (additional_control_points_flag)
@@ -517,7 +532,7 @@
                          // reaching in position - elbow control point
                         for (Ipopt::Index j=0; j<(chain_dof - 4); j++)
                         {
-                            iRow[idx]=2; jCol[idx]=j;
+                            iRow[idx]=6; jCol[idx]=j;
                             idx++;
                         }
                     }
@@ -529,26 +544,26 @@
             if (hitting_constraints)
             {
                 // shoulder's cables length
-                iRow[idx]=2+extra_ctrl_points_nr; jCol[idx]=3+0; idx++;
-                iRow[idx]=2+extra_ctrl_points_nr; jCol[idx]=3+1; idx++;
+                iRow[idx]=6+extra_ctrl_points_nr; jCol[idx]=3+0; idx++;
+                iRow[idx]=6+extra_ctrl_points_nr; jCol[idx]=3+1; idx++;
 
-                iRow[idx]=3+extra_ctrl_points_nr; jCol[idx]=3+0; idx++;
-                iRow[idx]=3+extra_ctrl_points_nr; jCol[idx]=3+1; idx++;
-                iRow[idx]=3+extra_ctrl_points_nr; jCol[idx]=3+2; idx++;
+                iRow[idx]=7+extra_ctrl_points_nr; jCol[idx]=3+0; idx++;
+                iRow[idx]=7+extra_ctrl_points_nr; jCol[idx]=3+1; idx++;
+                iRow[idx]=7+extra_ctrl_points_nr; jCol[idx]=3+2; idx++;
 
-                iRow[idx]=4+extra_ctrl_points_nr; jCol[idx]=3+1; idx++;
-                iRow[idx]=4+extra_ctrl_points_nr; jCol[idx]=3+2; idx++;
+                iRow[idx]=8+extra_ctrl_points_nr; jCol[idx]=3+1; idx++;
+                iRow[idx]=8+extra_ctrl_points_nr; jCol[idx]=3+2; idx++;
 
                 // avoid hitting torso
-                iRow[idx]=5+extra_ctrl_points_nr; jCol[idx]=3+1; idx++;
-                iRow[idx]=5+extra_ctrl_points_nr; jCol[idx]=3+2; idx++;
+                iRow[idx]=9+extra_ctrl_points_nr; jCol[idx]=3+1; idx++;
+                iRow[idx]=9+extra_ctrl_points_nr; jCol[idx]=3+2; idx++;
 
                 // avoid hitting forearm
-                iRow[idx]=6+extra_ctrl_points_nr; jCol[idx]=3+3+0; idx++;
-                iRow[idx]=6+extra_ctrl_points_nr; jCol[idx]=3+3+1; idx++;
+                iRow[idx]=10+extra_ctrl_points_nr; jCol[idx]=3+3+0; idx++;
+                iRow[idx]=10+extra_ctrl_points_nr; jCol[idx]=3+3+1; idx++;
 
-                iRow[idx]=7+extra_ctrl_points_nr; jCol[idx]=3+3+0; idx++;
-                iRow[idx]=7+extra_ctrl_points_nr; jCol[idx]=3+3+1;
+                iRow[idx]=11+extra_ctrl_points_nr; jCol[idx]=3+3+0; idx++;
+                iRow[idx]=11+extra_ctrl_points_nr; jCol[idx]=3+3+1;
             }
         }
         else
@@ -558,13 +573,10 @@
             Ipopt::Index idx=0;
 
             // reaching in position
-            for (Ipopt::Index i=0; i < chain_dof; i++)
-            {
-                values[idx++] = pos_grad[i];
-            }
-            // reaching in orientation
-            for (Ipopt::Index i = 0; i < chain_dof; i++) {
-                values[idx++] = ori_grad[i];
+            for (int j = 0; j < 6; ++j) {
+                for (Ipopt::Index i = 0; i < chain_dof; i++)
+                    values[idx++] = -J0(j, i);
+                values[idx++] = 1;
             }
 
             if (additional_control_points_flag)
@@ -626,5 +638,3 @@
         for (Ipopt::Index i=0; i < chain_dof; i++)
             v[i]=x[i];
     }
-
-

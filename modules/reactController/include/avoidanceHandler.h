@@ -21,41 +21,11 @@
 #ifndef __AVOIDANCEHANDLER_H__
 #define __AVOIDANCEHANDLER_H__
 
-#include <vector>
-#include <deque>
-
-#include <cstdarg>
-#include <string>
-
-#include <algorithm>
-
-#include <yarp/sig/all.h>
-#include <yarp/math/Math.h>
-#include <yarp/os/Property.h>
-
 #include <iCub/iKin/iKinFwd.h>
-#include <iCub/skinDynLib/common.h>
+
+#include "common.h"
 
 
-struct collisionPoint_t{
-    iCub::skinDynLib::SkinPart skin_part;
-    yarp::sig::Vector x; //position (x,y,z) in the FoR of the respective skin part
-    yarp::sig::Vector n; //direction of normal vector at that point - derived from taxel normals, pointing out of the skin
-    double magnitude; // ~ activation level from probabilistic representation in pps - likelihood of collision
-
-    collisionPoint_t(): magnitude(1), skin_part(iCub::skinDynLib::SKIN_PART_UNKNOWN)
-    {
-        x.resize(3);
-        n.resize(3);
-    }
-
-    explicit collisionPoint_t(iCub::skinDynLib::SkinPart _skinPart, double mag=1): skin_part(_skinPart), magnitude(mag)
-    {
-        x.resize(3);
-        n.resize(3);
-    }
-
-};
 
 /****************************************************************/
 class AvoidanceHandlerAbstract
@@ -88,7 +58,7 @@ protected:
     std::vector<collisionPoint_t> totalColPoints;
     yarp::os::Property parameters;
     std::vector<collisionPoint_t> selfColPoints;
-    
+
     static bool computeFoR(const yarp::sig::Vector &pos, const yarp::sig::Vector &norm, yarp::sig::Matrix &FoR);
     
     /**

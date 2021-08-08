@@ -26,16 +26,9 @@
 #include <IpTNLP.hpp>
 #include <IpIpoptApplication.hpp>
 
-#include <yarp/os/all.h>
-#include <yarp/dev/all.h>
-#include <yarp/sig/all.h>
-#include <yarp/math/Math.h>
-
-#include <iCub/ctrl/math.h>
-#include <iCub/ctrl/pids.h>
-#include <iCub/ctrl/minJerkCtrl.h>
 #include <iCub/iKin/iKinFwd.h>
-#include <iCub/skinDynLib/common.h>
+
+#include "common.h"
 
 using namespace std;
 using namespace yarp::os;
@@ -45,49 +38,22 @@ using namespace yarp::math;
 using namespace iCub::ctrl;
 using namespace iCub::iKin;
 
-class ControlPoint
-{
-    public:
-        string type; //e.g. "elbow"
-        yarp::sig::Vector x_desired; //desired Cartesian position (x,y,z) in Root FoR 
-        yarp::sig::Vector p0; //position of the control point depending on current state of chain
-        yarp::sig::Matrix J0_xyz; //Jacobian for position depending on current state of chain
-        
-        ControlPoint()
-        {
-            x_desired.resize(3); x_desired.zero();
-            x_desired(0)=-0.2; //just to have it iCub Root FoR friendly
-            p0.resize(3); p0.zero();
-            p0(0) = -0.1;
-            //for J0_xyz we don't know the size yet - depending on the control point
-        }
-        
-        string toString() const
-        {
-            std::stringstream sstm;
-            sstm<< "ControlPoint, type: "<<type<<", x_desired: ("<<x_desired.toString(3,3)<<"), p0: ("<<p0.toString(3,3)<<"), J0_xyz: "<<endl<<
-            J0_xyz.toString(3,3)<<endl;
-            
-            return sstm.str();
-        }
-};
 
 /****************************************************************/
 class ControllerNLP : public Ipopt::TNLP
 {
     iKinChain &chain;
     bool hitting_constraints;
-    bool orientation_control;
+    bool ori_control;
     bool additional_control_points_flag;
         
-    Vector xr,pr, ori_grad, pos_grad;
-    Matrix Hr,skew_nr,skew_sr,skew_ar;
-    Matrix q_lim,v_lim;    
+    Vector xr,pr;
+    Matrix q_lim,v_lim;
     Vector q0,v0,v,p0, rest_jnt_pos, q1, rest_weights, rest_err;
-    Matrix H0,R0,He,J0_xyz,J0_ang;
-    Vector err_xyz,err_ang;
+    Matrix H0, J0;
+    Vector v_x, v_des;
     Matrix bounds;
-    double dt, ang_mag, weight, weight2;
+    double dt, w1, w2, w3, w4;
     int chain_dof, constr_num, nnz_jacobian;
 
     std::vector<ControlPoint> &additional_control_points;
@@ -134,14 +100,13 @@ class ControllerNLP : public Ipopt::TNLP
     bool eval_g(Ipopt::Index n, const Ipopt::Number *x, bool new_x,Ipopt::Index m, Ipopt::Number *g) override;
     bool eval_jac_g(Ipopt::Index n, const Ipopt::Number *x, bool new_x, Ipopt::Index m, Ipopt::Index nele_jac, Ipopt::Index *iRow,
                     Ipopt::Index *jCol, Ipopt::Number *values) override;
+    bool eval_h(Ipopt::Index n, const Ipopt::Number *x, bool new_x, Ipopt::Number obj_factor, Ipopt::Index m, const Ipopt::Number *lambda,
+                bool new_lambda, Ipopt::Index nele_hess, Ipopt::Index *iRow, Ipopt::Index *jCol, Ipopt::Number *values) override;
     void finalize_solution(Ipopt::SolverReturn status, Ipopt::Index n, const Ipopt::Number *x, const Ipopt::Number *z_L,
                            const Ipopt::Number *z_U, Ipopt::Index m, const Ipopt::Number *g, const Ipopt::Number *lambda,
                            Ipopt::Number obj_value, const Ipopt::IpoptData *ip_data, Ipopt::IpoptCalculatedQuantities *ip_cq) override;
 };
 
 
-
-
 #endif
-
 

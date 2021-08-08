@@ -1,0 +1,35 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <world name="default">
+
+    <include>
+      <uri>model://sun</uri>
+    </include>
+
+    <state world_name='default'>
+      <light name='sun'>
+        <pose frame=''>0 0 10 0 -0 3.14</pose>
+      </light>
+    </state>
+
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+
+    <model name="iCub">
+      <include>
+        <uri>model://iCubGazeboV2_5_visuomanip</uri>
+        <pose>0.0 0.0 0.63 0.0 0.0 0.0</pose>
+      </include>
+    </model>
+
+    <gui fullscreen='0'>
+      <camera name='user_camera'>
+        <pose frame=''>-2.2 0 0.7 0 0 0</pose>
+        <view_controller>orbit</view_controller>
+        <projection_type>perspective</projection_type>
+      </camera>
+    </gui>
+
+  </world>
+</sdf>

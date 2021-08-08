@@ -56,15 +56,9 @@ None for now.
 \author: Alessandro Roncone
 */ 
 
-#include <yarp/os/Log.h>
-#include <yarp/os/RpcServer.h>
-#include <yarp/os/ResourceFinder.h>
 #include <yarp/os/RFModule.h>
 
-#include <yarp/math/Math.h>
-
 #include "reactCtrlThread.h"
-#include "particleThread.h"
 #include "reactController_IDL.h"
 
 using namespace yarp;
@@ -517,10 +511,10 @@ public:
             if (rf.check("controlMode"))
             {
                 controlMode = rf.find("controlMode").asString();
-                if(controlMode!="velocity" && controlMode!="positionDirect")
+                if(controlMode!="positionDirect")
                 {
-                    controlMode="velocity";
-                    yWarning("[reactController] controlMode was not in the admissible values (velocity / positionDirect). Using %s as default.",controlMode.c_str());
+                    controlMode="positionDirect";
+                    yWarning("[reactController] The only admissible value for controlMode is positionDirect; using positionDirect as default.");
                 }
                 else 
                     yInfo("[reactController] controlMode to use is: %s", controlMode.c_str());
