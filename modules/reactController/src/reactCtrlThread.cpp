@@ -22,6 +22,7 @@
 
 #define TACTILE_INPUT_GAIN 1.5
 #define VISUAL_INPUT_GAIN 0.5
+#define PROXIMITY_INPUT_GAIN 0.5
 
 #define STATE_WAIT              0
 #define STATE_REACH             1
@@ -36,7 +37,7 @@
 reactCtrlThread::reactCtrlThread(int _rate, string _name, string _robot,  string _part,
                                  int _verbosity, bool _disableTorso,
                                  double _trajSpeed, double _globalTol, double _vMax, double _tol,
-                                 string _referenceGen, bool _tactileCPOn, bool _visualCPOn,
+                                 string _referenceGen, bool _tactileCPOn, bool _visualCPOn, bool _proximityCPOn,
                                  bool _gazeControl, bool _stiffInteraction,
                                  bool _hittingConstraints, bool _orientationControl,
                                  bool _additionalControlPoints,
@@ -46,10 +47,10 @@ reactCtrlThread::reactCtrlThread(int _rate, string _name, string _robot,  string
                                  part(std::move(_part)), verbosity(_verbosity), useTorso(!_disableTorso), trajSpeed(_trajSpeed),
                                  globalTol(_globalTol), vMax(_vMax), tol(_tol), referenceGen(std::move(_referenceGen)),
                                  tactileCollisionPointsOn(_tactileCPOn), visualCollisionPointsOn(_visualCPOn),
-                                 gazeControl(_gazeControl), stiffInteraction(_stiffInteraction),
-                                 hittingConstraints(_hittingConstraints),orientationControl(_orientationControl),
-                                 additionalControlPoints(_additionalControlPoints), arm(nullptr),
-                                 visualizeCollisionPointsInSim(_visCollisionPointsInSim), start_experiment(0),
+                                 proximityCollisionPointsOn(_proximityCPOn), gazeControl(_gazeControl),
+                                 stiffInteraction(_stiffInteraction), hittingConstraints(_hittingConstraints),
+                                 orientationControl(_orientationControl), additionalControlPoints(_additionalControlPoints),
+                                 arm(nullptr), visualizeCollisionPointsInSim(_visCollisionPointsInSim), start_experiment(0),
                                  counter(0), t_1(0), restPosWeight(_restPosWeight), selfColPoints(_selfColPoints),
                                  state(STATE_WAIT), minJerkTarget(nullptr), I(nullptr), iencsA(nullptr), ivelA(nullptr),
                                  iposDirA(nullptr), imodA(nullptr), iintmodeA(nullptr), iimpA(nullptr), ilimA(nullptr),
@@ -270,6 +271,7 @@ bool reactCtrlThread::threadInit()
 
     aggregPPSeventsInPort.open("/"+name+"/pps_events_aggreg:i");
     aggregSkinEventsInPort.open("/"+name+"/skin_events_aggreg:i");
+    proximityEventsInPort.open("/"+name+"/proximity_events:i");
 
     streamedTargets.open("/"+name+"/streamedWholeBodyTargets:i");
 
@@ -418,6 +420,10 @@ void reactCtrlThread::run()
     if (visualCollisionPointsOn){ //note, these are not mutually exclusive - they can co-exist
         printMessage(9,"[reactCtrlThread::run()] Getting visual collisions from port.\n");
         getCollisionPointsFromPort(aggregPPSeventsInPort, VISUAL_INPUT_GAIN, part_short,collisionPoints);
+    }
+    if (proximityCollisionPointsOn) {
+        printMessage(9,"[reactCtrlThread::run()] Getting proximity collisions from port.\n");
+        getProximityFromPort(collisionPoints);
     }
     //after this point, we don't care where did the collision points come from - our relative confidence in the two modalities is expressed in the gains
     
@@ -874,7 +880,7 @@ bool reactCtrlThread::areJointsHealthyAndSet(vector<int> &jointsToSet,
 
     for (int i=0; i<modes.size(); i++)
     {
-        if (arm->isLinkBlocked(i))  //TODO in addition, one might check if some joints are blocked like here:  ServerCartesianController::areJointsHealthyAndSet
+        if (arm->isLinkBlocked(i))
             continue;
         if ((modes[i]==VOCAB_CM_HW_FAULT) || (modes[i]==VOCAB_CM_IDLE))
             return false;
@@ -1099,6 +1105,43 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
     else{
        printMessage(9,"[reactCtrlThread::getCollisionPointsFromPort]: no avoidance vectors on the port.\n") ;
        return false;
+    }
+}
+
+
+bool reactCtrlThread::getProximityFromPort(std::vector<collisionPoint_t> &collPoints)
+{
+//    printMessage(9,"[reactCtrlThread::getProximityPointsFromPort].\n");
+    collisionPoint_t collPoint;
+    SkinPart sp;
+
+    collPoint.skin_part = SKIN_PART_UNKNOWN;
+    collPoint.x.resize(3,0.0);
+    collPoint.n.resize(3,0.0);
+    collPoint.magnitude=0.0;
+
+    Bottle* collPointBottle = proximityEventsInPort.read(false);
+    if(collPointBottle != nullptr){
+        printMessage(0,"Bottle contains %s \n", collPointBottle->toString().c_str());
+        sp =  (SkinPart)(collPointBottle->get(0).asInt());
+        //we take only those collision points that are relevant for the chain we are controlling + torso
+        if( ((part_short == "left") && ( (sp==SKIN_LEFT_HAND) || (sp==SKIN_LEFT_FOREARM) || (sp==SKIN_LEFT_UPPER_ARM)) ) || (sp==SKIN_FRONT_TORSO)
+        || ((part_short == "right") && ( (sp==SKIN_RIGHT_HAND) || (sp==SKIN_RIGHT_FOREARM) || (sp==SKIN_RIGHT_UPPER_ARM) ) ) ){
+            collPoint.skin_part = sp;
+            collPoint.x(0) = collPointBottle->get(1).asDouble();
+            collPoint.x(1) = collPointBottle->get(2).asDouble();
+            collPoint.x(2) = collPointBottle->get(3).asDouble();
+            collPoint.n(0) = collPointBottle->get(4).asDouble();
+            collPoint.n(1) = collPointBottle->get(5).asDouble();
+            collPoint.n(2) = collPointBottle->get(6).asDouble();
+            collPoint.magnitude = collPointBottle->get(7).asDouble() * PROXIMITY_INPUT_GAIN;
+            collPoints.push_back(collPoint);
+        }
+        return true;
+    }
+    else{
+        printMessage(9,"[reactCtrlThread::getProximityPointsFromPort]: no avoidance vectors on the port.\n") ;
+        return false;
     }
 }
 

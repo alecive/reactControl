@@ -50,7 +50,7 @@ public:
     // CONSTRUCTOR
     reactCtrlThread(int , string  , string  , string _ ,
                     int , bool , double , double , double , double , string ,
-                    bool , bool , bool , bool , bool, bool , bool , bool , bool , bool ,
+                    bool , bool , bool, bool , bool , bool, bool , bool , bool , bool , bool ,
                     particleThread *, double, bool);
     // INIT
     bool threadInit() override;
@@ -138,6 +138,7 @@ protected:
     string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk"
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
+    bool proximityCollisionPointsOn; //if on will be reading predicted collision points from proximity sensor
     bool selfColPoints; // add robot body parts as the collision points to the avoidance handler
 
     bool gazeControl; //will follow target with gaze
@@ -231,6 +232,7 @@ protected:
     yarp::sig::Matrix vLimAdapted;  //matrix with min/max velocity limits after adptation by avoidanceHandler
       
     // ports and files
+    yarp::os::BufferedPort<yarp::os::Bottle> proximityEventsInPort; //coming from proximity sensor
     yarp::os::BufferedPort<yarp::os::Bottle> aggregSkinEventsInPort; //coming from /skinEventsAggregator/skin_events_aggreg:o
     yarp::os::BufferedPort<yarp::os::Bottle> aggregPPSeventsInPort; //coming from visuoTactileRF/pps_activations_aggreg:o 
     //expected format for both: (skinPart_s x y z o1 o2 o3 magnitude), with position x,y,z and normal o1 o2 o3 in link FoR
@@ -316,6 +318,8 @@ protected:
    /************************** communication through ports in/out ***********************************/
 
     bool getCollisionPointsFromPort(yarp::os::BufferedPort<yarp::os::Bottle> &inPort, double gain, const string& whichChain,std::vector<collisionPoint_t> &collPoints);
+
+    bool getProximityFromPort(std::vector<collisionPoint_t> &collPoints);
 
     /**
     * Sends useful data to a port in order to track it on matlab

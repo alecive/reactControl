@@ -108,6 +108,7 @@ private:
     
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
+    bool proximityCollisionPointsOn; //if on will be reading predicted collision points from proximity sensor
 
     //setting visualization in iCub simulator; the visualizations in iCubGui constitute an independent pipeline
     // (currently the iCubGui ones are on and cannot be toggled on/off from the outside)
@@ -145,7 +146,8 @@ public:
         
         tactileCollisionPointsOn = true;
         visualCollisionPointsOn = true;
-        
+        proximityCollisionPointsOn = true;
+
         if(robot == "icubSim"){
             visualizeTargetInSim = true;
             visualizeParticleInSim = true;
@@ -419,7 +421,23 @@ public:
         else
         {
             yInfo("[reactController] Could not find visualCollisionPoints flag (on/off) in the config file; using %d as default",visualCollisionPointsOn);
-        }  
+        }
+
+        if (rf.check("proximityCollisionPoints"))
+        {
+            if(rf.find("proximityCollisionPoints").asString()=="on"){
+                proximityCollisionPointsOn = true;
+                yInfo("[reactController] proximityCollisionPoints flag set to on.");
+            }
+            else{
+                proximityCollisionPointsOn = false;
+                yInfo("[reactController] proximityCollisionPoints flag set to off.");
+            }
+        }
+        else
+        {
+            yInfo("[reactController] Could not find proximityCollisionPoints flag (on/off) in the config file; using %d as default",proximityCollisionPointsOn);
+        }
         
         //************************** gazeControl ******************************************************8
         if (rf.check("gazeControl"))
@@ -667,7 +685,7 @@ public:
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
                                           disableTorso, trajSpeed,
                                           globalTol, vMax, tol, referenceGen, 
-                                          tactileCollisionPointsOn,visualCollisionPointsOn,
+                                          tactileCollisionPointsOn,visualCollisionPointsOn, proximityCollisionPointsOn,
                                           gazeControl,stiffInteraction,
                                           hittingConstraints, orientationControl, additionalControlPoints,
                                           visualizeTargetInSim, visualizeParticleInSim,
