@@ -242,15 +242,12 @@ protected:
     double t_0, t_1;
     int start_experiment, counter;
  
-    // IPOPT STUFF
-    int ipoptExitCode;
-    double timeToSolveProblem_s; //time taken by q_dot = solveIK(ipoptExitCode) ~ ipopt + avoidance handler
-//    Ipopt::SmartPtr<Ipopt::IpoptApplication> app; // pointer to instance of main application class for making calls to Ipopt
-//    Ipopt::SmartPtr<ControllerNLP> nlp; //pointer to IK solver instance
+    // QPSolver STUFF
+    int solverExitCode;
+    double timeToSolveProblem_s; //time taken by q_dot = solveIK(solverExitCode) ~ ipopt + avoidance handler
     std::unique_ptr<QPSolver> solver;
-    VisualisationHandler visuhdl;
 
-//    bool firstSolve; //ipopt OptimizeTNLP only for first time to allocate memory, then use ReOptimizeTNLP
+    VisualisationHandler visuhdl;
     std::vector<collisionPoint_t> collisionPoints; //list of "avoidance vectors" from peripersonal space / safety margin
     std::unique_ptr<AvoidanceHandlerAbstract> avhdl;
         

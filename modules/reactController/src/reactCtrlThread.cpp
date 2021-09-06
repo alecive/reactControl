@@ -43,22 +43,22 @@ reactCtrlThread::reactCtrlThread(int _rate, string _name, string _robot,  string
                                  bool _additionalControlPoints,
                                  bool _visTargetInSim, bool _visParticleInSim, bool _visCollisionPointsInSim,
                                  particleThread *_pT, double _restPosWeight, bool _selfColPoints) :
-                                 PeriodicThread((double)_rate/1000.0), name(std::move(_name)), robot(std::move(_robot)),
-                                 part(std::move(_part)), verbosity(_verbosity), useTorso(!_disableTorso), trajSpeed(_trajSpeed),
-                                 globalTol(_globalTol), vMax(_vMax), tol(_tol), referenceGen(std::move(_referenceGen)),
-                                 tactileCollisionPointsOn(_tactileCPOn), visualCollisionPointsOn(_visualCPOn),
-                                 proximityCollisionPointsOn(_proximityCPOn), gazeControl(_gazeControl),
-                                 stiffInteraction(_stiffInteraction), hittingConstraints(_hittingConstraints),
-                                 orientationControl(_orientationControl), additionalControlPoints(_additionalControlPoints),
-                                 arm(nullptr), visualizeCollisionPointsInSim(_visCollisionPointsInSim), start_experiment(0),
-                                 counter(0), t_1(0), restPosWeight(_restPosWeight), selfColPoints(_selfColPoints),
-                                 state(STATE_WAIT), minJerkTarget(nullptr), I(nullptr), iencsA(nullptr), iposDirA(nullptr),
-                                 imodA(nullptr), iintmodeA(nullptr), iimpA(nullptr), ilimA(nullptr), encsA(nullptr),
-                                 jntsA(0), iencsT(nullptr), iposDirT(nullptr), imodT(nullptr), ilimT(nullptr), encsT(nullptr),
-                                 jntsT(0), igaze(nullptr), contextGaze(0), chainActiveDOF(0), virtualArm(nullptr),
-                                 movingTargetCircle(false), radius(0), frequency(0), streamingTarget(true),
-                                 t_0(0), ipoptExitCode(0), timeToSolveProblem_s(0), /*firstSolve(true),*/
-                                 visuhdl(verbosity, (robot == "icubSim"), name, _visTargetInSim,
+        PeriodicThread((double)_rate/1000.0), name(std::move(_name)), robot(std::move(_robot)),
+        part(std::move(_part)), verbosity(_verbosity), useTorso(!_disableTorso), trajSpeed(_trajSpeed),
+        globalTol(_globalTol), vMax(_vMax), tol(_tol), referenceGen(std::move(_referenceGen)),
+        tactileCollisionPointsOn(_tactileCPOn), visualCollisionPointsOn(_visualCPOn),
+        proximityCollisionPointsOn(_proximityCPOn), gazeControl(_gazeControl),
+        stiffInteraction(_stiffInteraction), hittingConstraints(_hittingConstraints),
+        orientationControl(_orientationControl), additionalControlPoints(_additionalControlPoints),
+        arm(nullptr), visualizeCollisionPointsInSim(_visCollisionPointsInSim), start_experiment(0),
+        counter(0), t_1(0), restPosWeight(_restPosWeight), selfColPoints(_selfColPoints),
+        state(STATE_WAIT), minJerkTarget(nullptr), I(nullptr), iencsA(nullptr), iposDirA(nullptr),
+        imodA(nullptr), iintmodeA(nullptr), iimpA(nullptr), ilimA(nullptr), encsA(nullptr),
+        jntsA(0), iencsT(nullptr), iposDirT(nullptr), imodT(nullptr), ilimT(nullptr), encsT(nullptr),
+        jntsT(0), igaze(nullptr), contextGaze(0), chainActiveDOF(0), virtualArm(nullptr),
+        movingTargetCircle(false), radius(0), frequency(0), streamingTarget(true),
+        t_0(0), solverExitCode(0), timeToSolveProblem_s(0),
+        visuhdl(verbosity, (robot == "icubSim"), name, _visTargetInSim,
                                          referenceGen != "none" && _visParticleInSim)
 {
     dT=getPeriod();
@@ -295,30 +295,6 @@ bool reactCtrlThread::threadInit()
     yInfo("Written to param file and closing..");
     fout_param.close();
 
-//    app=new Ipopt::IpoptApplication;
-//    app->Options()->SetNumericValue("tol",tol);
-//    app->Options()->SetNumericValue("constr_viol_tol",1e-6);
-//    app->Options()->SetIntegerValue("acceptable_iter",0);
-//    app->Options()->SetStringValue("mu_strategy","adaptive");
-//    app->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
-//    app->Options()->SetNumericValue("max_cpu_time",0.7*dT);
-//    app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
-//    app->Options()->SetStringValue("hessian_constant", "yes");
-//    app->Options()->SetStringValue("jac_c_constant", "yes");
-//    app->Options()->SetStringValue("jac_d_constant", "yes");
-//    app->Options()->SetStringValue("mehrotra_algorithm", "yes");
-//    app->Options()->SetStringValue("derivative_test",verbosity?"first-order":"none");
-////    app->Options()->SetStringValue("derivative_test_print_all", "yes");
-//    app->Options()->SetIntegerValue("print_level", verbosity?5:0);
-//    app->Options()->SetNumericValue("derivative_test_tol", 1e-7);
-////    app->Options()->SetStringValue("print_timing_statistics", "yes");
-//    app->Initialize();
-//
-//    //in positionDirect mode, ipopt will use the qIntegrated values to update its copy of chain
-//    nlp=new ControllerNLP(*virtualArm,
-//                          additionalControlPointsVector, hittingConstraints, orientationControl,
-//                          additionalControlPoints, dT, restPosWeight);
-    //    firstSolve = true;
     weighted_normal.resize(3,0);
     //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
     avhdl = std::make_unique<AvoidanceHandlerTactile>(*arm->asChain(),collisionPoints,selfColPoints,verbosity);
@@ -452,9 +428,6 @@ void reactCtrlThread::run()
             {
                 yDebug("[reactCtrlThread] norm(x_t-x_d) %g\tglobalTol %g",norm(x_t-x_d),globalTol);
                 state=STATE_IDLE;
-//                if (!stopControlHelper())
-//                    yError("[reactCtrlThread] Unable to properly stop the control of the arm!");
-//                break;
             }
 
             if (movingTargetCircle) {
@@ -489,17 +462,12 @@ void reactCtrlThread::run()
             }
 //            yDebug("vLimAdapted = %s",vLimAdapted.toString(3,3).c_str());
             double t_3=yarp::os::Time::now();
-            q_dot = solveIK(ipoptExitCode); //this is the key function call where the reaching opt problem is solved 
+            q_dot = solveIK(solverExitCode); //this is the key function call where the reaching opt problem is solved
             timeToSolveProblem_s  = yarp::os::Time::now()-t_3;
 
-//            if (ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
-//                yWarning("[reactCtrlThread] Ipopt cpu time was higher than the rate of the thread!");
-//            else if (ipoptExitCode!=Ipopt::Solve_Succeeded)
-//                yWarning("[reactCtrlThread] Ipopt solve did not succeed!");
-
-            if (ipoptExitCode==OSQP_TIME_LIMIT_REACHED) // qpOASES::RET_MAX_NWSR_REACHED)
+            if (solverExitCode == OSQP_TIME_LIMIT_REACHED) // qpOASES::RET_MAX_NWSR_REACHED)
                 yWarning("[reactCtrlThread] OSQP cpu time was higher than the rate of the thread!");
-            else if (ipoptExitCode!=OSQP_SOLVED) // qpOASES::SUCCESSFUL_RETURN)
+            else if (solverExitCode != OSQP_SOLVED) // qpOASES::SUCCESSFUL_RETURN)
                 yWarning("[reactCtrlThread] OSQP solve did not succeed!");
 
             qIntegrated = I->integrate(q_dot);
@@ -711,8 +679,9 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
         else if(referenceGen == "minJerk"){
             minJerkTarget->init(x_0); //initial pos
             minJerkTarget->setTs(dT); //time step
-            //calculate the time to reach from the distance to target and desired velocity - this was wrong somehow
-            double T = sqrt( (x_d(0)-x_0(0))*(x_d(0)-x_0(0)) + (x_d(1)-x_0(1))*(x_d(1)-x_0(1)) + (x_d(2)-x_0(2))*(x_d(2)-x_0(2)) )  / trajSpeed;
+            // calculate the time to reach from the distance to target and desired velocity
+            double T = sqrt( (x_d(0)-x_0(0))*(x_d(0)-x_0(0)) + (x_d(1)-x_0(1))*(x_d(1)-x_0(1)) +
+                    (x_d(2)-x_0(2))*(x_d(2)-x_0(2)) )  / trajSpeed;
             minJerkTarget->setT(std::ceil(T * 10.0) / 10.0);
         }
         
@@ -762,7 +731,6 @@ bool reactCtrlThread::stopControlAndSwitchToPositionMode()
 }
 
 
-
 //************** protected methods *******************************/
 
 
@@ -773,13 +741,6 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     //printf("calling ipopt with the following joint velocity limits (rad): \n %s \n",(vLimAdapted*CTRL_DEG2RAD).toString(3,3).c_str());
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
-   
-   //Vector xee_pos_virtual=virtualArmChain->EndEffPosition();
-   //Vector xee_pos_real= arm->asChain()->EndEffPosition();
-   //yInfo()<<"   t [s] = "<<yarp::os::Time::now() -t_0;
-   //yInfo()<<"   e_pos_real before opt step [m] = "<<norm(x_n-xee_pos_real);
-   //yInfo()<<"   e_pos real using x_t       [m] = "<<norm(x_n-x_t); 
-   //yInfo()<<"   e_pos_virtual before opt step [m] = "<<norm(x_n-xee_pos_virtual);
 
     Vector xr(6,0.0);
     xr.setSubvector(0,x_n);
@@ -798,15 +759,6 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
         count++;
     }
     res = solver->get_resultInDegPerSecond();
-
-//    nlp->init(xr, q_dot, vLimAdapted);
-//    if (firstSolve) {
-//        _exit_code = app->OptimizeTNLP(GetRawPtr(nlp));
-//        firstSolve = false;
-//    } else {
-//        _exit_code = app->ReOptimizeTNLP(GetRawPtr(nlp));
-//    }
-//    Vector res=nlp->get_resultInDegPerSecond();
 
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
     if(verbosity >= 1){ 
@@ -1006,34 +958,7 @@ bool reactCtrlThread::controlArm(const string& _controlMode, const yarp::sig::Ve
         yError("[reactCtrlThread::controlArm] I am not able to set the torso joints to %s mode!",_controlMode.c_str());
         return false;
     }
-    /*if(verbosity>=10){
-        printf("[reactCtrlThread::controlArm] setting following arm joints to %s: ",Vocab::decode(VOCAB_CM_VELOCITY).c_str());
-        for (size_t k=0; k<jointsToSetA.size(); k++){
-                printf("%d ",jointsToSetA[k]);
-        }
-        printf("\n");
-        if(useTorso){
-            printf("[reactCtrlThread::controlArm] setting following torso joints to %s: ",Vocab::decode(VOCAB_CM_VELOCITY).c_str());
-            for (size_t l=0; l<jointsToSetT.size(); l++){
-                printf("%d ",jointsToSetT[l]);
-            }
-            printf("\n");       
-        }
-    }*/
-//    if (_controlMode == "velocity")
-//    {
-//        printMessage(1,"[reactCtrlThread::controlArm] Joint velocities (iKin order, deg/s): %s\n",_targetValues.toString(3,3).c_str());
-//
-//        Vector velsT(TORSO_DOF,0.0);
-//        velsT[0] = _targetValues[2]; //swapping pitch and yaw as per iKin vs. motor interface convention
-//        velsT[1] = _targetValues[1];
-//        velsT[2] = _targetValues[0]; //swapping pitch and yaw as per iKin vs. motor interface convention
-//
-//        printMessage(2,"    velocityMove(): torso (swap pitch & yaw): %s\n",velsT.toString(3,3).c_str());
-//        ivelT->velocityMove(velsT.data());
-//        ivelA->velocityMove(_targetValues.subVector(3,9).data()); //indexes 3 to 9 are the arm joints velocities
-//    }
-//    else
+
     if(_controlMode == "positionDirect")
     {
         printMessage(1,"[reactCtrlThread::controlArm] Target joint positions (iKin order, deg): %s\n",_targetValues.toString(3,3).c_str());
@@ -1053,8 +978,6 @@ bool reactCtrlThread::controlArm(const string& _controlMode, const yarp::sig::Ve
 bool reactCtrlThread::stopControlAndSwitchToPositionModeHelper()
 {
     state=STATE_IDLE;
-//    ivelA->stop();
-//    ivelT->stop();
     vector<int> jointsToSetA{0,1,2,3,4,5,6};
     vector<int> jointsToSetT{0,1,2};
     return  setCtrlModes(jointsToSetA,"arm","position") && setCtrlModes(jointsToSetT,"torso","position");
@@ -1193,7 +1116,7 @@ void reactCtrlThread::sendData()
             vectorIntoBottle(q,b); 
             //variable - if torso on: 40:59; joint vel limits as input to ipopt, after avoidanceHandler,
             matrixIntoBottle(vLimAdapted,b); // assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
-            b.addInt(ipoptExitCode);
+            b.addInt(solverExitCode);
             b.addDouble(timeToSolveProblem_s);
             //joint pos from virtual chain IPopt is operating onl variable - if torso on: 60:69
             vectorIntoBottle(qIntegrated,b);
