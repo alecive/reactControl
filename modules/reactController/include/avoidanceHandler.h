@@ -43,11 +43,13 @@ public:
     
     std::deque<yarp::sig::Vector> getCtrlPointsPosition();
     
-    virtual yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim) { return v_lim; }
+    virtual yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim, yarp::sig::Vector &normal) { return v_lim; }
     
     virtual ~AvoidanceHandlerAbstract() { ctrlPointChains.clear(); }
 
-    const std::vector<collisionPoint_t>& getSelfColPoints() { return selfColPoints; }
+    const std::vector<yarp::sig::Vector>& getSelfColPoints() { return selfColPoints; }
+
+    void checkSelfCollisions();
 
 protected:
     unsigned int verbosity;
@@ -57,7 +59,8 @@ protected:
     std::deque<iCub::iKin::iKinChain> ctrlPointChains;
     std::vector<collisionPoint_t> totalColPoints;
     yarp::os::Property parameters;
-    std::vector<collisionPoint_t> selfColPoints;
+    std::vector<yarp::sig::Vector> selfColPoints;
+    std::vector<std::vector<yarp::sig::Vector>> selfControlPoints;
 
     static bool computeFoR(const yarp::sig::Vector &pos, const yarp::sig::Vector &norm, yarp::sig::Matrix &FoR);
     
@@ -79,7 +82,7 @@ class AvoidanceHandlerTactile : public virtual AvoidanceHandlerAbstract
 public:
     AvoidanceHandlerTactile(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_collisionPoints, bool _useSelfColPoints, unsigned int _verbosity=0);
     void setParameters(const yarp::os::Property &params) override;
-    yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim) override;
+    yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim, yarp::sig::Vector &normal) override;
 
 protected:
     double avoidingSpeed;

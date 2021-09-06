@@ -28,7 +28,7 @@
 #include <fstream>
 
 
-#include "reactIpOpt.h"
+#include "reactOSQP.h"
 #include "particleThread.h"
 #include "avoidanceHandler.h"
 #include "visualisationHandler.h"
@@ -167,7 +167,6 @@ protected:
     
     // "Classical" interfaces for the arm
     IEncoders             *iencsA;
-    IVelocityControl      *ivelA;
     IPositionDirect       *iposDirA;
     IControlMode          *imodA;
     IInteractionMode      *iintmodeA;
@@ -183,7 +182,6 @@ protected:
     
     // "Classical" interfaces for the torso
     IEncoders         *iencsT;
-    IVelocityControl  *ivelT;
     IPositionDirect   *iposDirT;
     IControlMode      *imodT;
     IControlLimits    *ilimT;
@@ -230,6 +228,7 @@ protected:
     yarp::sig::Matrix lim;  //matrix with joint position limits for the current chain
     yarp::sig::Matrix vLimNominal;     //matrix with min/max velocity limits for the current chain
     yarp::sig::Matrix vLimAdapted;  //matrix with min/max velocity limits after adptation by avoidanceHandler
+    yarp::sig::Vector weighted_normal; // weighted collision normal
       
     // ports and files
     yarp::os::BufferedPort<yarp::os::Bottle> proximityEventsInPort; //coming from proximity sensor
@@ -246,12 +245,12 @@ protected:
     // IPOPT STUFF
     int ipoptExitCode;
     double timeToSolveProblem_s; //time taken by q_dot = solveIK(ipoptExitCode) ~ ipopt + avoidance handler
-    Ipopt::SmartPtr<Ipopt::IpoptApplication> app; // pointer to instance of main application class for making calls to Ipopt
-    Ipopt::SmartPtr<ControllerNLP> nlp; //pointer to IK solver instance
-
+//    Ipopt::SmartPtr<Ipopt::IpoptApplication> app; // pointer to instance of main application class for making calls to Ipopt
+//    Ipopt::SmartPtr<ControllerNLP> nlp; //pointer to IK solver instance
+    std::unique_ptr<QPSolver> solver;
     VisualisationHandler visuhdl;
 
-    bool firstSolve; //ipopt OptimizeTNLP only for first time to allocate memory, then use ReOptimizeTNLP
+//    bool firstSolve; //ipopt OptimizeTNLP only for first time to allocate memory, then use ReOptimizeTNLP
     std::vector<collisionPoint_t> collisionPoints; //list of "avoidance vectors" from peripersonal space / safety margin
     std::unique_ptr<AvoidanceHandlerAbstract> avhdl;
         
@@ -302,7 +301,7 @@ protected:
                       const string &_p, const string &_s);
 
 
-    bool stopControlHelper() { return ivelA->stop() && ivelT->stop(); }
+//    bool stopControlHelper() { return ivelA->stop() && ivelT->stop(); }
 
     bool stopControlAndSwitchToPositionModeHelper();
 

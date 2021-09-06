@@ -34,31 +34,58 @@ AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &
 {
     selfColPoints = {};
     if (_useSelfColPoints) {
-        std::vector<std::vector<double>> normals{{0, 0, -1}, {-0.739, 0.078, 0.105}};
-        // front chest, back, face, back of head, ears (2x), hip (3x)
-        std::vector<std::vector<double>> posx{{-0.13, -0.122, -0.104}, {0.05,  0.065, 0.08}, {-0.12, -0.112, -0.082},
+        // front chest, back, face, back of head, ears (2x), hip (3x), front chest low band
+        std::vector<std::vector<double>> posx{{-0.13, -0.122, -0.084}, {0.05,  0.065, 0.08}, {-0.12, -0.112, -0.082},
                                               {0.07,  0.105,  0.115}, {-0.03, 0., 0.03}, {-0.03, -0.01, 0.01},
-                                              {-0.03, 0.}, {-0.03, 0.}, {-0.03, 0.}};
-        std::vector<std::vector<double>> posy{{0.02, -0.05, -0.12, -0.19}, {0.02, -0.05, -0.12, -0.19}, {0.09, 0.17, 0.25},
+                                              {-0.03, 0.}, {-0.03, 0.}, {-0.03, 0.}, {-0.11, -0.102, -0.064}};
+        std::vector<std::vector<double>> posy{{0.02, -0.05, -0.12}, {0.02, -0.05, -0.12, -0.19}, {0.09, 0.17, 0.25},
                                               {0.09, 0.17,  0.25}, {0.09, 0.18}, {0.27},
-                                              {-0.05}, {-0.12}, {-0.19}};
+                                              {-0.05}, {-0.12}, {-0.19}, {-0.19}};
         std::vector<std::vector<double>> posz{{-0.025, 0.03,   0.085}, {-0.085, -0.025, 0.045}, {-0.04, 0.025, 0.09},
                                               {-0.1, -0.035, 0.03}, {-0.095, -0.005, 0.085}, {-0.075, -0.005, 0.065},
-                                              {-0.09, 0.09}, {-0.1, 0.1}, {-0.11, 0.11}};
+                                              {-0.09, 0.09}, {-0.1, 0.1}, {-0.11, 0.11}, {-0.025, 0.03,   0.085}};
 
-        for (int k = 0; k < normals.size(); ++k) {
-            for (int l = 0; l < posz.size(); ++l) {
-                for (int i = 0; i < posy[l].size(); ++i) {
-                    for (int j = 0; j < posz[l].size(); ++j) {
-                        if (l == 4 && i == 1 && j == 1) continue;
-                        collisionPoint_t colPoint{k == 0 ? SKIN_LEFT_HAND : SKIN_LEFT_FOREARM};
-                        colPoint.n = {normals[k][0], normals[k][1], normals[k][2]};
-                        colPoint.x = {posx[l][j], posy[l][i], posz[l][j]};
-                        selfColPoints.push_back(colPoint);
-                    }
+        for (int l = 0; l < posz.size(); ++l) {
+            for (int i = 0; i < posy[l].size(); ++i) {
+                for (int j = 0; j < posz[l].size(); ++j) {
+                    if (l == 4 && i == 1 && j == 1) continue;
+                    Vector pos(4);
+                    selfColPoints.push_back(pos);
+                    selfColPoints.back() = {posx[l][j], posy[l][i], posz[l][j], 1}; //homogenous coordinates
                 }
             }
         }
+
+        selfControlPoints.resize(2);
+        selfControlPoints[0].push_back({-0.0049, 0.0012,  0.0});
+        selfControlPoints[0].push_back({-0.0059, 0.0162,  0.0});
+        selfControlPoints[0].push_back({-0.0199, 0.0122,  0.0});
+        selfControlPoints[0].push_back({-0.0049, -0.0143,  0.0});
+        selfControlPoints[0].push_back({-0.0304, 0.0122,  0.0});
+        selfControlPoints[1].push_back({-0.0323, -0.0642, 0.0178});
+        selfControlPoints[1].push_back({-0.0310, -0.0794, 0.0278});
+        selfControlPoints[1].push_back({-0.0335, -0.0964, 0.0192});
+        selfControlPoints[1].push_back({0.0286, -0.0641, 0.0179});
+        selfControlPoints[1].push_back({0.0258, -0.0474, 0.0251});
+        selfControlPoints[1].push_back({0.0157, -0.0460, 0.0401});
+        selfControlPoints[1].push_back({0.0273, -0.0793, 0.0278});
+        selfControlPoints[1].push_back({0.0296, -0.0964, 0.0192});
+        selfControlPoints[1].push_back({0.0075, -0.0952, 0.0463});
+        selfControlPoints[1].push_back({0.0167, -0.0789, 0.0425});
+        selfControlPoints[1].push_back({0.0075, -0.0624, 0.0450});
+        selfControlPoints[1].push_back({-0.0112, -0.0624, 0.0450});
+        selfControlPoints[1].push_back({-0.0204, -0.0789, 0.0425});
+        selfControlPoints[1].push_back({-0.0112, -0.0952, 0.0463});
+        selfControlPoints[1].push_back({-0.0194, -0.0460, 0.0400});
+        selfControlPoints[1].push_back({-0.0293, -0.0475, 0.0248});
+        selfControlPoints[1].push_back({-0.0327, -0.0645, -0.0101});
+        selfControlPoints[1].push_back({-0.0299, -0.0461, -0.0152});
+        selfControlPoints[1].push_back({0.0290, -0.0643, -0.0101});
+        selfControlPoints[1].push_back({0.0264, -0.0460, -0.0154});
+        selfControlPoints[1].push_back({0.0074, -0.0258, -0.0302});
+        selfControlPoints[1].push_back({0.0159, -0.0429, -0.0300});
+        selfControlPoints[1].push_back({-0.0196, -0.0430, -0.0299});
+        selfControlPoints[1].push_back({-0.0112, -0.0259, -0.0301});
     }
 }
 
@@ -123,7 +150,38 @@ bool AvoidanceHandlerAbstract::computeFoR(const yarp::sig::Vector &pos, const ya
 
     return true;
 }
-    
+
+void AvoidanceHandlerAbstract::checkSelfCollisions()
+{
+    std::vector<Matrix> transforms;
+    transforms.push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_HAND].linkNum + 3))*chain.getH(2));
+    transforms.push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_FOREARM].linkNum + 3))*chain.getH(2));
+    int index = 0;
+    for (int k = 0; k < 2; ++k) {
+        for (const auto &colPoint: selfColPoints) {
+            Vector pos = transforms[k] * colPoint;
+            int nearest = -1;
+            double neardist = 10000;
+            for (int i = 0; i < selfControlPoints[k].size(); i++) {
+                double n = yarp::math::norm2(pos.subVector(0, 2) - selfControlPoints[k][i]);
+                if (n < neardist) {
+                    nearest = i;
+                    neardist = n;
+                }
+            }
+            if (neardist < 0.0025) { // distance lower than 0.05 m
+                totalColPoints.emplace_back();
+                collisionPoint_t cp{(k == 0)? SKIN_LEFT_HAND : SKIN_LEFT_FOREARM, (1 - neardist * 100)};
+                cp.x = selfControlPoints[k][nearest];
+                Vector n = pos.subVector(0, 2) - selfControlPoints[k][nearest];
+                cp.n = n / yarp::math::norm(n);
+                totalColPoints.push_back(cp);
+                printf("colPoint %d with pos = %s\n", index, cp.x.toString().c_str());
+            }
+            index++;
+        }
+    }
+}
 
 
 /****************************************************************/
@@ -150,7 +208,7 @@ void AvoidanceHandlerTactile::setParameters(const Property &parameters)
 }
 
 /****************************************************************/
-Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim)
+Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, Vector& weighted_normal)
 {
     printMessage(2,"AvoidanceHandlerTactile::getVLIM\n");
     Matrix VLIM=v_lim;
@@ -159,25 +217,7 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim)
     int dim_offset = dim-7;  // 3 if dim == 10; 0 if dim == 7
     ctrlPointChains.clear();
     totalColPoints = collisionPoints;
-    std::vector<Matrix> transforms;
-    transforms.push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_HAND].linkNum + 3))*chain.getH(2));
-    transforms.push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_FOREARM].linkNum + 3))*chain.getH(2));
-    int index = 0;
-    for (const auto & colPoint : selfColPoints) {
-        Vector temp_pos = colPoint.x;
-        temp_pos.resize(4);
-        temp_pos(3) = 1.0;
-        Vector pos =  transforms[colPoint.skin_part == SKIN_LEFT_FOREARM]*temp_pos;
-        double n = yarp::math::norm2(pos.subVector(0,2));
-        if (n < 0.0025) { // distance lower than 0.05 m
-            totalColPoints.push_back(colPoint);
-            totalColPoints.back().x = pos;
-            totalColPoints.back().magnitude = (1-n*100);
-            printf("colPoint %d with pos = %s\n", index, totalColPoints.back().x.toString().c_str());
-        }
-        index++;
-    }
-    printf("Total col point size = %lu\n", totalColPoints.size());
+    checkSelfCollisions();
     for(const auto & colPoint : totalColPoints) {
         iKinChain customChain= chain; //instantiates a new chain, copying from the old (full) one
         if (verbosity >= 5){
@@ -211,6 +251,7 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim)
         printMessage(2,"Chain with control point - index %d (last index %d), nDOF: %d.\n",i,collisionPoints.size()-1,customChain.getDOF());
         Matrix J=customChain.GeoJacobian().submatrix(0,2,0,customChain.getDOF()-1); //first 3 rows ~ dPosition/dJoints
         Vector normal = customChain.getH().getCol(2).subVector(0,2); //get the end-effector frame of the standard or custom chain (control point derived from skin), takes the z-axis (3rd column in transform matrix) ~ normal, only its first three elements of the 4 in the homogenous transf. format
+        weighted_normal += (-colPoint.magnitude*normal);
         Vector s=(J.transposed()*normal) * avoidingSpeed * colPoint.magnitude; //project movement along the normal into joint velocity space and scale by default avoidingSpeed and magnitude of skin (or PPS) activation
         if (verbosity>=2){
             printf("J for positions at control point:\n %s \nJ.transposed:\n %s \nNormal at control point: (%s), norm: %f \n",J.toString(3,3).c_str(),J.transposed().toString(3,3).c_str(), normal.toString(3,3).c_str(),norm(normal));

@@ -126,7 +126,7 @@ void VisualisationHandler::visualizeObjects(const Vector& x_d, const Vector& x_n
     if (visualizeTargetIniCubGui){
         sendiCubGuiObject("target", x_d);
         if(!additionalControlPoints.empty())
-            sendiCubGuiObject("additionalTargets", additionalControlPoints);
+            sendiCubGuiObject(additionalControlPoints);
     }
 
     if(visualizeParticleIniCubGui){
@@ -152,7 +152,7 @@ void VisualisationHandler::sendiCubGuiObject(const std::string& object_type, Vec
         if (object_type == "particle")
         {
             obj.addString("object");
-            obj.addString("particle");
+            obj.addString(object_type);
 
             // size
             obj.addDouble(20.0);
@@ -180,7 +180,7 @@ void VisualisationHandler::sendiCubGuiObject(const std::string& object_type, Vec
         else if(object_type == "target")
         {
             obj.addString("object");
-            obj.addString("target");
+            obj.addString(object_type);
 
             // size
             obj.addDouble(40.0);
@@ -210,7 +210,7 @@ void VisualisationHandler::sendiCubGuiObject(const std::string& object_type, Vec
     }
 }
 
-void VisualisationHandler::sendiCubGuiObject(const std::string& object_type, const std::vector<ControlPoint>& additionalControlPointsVector)
+void VisualisationHandler::sendiCubGuiObject(const std::vector<ControlPoint>& additionalControlPointsVector)
 {
     if (outPortiCubGui.getOutputCount()>0) {
         Bottle obj;
@@ -322,15 +322,17 @@ void VisualisationHandler::moveBox(int index, const Vector &pos)
 }
 
 void VisualisationHandler::showCollisionPointsInSim(iCub::iKin::iCubArm& arm,
-                                                    const std::vector<collisionPoint_t>& collisionPoints)
+                                                    const std::vector<collisionPoint_t>& collisionPoints,
+                                                    const std::vector<Vector>& selfColPoints)
 {
-    size_t nrCollisionPoints = collisionPoints.size(); //+avhdl->getSelfColPoints().size();
+    size_t nrCollisionPoints = collisionPoints.size()+selfColPoints.size();
     Vector pos(3,0.0);
     if (nrCollisionPoints > collisionPointsVisualizedCount){
         for(int i=1; i<= (nrCollisionPoints - collisionPointsVisualizedCount);i++){
             pos = collisionPointsSimReservoirPos;
             pos(2)=pos(2)+0.03*i;
-            printMessage(5,"There are more collision points, %d, than available boxes in sim, %d, adding one at %s\n",nrCollisionPoints,collisionPointsVisualizedCount,pos.toString(3,3).c_str());
+            printMessage(5,"There are more collision points, %d, than available boxes in sim, %d, adding one at %s\n",
+                         nrCollisionPoints,collisionPointsVisualizedCount,pos.toString(3,3).c_str());
             createStaticBox(pos);
             collisionPointsVisualizedCount++;
         }
@@ -348,13 +350,14 @@ void VisualisationHandler::showCollisionPointsInSim(iCub::iKin::iCubArm& arm,
     }
 
 
-//    for(const auto & collisionPoint : avhdl->getSelfColPoints()) {
-//        convertPosFromLinkToRootFoR(collisionPoint.x,SKIN_FRONT_TORSO,posRoot);
-//        convertPosFromRootToSimFoR(posRoot,posSim);
-//        moveBox(j,posSim); //just move a box from the sim world
-//        j++;
-//        posRoot.zero(); posSim.zero();
-//    }
+    for(const auto & collisionPoint : selfColPoints) {
+        convertPosFromLinkToRootFoR(arm, collisionPoint,SKIN_FRONT_TORSO,posRoot);
+        sendiCubGuiObject("particle", posRoot);
+        convertPosFromRootToSimFoR(posRoot,posSim);
+        moveBox(j,posSim); //just move a box from the sim world
+        j++;
+        posRoot.zero(); posSim.zero();
+    }
 
     //if there have been more boxes allocated, just move them to the reservoir in the world
     //(icubSim does not support deleting individual objects)
@@ -363,7 +366,9 @@ void VisualisationHandler::showCollisionPointsInSim(iCub::iKin::iCubArm& arm,
         for(int k=collisionPointsVisualizedCount; k> nrCollisionPoints;k--){
             pos = collisionPointsSimReservoirPos;
             pos(2) = pos(2) + +0.03*k;
-            printMessage(5,"There are fewer collision points, %d, than available boxes in sim, %d, moving the rest to the reservoir in the sim world -  this one to: %s \n",nrCollisionPoints,collisionPointsVisualizedCount,pos.toString(3,3).c_str());
+            printMessage(5,"There are fewer collision points, %d, than available boxes in sim, %d, "
+                           "moving the rest to the reservoir in the sim world -  this one to: %s \n",
+                           nrCollisionPoints,collisionPointsVisualizedCount,pos.toString(3,3).c_str());
             moveBox(k,pos);
         }
     }

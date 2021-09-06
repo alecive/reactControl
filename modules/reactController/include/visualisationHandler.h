@@ -37,7 +37,7 @@ public:
     //uses corresponding global variables for target pos (x_d) or particle pos (x_n) and creates bottles for the port to iCubGui
     void sendiCubGuiObject(const std::string& object_type, Vector x);
 
-    void sendiCubGuiObject(const std::string& object_type, const std::vector<ControlPoint>& additionalControlPointsVector);
+    void sendiCubGuiObject(const std::vector<ControlPoint>& additionalControlPointsVector);
 
     void deleteiCubGuiObject(const std::string& object_type);
 
@@ -55,7 +55,8 @@ public:
 
     void moveBox(int index, const yarp::sig::Vector &pos);
 
-    void showCollisionPointsInSim(iCub::iKin::iCubArm& arm, const std::vector<collisionPoint_t>& collisionPoints);
+    void showCollisionPointsInSim(iCub::iKin::iCubArm& arm, const std::vector<collisionPoint_t>& collisionPoints,
+                                  const std::vector<Vector>& selfColPoints);
 
     void visualizeObjects(const Vector& x_d, const Vector& x_n, const std::vector<ControlPoint>& additionalControlPoints);
 

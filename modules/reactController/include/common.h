@@ -20,6 +20,12 @@ struct collisionPoint_t{
         x.resize(3);
         n.resize(3);
     }
+    collisionPoint_t(iCub::skinDynLib::SkinPart _skinPart, std::vector<double> pos, double mag = 1): skin_part(_skinPart), magnitude(mag)
+    {
+        x.resize(3);
+        x = {pos[0], pos[1], pos[2]};
+        n.resize(3);
+    }
 
     explicit collisionPoint_t(iCub::skinDynLib::SkinPart _skinPart, double mag=1): skin_part(_skinPart), magnitude(mag)
     {

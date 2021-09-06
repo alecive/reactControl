@@ -4,14 +4,15 @@
 
 project(reactController)
 
-find_package(IPOPT REQUIRED)
+#find_package(IPOPT REQUIRED)
+find_package(OsqpEigen REQUIRED)
 
-set(header_files ${CMAKE_CURRENT_SOURCE_DIR}/include/reactIpOpt.h
+set(header_files ${CMAKE_CURRENT_SOURCE_DIR}/include/reactOSQP.h
                  ${CMAKE_CURRENT_SOURCE_DIR}/include/reactCtrlThread.h
                  ${CMAKE_CURRENT_SOURCE_DIR}/include/particleThread.h
                  ${CMAKE_CURRENT_SOURCE_DIR}/include/visualisationHandler.h
                  ${CMAKE_CURRENT_SOURCE_DIR}/include/avoidanceHandler.h)
-set(source_files ${CMAKE_CURRENT_SOURCE_DIR}/src/reactIpOpt.cpp
+set(source_files ${CMAKE_CURRENT_SOURCE_DIR}/src/reactOSQP.cpp
                  ${CMAKE_CURRENT_SOURCE_DIR}/src/reactCtrlThread.cpp
                  ${CMAKE_CURRENT_SOURCE_DIR}/src/particleThread.cpp
                  ${CMAKE_CURRENT_SOURCE_DIR}/src/reactController.cpp
@@ -28,7 +29,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include
 
 add_executable(${PROJECT_NAME} ${header_files} ${source_files} ${IDL_GEN_FILES} ${idl_files})
 target_compile_definitions(${PROJECT_NAME} PRIVATE ${IPOPT_DEFINITIONS} _USE_MATH_DEFINES)
-target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES} ctrlLib iKin skinDynLib ${IPOPT_LIBRARIES})
-set_property(TARGET ${PROJECT_NAME} APPEND_STRING PROPERTY LINK_FLAGS " ${IPOPT_LINK_FLAGS}")
+target_link_libraries(${PROJECT_NAME} ${YARP_LIBRARIES} ctrlLib iKin skinDynLib Eigen3::Eigen OsqpEigen::OsqpEigen)
+#set_property(TARGET ${PROJECT_NAME} APPEND_STRING PROPERTY LINK_FLAGS " ${IPOPT_LINK_FLAGS}")
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
 

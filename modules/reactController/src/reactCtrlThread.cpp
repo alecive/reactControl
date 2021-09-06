@@ -52,12 +52,12 @@ reactCtrlThread::reactCtrlThread(int _rate, string _name, string _robot,  string
                                  orientationControl(_orientationControl), additionalControlPoints(_additionalControlPoints),
                                  arm(nullptr), visualizeCollisionPointsInSim(_visCollisionPointsInSim), start_experiment(0),
                                  counter(0), t_1(0), restPosWeight(_restPosWeight), selfColPoints(_selfColPoints),
-                                 state(STATE_WAIT), minJerkTarget(nullptr), I(nullptr), iencsA(nullptr), ivelA(nullptr),
-                                 iposDirA(nullptr), imodA(nullptr), iintmodeA(nullptr), iimpA(nullptr), ilimA(nullptr),
-                                 encsA(nullptr), jntsA(0), iencsT(nullptr), ivelT(nullptr), iposDirT(nullptr), imodT(nullptr),
-                                 ilimT(nullptr), encsT(nullptr), jntsT(0), igaze(nullptr), contextGaze(0), chainActiveDOF(0),
-                                 virtualArm(nullptr), movingTargetCircle(false), radius(0), frequency(0), streamingTarget(true),
-                                 t_0(0), ipoptExitCode(0), timeToSolveProblem_s(0), firstSolve(true),
+                                 state(STATE_WAIT), minJerkTarget(nullptr), I(nullptr), iencsA(nullptr), iposDirA(nullptr),
+                                 imodA(nullptr), iintmodeA(nullptr), iimpA(nullptr), ilimA(nullptr), encsA(nullptr),
+                                 jntsA(0), iencsT(nullptr), iposDirT(nullptr), imodT(nullptr), ilimT(nullptr), encsT(nullptr),
+                                 jntsT(0), igaze(nullptr), contextGaze(0), chainActiveDOF(0), virtualArm(nullptr),
+                                 movingTargetCircle(false), radius(0), frequency(0), streamingTarget(true),
+                                 t_0(0), ipoptExitCode(0), timeToSolveProblem_s(0), /*firstSolve(true),*/
                                  visuhdl(verbosity, (robot == "icubSim"), name, _visTargetInSim,
                                          referenceGen != "none" && _visParticleInSim)
 {
@@ -79,7 +79,7 @@ bool reactCtrlThread::threadInit()
     }
 
     /******** iKin chain and variables, and transforms init *************************/
-    arm = new iCub::iKin::iCubArm(part_short);
+    arm = new iCub::iKin::iCubArm(part_short+"_v2");
     // Release / block torso links (blocked by default)
     for (int i = 0; i < NR_TORSO_JOINTS; i++)
     {
@@ -143,7 +143,6 @@ bool reactCtrlThread::threadInit()
     if (ddA.isValid())
     {
         okA = ddA.view(iencsA);
-        okA = okA && ddA.view(ivelA);
         okA = okA && ddA.view(iposDirA);
         okA = okA && ddA.view(imodA);
         okA = okA && ddA.view(ilimA);
@@ -176,7 +175,6 @@ bool reactCtrlThread::threadInit()
     if (ddT.isValid())
     {
         okT = ddT.view(iencsT);
-        okT = okT && ddT.view(ivelT);
         okT = okT && ddT.view(iposDirT);
         okT = okT && ddT.view(imodT);
         okT = okT && ddT.view(ilimT);
@@ -297,32 +295,36 @@ bool reactCtrlThread::threadInit()
     yInfo("Written to param file and closing..");
     fout_param.close();
 
-    app=new Ipopt::IpoptApplication;
-    app->Options()->SetNumericValue("tol",tol);
-    app->Options()->SetNumericValue("constr_viol_tol",1e-6);
-    app->Options()->SetIntegerValue("acceptable_iter",0);
-    app->Options()->SetStringValue("mu_strategy","adaptive");
-    app->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
-    app->Options()->SetNumericValue("max_cpu_time",0.7*dT);
-    app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
-    app->Options()->SetStringValue("hessian_constant", "yes");
-    app->Options()->SetStringValue("jac_c_constant", "yes");
-    app->Options()->SetStringValue("jac_d_constant", "yes");
-    app->Options()->SetStringValue("mehrotra_algorithm", "yes");
-    app->Options()->SetStringValue("derivative_test",verbosity?"first-order":"none");
-//    app->Options()->SetStringValue("derivative_test_print_all", "yes");
-    app->Options()->SetIntegerValue("print_level", verbosity?5:0);
-    app->Options()->SetNumericValue("derivative_test_tol", 1e-7);
-//    app->Options()->SetStringValue("print_timing_statistics", "yes");
-    app->Initialize();
-
-    //in positionDirect mode, ipopt will use the qIntegrated values to update its copy of chain
-    nlp=new ControllerNLP(*virtualArm,
-                          additionalControlPointsVector, hittingConstraints, orientationControl,
-                          additionalControlPoints, dT, restPosWeight);
+//    app=new Ipopt::IpoptApplication;
+//    app->Options()->SetNumericValue("tol",tol);
+//    app->Options()->SetNumericValue("constr_viol_tol",1e-6);
+//    app->Options()->SetIntegerValue("acceptable_iter",0);
+//    app->Options()->SetStringValue("mu_strategy","adaptive");
+//    app->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
+//    app->Options()->SetNumericValue("max_cpu_time",0.7*dT);
+//    app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
+//    app->Options()->SetStringValue("hessian_constant", "yes");
+//    app->Options()->SetStringValue("jac_c_constant", "yes");
+//    app->Options()->SetStringValue("jac_d_constant", "yes");
+//    app->Options()->SetStringValue("mehrotra_algorithm", "yes");
+//    app->Options()->SetStringValue("derivative_test",verbosity?"first-order":"none");
+////    app->Options()->SetStringValue("derivative_test_print_all", "yes");
+//    app->Options()->SetIntegerValue("print_level", verbosity?5:0);
+//    app->Options()->SetNumericValue("derivative_test_tol", 1e-7);
+////    app->Options()->SetStringValue("print_timing_statistics", "yes");
+//    app->Initialize();
+//
+//    //in positionDirect mode, ipopt will use the qIntegrated values to update its copy of chain
+//    nlp=new ControllerNLP(*virtualArm,
+//                          additionalControlPointsVector, hittingConstraints, orientationControl,
+//                          additionalControlPoints, dT, restPosWeight);
+    //    firstSolve = true;
+    weighted_normal.resize(3,0);
     //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
     avhdl = std::make_unique<AvoidanceHandlerTactile>(*arm->asChain(),collisionPoints,selfColPoints,verbosity);
-    firstSolve = true;
+
+    solver = std::make_unique<QPSolver>(*virtualArm,additionalControlPointsVector, hittingConstraints,
+                                        orientationControl, additionalControlPoints, dT, restPosWeight);
     printMessage(5,"[reactCtrlThread] threadInit() finished.\n");
     yarp::os::Time::delay(0.2);
     t_0=Time::now();
@@ -391,14 +393,10 @@ void reactCtrlThread::run()
 
     if (t_1 > 0)
     {
-        collisionPoint_t collisionPointStruct;
-        collisionPointStruct.skin_part = SKIN_LEFT_FOREARM;
-        collisionPointStruct.x.resize(3,0.0);
-        collisionPointStruct.n.resize(3,0.0);
-        collisionPointStruct.magnitude = 1.5; //~ "probability of collision"
+        collisionPoint_t collisionPointStruct{SKIN_LEFT_FOREARM};
         if (yarp::os::Time::now() - t_1 > 10 && counter < 150) {
-            collisionPointStruct.x = {-0.0002, -0.0131,-0.0258434}; // {-0.031, -0.079, 0.005};
-            collisionPointStruct.n = {-0.005, 0.238, -0.971}; // {-0.739, 0.078, 0.105};
+            collisionPointStruct.x = {-0.0002, -0.0131,-0.0258434};//  {-0.02, 0.0, -0.005}; //  // {-0.031, -0.079, 0.005};
+            collisionPointStruct.n = {-0.005, 0.238, -0.971}; //{0,0,-1}; // // {-0.739, 0.078, 0.105};
             counter++;
             collisionPoints.push_back(collisionPointStruct);
         } else if (yarp::os::Time::now() - t_1 > 20 && counter < 450) {
@@ -426,10 +424,10 @@ void reactCtrlThread::run()
         getProximityFromPort(collisionPoints);
     }
     //after this point, we don't care where did the collision points come from - our relative confidence in the two modalities is expressed in the gains
-    
-    if (visualizeCollisionPointsInSim && !collisionPoints.empty()){
+
+    if (visualizeCollisionPointsInSim){
         printMessage(5,"[reactCtrlThread::run()] will visualize collision points in simulator.\n");
-        visuhdl.showCollisionPointsInSim(*arm, collisionPoints);
+        visuhdl.showCollisionPointsInSim(*arm, collisionPoints, avhdl->getSelfColPoints());
     }
 
     switch (state)
@@ -438,11 +436,11 @@ void reactCtrlThread::run()
         {
             Vector v0(3,0.0);
             switch(start_experiment) {
-                case 1: { v0[2] = 0.0; setNewRelativeTarget(v0); break; }
-                case 2: { v0[2] = 0.05; setNewRelativeTarget(v0); break; }
-                case 3: { v0[2] = -0.15; setNewRelativeTarget(v0); break; }
-                case 4: { v0[2] = 0.1; setNewRelativeTarget(v0); break; }
-                case 5: setNewCircularTarget(0.08,0.2); break;
+//                case 1: { v0[2] = 0.0; setNewRelativeTarget(v0); break; }
+                case 1: { v0[2] = 0.1; setNewRelativeTarget(v0); break; }
+                case 2: { v0[2] = -0.15; setNewRelativeTarget(v0); break; }
+                case 3: { v0[2] = 0.1; setNewRelativeTarget(v0); break; }
+                case 4: setNewCircularTarget(0.08,0.2); break;
                 default: break;
             }
             break;
@@ -454,11 +452,11 @@ void reactCtrlThread::run()
             {
                 yDebug("[reactCtrlThread] norm(x_t-x_d) %g\tglobalTol %g",norm(x_t-x_d),globalTol);
                 state=STATE_IDLE;
-                if (!stopControlHelper())
-                    yError("[reactCtrlThread] Unable to properly stop the control of the arm!");
-                break;
+//                if (!stopControlHelper())
+//                    yError("[reactCtrlThread] Unable to properly stop the control of the arm!");
+//                break;
             }
-            
+
             if (movingTargetCircle) {
                 x_d = getPosMovingTargetOnCircle();
             }
@@ -485,18 +483,24 @@ void reactCtrlThread::run()
             if(gazeControl)
                 igaze -> lookAtFixationPoint(x_d); //for now looking at final target (x_d), not at intermediate/next target x_n
 
-            if (tactileCollisionPointsOn || visualCollisionPointsOn){
-                vLimAdapted=avhdl->getVLIM(CTRL_DEG2RAD * vLimNominal) * CTRL_RAD2DEG;
+            if (tactileCollisionPointsOn || visualCollisionPointsOn || proximityCollisionPointsOn){
+                weighted_normal = {0,0,0};
+                vLimAdapted=avhdl->getVLIM(CTRL_DEG2RAD * vLimNominal, weighted_normal) * CTRL_RAD2DEG;
             }
 //            yDebug("vLimAdapted = %s",vLimAdapted.toString(3,3).c_str());
             double t_3=yarp::os::Time::now();
             q_dot = solveIK(ipoptExitCode); //this is the key function call where the reaching opt problem is solved 
             timeToSolveProblem_s  = yarp::os::Time::now()-t_3;
 
-            if (ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
-                yWarning("[reactCtrlThread] Ipopt cpu time was higher than the rate of the thread!");
-            else if (ipoptExitCode!=Ipopt::Solve_Succeeded)
-                yWarning("[reactCtrlThread] Ipopt solve did not succeed!");
+//            if (ipoptExitCode==Ipopt::Maximum_CpuTime_Exceeded)
+//                yWarning("[reactCtrlThread] Ipopt cpu time was higher than the rate of the thread!");
+//            else if (ipoptExitCode!=Ipopt::Solve_Succeeded)
+//                yWarning("[reactCtrlThread] Ipopt solve did not succeed!");
+
+            if (ipoptExitCode==OSQP_TIME_LIMIT_REACHED) // qpOASES::RET_MAX_NWSR_REACHED)
+                yWarning("[reactCtrlThread] OSQP cpu time was higher than the rate of the thread!");
+            else if (ipoptExitCode!=OSQP_SOLVED) // qpOASES::SUCCESSFUL_RETURN)
+                yWarning("[reactCtrlThread] OSQP solve did not succeed!");
 
             qIntegrated = I->integrate(q_dot);
             if (!controlArm("positionDirect",qIntegrated)){
@@ -692,7 +696,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
         x_n=x_0;
         x_d=_x_d;
         if (start_experiment == 1) {
-            x_d[0] = -0.289; x_d[1] = -0.164; x_d[2] = 0.1;
+            x_d[0] = -0.299; x_d[1] = -0.174; x_d[2] = 0.05;
         }
 
                 
@@ -777,19 +781,32 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
    //yInfo()<<"   e_pos real using x_t       [m] = "<<norm(x_n-x_t); 
    //yInfo()<<"   e_pos_virtual before opt step [m] = "<<norm(x_n-xee_pos_virtual);
 
-
     Vector xr(6,0.0);
     xr.setSubvector(0,x_n);
     xr.setSubvector(3,o_n);
 
-    nlp->init(xr, q_dot, vLimAdapted);
-    if (firstSolve) {
-        _exit_code = app->OptimizeTNLP(GetRawPtr(nlp));
-        firstSolve = false;
-    } else {
-        _exit_code = app->ReOptimizeTNLP(GetRawPtr(nlp));
+    int count = 0;
+    Vector res;
+    solver->init(xr, q_dot, vLimAdapted, weighted_normal);
+    std::array<double,7> vals = {0, 0.1, 1.25, 2.5, 5, 10, std::numeric_limits<double>::max()};
+    while(count < vals.size()) {
+        _exit_code = solver->optimize(vals[count]);
+        if (_exit_code == OSQP_SOLVED) {
+            yInfo("Problem solved in %d runs\n", count+1);
+            break;
+        }
+        count++;
     }
-    Vector res=nlp->get_resultInDegPerSecond();
+    res = solver->get_resultInDegPerSecond();
+
+//    nlp->init(xr, q_dot, vLimAdapted);
+//    if (firstSolve) {
+//        _exit_code = app->OptimizeTNLP(GetRawPtr(nlp));
+//        firstSolve = false;
+//    } else {
+//        _exit_code = app->ReOptimizeTNLP(GetRawPtr(nlp));
+//    }
+//    Vector res=nlp->get_resultInDegPerSecond();
 
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
     if(verbosity >= 1){ 
@@ -860,8 +877,7 @@ void reactCtrlThread::printJointsBounds()
     }
 }
 
-bool reactCtrlThread::areJointsHealthyAndSet(vector<int> &jointsToSet,
-                                             const string &_p, const string &_s)
+bool reactCtrlThread::areJointsHealthyAndSet(vector<int> &jointsToSet, const string &_p, const string &_s)
 {
     jointsToSet.clear();
     vector<int> modes(jntsA);
@@ -919,8 +935,7 @@ bool reactCtrlThread::areJointsHealthyAndSet(vector<int> &jointsToSet,
     return true;
 }
 
-bool reactCtrlThread::setCtrlModes(const vector<int> &jointsToSet,
-                                   const string &_p, const string &_s)
+bool reactCtrlThread::setCtrlModes(const vector<int> &jointsToSet, const string &_p, const string &_s)
 {
     if (_s!="position" && _s!="velocity" && _s!="positionDirect")
         return false;
@@ -971,14 +986,12 @@ bool reactCtrlThread::controlArm(const string& _controlMode, const yarp::sig::Ve
     if (!areJointsHealthyAndSet(jointsToSetA,"arm",_controlMode))
     {
         yWarning("[reactCtrlThread::controlArm] Stopping control because arm joints are not healthy!");
-        stopControlHelper();
         return false;
     }
  
     if (!areJointsHealthyAndSet(jointsToSetT,"torso",_controlMode))
     {
         yWarning("[reactCtrlThread::controlArm] Stopping control because torso joints are not healthy!");
-        stopControlHelper();
         return false;
     }
     
@@ -1007,20 +1020,21 @@ bool reactCtrlThread::controlArm(const string& _controlMode, const yarp::sig::Ve
             printf("\n");       
         }
     }*/
-    if (_controlMode == "velocity")
-    {
-        printMessage(1,"[reactCtrlThread::controlArm] Joint velocities (iKin order, deg/s): %s\n",_targetValues.toString(3,3).c_str());
-
-        Vector velsT(TORSO_DOF,0.0);
-        velsT[0] = _targetValues[2]; //swapping pitch and yaw as per iKin vs. motor interface convention
-        velsT[1] = _targetValues[1];
-        velsT[2] = _targetValues[0]; //swapping pitch and yaw as per iKin vs. motor interface convention
-
-        printMessage(2,"    velocityMove(): torso (swap pitch & yaw): %s\n",velsT.toString(3,3).c_str());
-        ivelT->velocityMove(velsT.data());
-        ivelA->velocityMove(_targetValues.subVector(3,9).data()); //indexes 3 to 9 are the arm joints velocities
-    }
-    else if(_controlMode == "positionDirect")
+//    if (_controlMode == "velocity")
+//    {
+//        printMessage(1,"[reactCtrlThread::controlArm] Joint velocities (iKin order, deg/s): %s\n",_targetValues.toString(3,3).c_str());
+//
+//        Vector velsT(TORSO_DOF,0.0);
+//        velsT[0] = _targetValues[2]; //swapping pitch and yaw as per iKin vs. motor interface convention
+//        velsT[1] = _targetValues[1];
+//        velsT[2] = _targetValues[0]; //swapping pitch and yaw as per iKin vs. motor interface convention
+//
+//        printMessage(2,"    velocityMove(): torso (swap pitch & yaw): %s\n",velsT.toString(3,3).c_str());
+//        ivelT->velocityMove(velsT.data());
+//        ivelA->velocityMove(_targetValues.subVector(3,9).data()); //indexes 3 to 9 are the arm joints velocities
+//    }
+//    else
+    if(_controlMode == "positionDirect")
     {
         printMessage(1,"[reactCtrlThread::controlArm] Target joint positions (iKin order, deg): %s\n",_targetValues.toString(3,3).c_str());
         Vector posT(3,0.0);
@@ -1039,15 +1053,10 @@ bool reactCtrlThread::controlArm(const string& _controlMode, const yarp::sig::Ve
 bool reactCtrlThread::stopControlAndSwitchToPositionModeHelper()
 {
     state=STATE_IDLE;
-    
-    vector<int> jointsToSetA;
-    jointsToSetA.push_back(0);jointsToSetA.push_back(1);jointsToSetA.push_back(2);jointsToSetA.push_back(3);jointsToSetA.push_back(4);
-    jointsToSetA.push_back(5);jointsToSetA.push_back(6);
-
-    ivelA->stop();
-    ivelT->stop();
-    vector<int> jointsToSetT;
-    jointsToSetT.push_back(0);jointsToSetT.push_back(1);jointsToSetT.push_back(2);
+//    ivelA->stop();
+//    ivelT->stop();
+    vector<int> jointsToSetA{0,1,2,3,4,5,6};
+    vector<int> jointsToSetT{0,1,2};
     return  setCtrlModes(jointsToSetA,"arm","position") && setCtrlModes(jointsToSetT,"torso","position");
 }
 
@@ -1068,7 +1077,8 @@ Vector reactCtrlThread::getPosMovingTargetOnCircle()
  /**** communication through ports in/out ****************/
 
 
-bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, double gain, const string& which_chain,std::vector<collisionPoint_t> &collPoints)
+bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, double gain, const string& which_chain,
+                                                 std::vector<collisionPoint_t> &collPoints)
 {
     //printMessage(9,"[reactCtrlThread::getCollisionPointsFromPort].\n");
     collisionPoint_t collPoint;    
@@ -1081,14 +1091,16 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
     
     Bottle* collPointsMultiBottle = inPort.read(false);
     if(collPointsMultiBottle != nullptr){
-         printMessage(5,"[reactCtrlThread::getCollisionPointsFromPort]: There were %d bottles on the port.\n",collPointsMultiBottle->size());
+         printMessage(5,"[reactCtrlThread::getCollisionPointsFromPort]: There were %d bottles on the port.\n",
+                      collPointsMultiBottle->size());
          for(int i=0; i< collPointsMultiBottle->size();i++){
              Bottle* collPointBottle = collPointsMultiBottle->get(i).asList();
              printMessage(5,"Bottle %d contains %s \n", i,collPointBottle->toString().c_str());
              sp =  (SkinPart)(collPointBottle->get(0).asInt());
              //we take only those collision points that are relevant for the chain we are controlling + torso
-             if( ((which_chain == "left") && ( (sp==SKIN_LEFT_HAND) || (sp==SKIN_LEFT_FOREARM) || (sp==SKIN_LEFT_UPPER_ARM)) ) || (sp==SKIN_FRONT_TORSO)
-                 || ((which_chain == "right") && ( (sp==SKIN_RIGHT_HAND) || (sp==SKIN_RIGHT_FOREARM) || (sp==SKIN_RIGHT_UPPER_ARM) ) ) ){
+             if( ((which_chain == "left") && ( (sp==SKIN_LEFT_HAND) || (sp==SKIN_LEFT_FOREARM) ||
+             (sp==SKIN_LEFT_UPPER_ARM)) ) || (sp==SKIN_FRONT_TORSO) || ((which_chain == "right") &&
+             ( (sp==SKIN_RIGHT_HAND) || (sp==SKIN_RIGHT_FOREARM) || (sp==SKIN_RIGHT_UPPER_ARM) ) ) ){
                 collPoint.skin_part = sp;
                 collPoint.x(0) = collPointBottle->get(1).asDouble();
                 collPoint.x(1) = collPointBottle->get(2).asDouble();
@@ -1125,8 +1137,9 @@ bool reactCtrlThread::getProximityFromPort(std::vector<collisionPoint_t> &collPo
         printMessage(0,"Bottle contains %s \n", collPointBottle->toString().c_str());
         sp =  (SkinPart)(collPointBottle->get(0).asInt());
         //we take only those collision points that are relevant for the chain we are controlling + torso
-        if( ((part_short == "left") && ( (sp==SKIN_LEFT_HAND) || (sp==SKIN_LEFT_FOREARM) || (sp==SKIN_LEFT_UPPER_ARM)) ) || (sp==SKIN_FRONT_TORSO)
-        || ((part_short == "right") && ( (sp==SKIN_RIGHT_HAND) || (sp==SKIN_RIGHT_FOREARM) || (sp==SKIN_RIGHT_UPPER_ARM) ) ) ){
+        if (((part_short == "left") && ((sp==SKIN_LEFT_HAND) || (sp==SKIN_LEFT_FOREARM) || (sp==SKIN_LEFT_UPPER_ARM)))
+        || ((part_short == "right") &&
+        ((sp==SKIN_RIGHT_HAND) || (sp==SKIN_RIGHT_FOREARM) || (sp==SKIN_RIGHT_UPPER_ARM)))) {
             collPoint.skin_part = sp;
             collPoint.x(0) = collPointBottle->get(1).asDouble();
             collPoint.x(1) = collPointBottle->get(2).asDouble();
