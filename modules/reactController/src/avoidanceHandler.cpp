@@ -234,8 +234,15 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, Vector& weighted_no
             printMessage(2,"obstacle threatening skin part %s, blocking links 5(+3) and 6(+3) on subchain for avoidance\n",SkinPart_s[colPoint.skin_part].c_str());
         }
         else if ((colPoint.skin_part == SKIN_LEFT_UPPER_ARM) || (colPoint.skin_part == SKIN_RIGHT_UPPER_ARM)){
-            customChain.rmLink(6+dim_offset); customChain.rmLink(5+dim_offset);customChain.rmLink(4+dim_offset);customChain.rmLink(3+dim_offset);
+            customChain.rmLink(6+dim_offset); customChain.rmLink(5+dim_offset);
+            customChain.rmLink(4+dim_offset); customChain.rmLink(3+dim_offset);
             printMessage(2,"obstacle threatening skin part %s, blocking links 3(+3)-6(+3) on subchain for avoidance\n",SkinPart_s[colPoint.skin_part].c_str());
+        }
+        else if (colPoint.skin_part == SKIN_FRONT_TORSO) {
+            customChain.rmLink(6+dim_offset); customChain.rmLink(5+dim_offset); customChain.rmLink(4+dim_offset);
+            customChain.rmLink(3+dim_offset); customChain.rmLink(2+dim_offset); customChain.rmLink(1+dim_offset);
+            customChain.rmLink(0+dim_offset);
+            printMessage(2,"obstacle threatening skin part %s, blocking links 0(+3)-6(+3) on subchain for avoidance\n",SkinPart_s[colPoint.skin_part].c_str());
         }
 
         // SetHN to move the end effector toward the point to be controlled - the average locus of collision threat from safety margin

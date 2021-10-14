@@ -67,9 +67,10 @@ class QPSolver
 
 public:
     QPSolver(iCubArm &chain_, std::vector<ControlPoint> &additional_control_points_, bool hittingConstraints_,
-                  bool orientationControl_, bool additionalControlPoints_, double dT_, double restPosWeight=0.0);
+                  bool orientationControl_, bool additionalControlPoints_, double dT_, const Vector& restPos,
+                  double restPosWeight=0.0);
     ~QPSolver();
-    void init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, const Vector &col_normal);
+    void init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, const Vector &col_normal, double rest_pos_w);
     Vector get_resultInDegPerSecond() {
         Eigen::VectorXd sol = solver.getSolution();
         for (int i = 0; i < chain_dof; ++i) {

@@ -87,7 +87,7 @@ void QPSolver::computeBounds()
 /****************************************************************/
 QPSolver::QPSolver(iCubArm &chain_, std::vector<ControlPoint> &additional_control_points_,
                              bool hittingConstraints_, bool orientationControl_, bool additionalControlPoints_,
-                             double dT_, double restPosWeight_) :
+                             double dT_, const Vector& restPos, double restPosWeight_) :
         arm(chain_), additional_control_points(additional_control_points_), hitting_constraints(hittingConstraints_),
         additional_control_points_flag(additionalControlPoints_), dt(dT_), extra_ctrl_points_nr(0),
         additional_control_points_tol(0.0001), shou_m(0), shou_n(0), elb_m(0), elb_n(0),
@@ -114,8 +114,8 @@ QPSolver::QPSolver(iCubArm &chain_, std::vector<ControlPoint> &additional_contro
     if (hitting_constraints)
         computeSelfAvoidanceConstraints();
     computeGuard();
-    rest_jnt_pos = {0, 0, 0, -25*CTRL_DEG2RAD, 20*CTRL_DEG2RAD, 0, 50*CTRL_DEG2RAD, 0, -20*CTRL_DEG2RAD, 0};
-    rest_weights = {1,1,1,0,0,0,0,0,0,0};
+    rest_jnt_pos = restPos;
+    rest_weights = {1,1,1,0.5,0.5,0.5,0.5,0.5,0.5,0.5};
     rest_err.resize(chain_dof, 0.0);
 
     hessian.resize(chain_dof+6, chain_dof+6);
@@ -183,14 +183,15 @@ QPSolver::QPSolver(iCubArm &chain_, std::vector<ControlPoint> &additional_contro
 QPSolver::~QPSolver() = default;
 
 /****************************************************************/
-void QPSolver::init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, const Vector &col_normal)
+void QPSolver::init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, const Vector &col_normal, double rest_pos_w)
 {
     yAssert(6 <= _xr.length())
     yAssert(v0.length() == _v0.length())
     yAssert((v_lim.rows() == _v_lim.rows()) && (v_lim.cols() == _v_lim.cols()))
     for (int r=0; r < _v_lim.rows(); r++)
         yAssert(_v_lim(r, 0) <= _v_lim(r, 1));
-
+    if (rest_pos_w >= 0)  // TODO: remember old value
+        w2 = rest_pos_w;
     normal = col_normal; // TODO: add decay_rate
     v_lim= CTRL_DEG2RAD * _v_lim;
     v0= CTRL_DEG2RAD * _v0;

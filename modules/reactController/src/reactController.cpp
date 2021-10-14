@@ -97,6 +97,7 @@ private:
     double  globalTol;  // global tolerance of the task. The controller exits if norm(x_d-x)<globalTol
     double       vMax;  // max velocity set for the joints
     double restPosWeight; // Weight of the reaching joint rest position task (disabled if 0.0)
+    double timeLimit;  // time limit to reach target
     
     string referenceGen; // either "uniformParticle" (constant velocity with particleThread) or "minJerk" 
     //or "none" (will directly apply the target - used especially in the mode when targets are streamed)  
@@ -137,6 +138,7 @@ public:
         globalTol    =  1e-2;
         vMax         =  20.0;
         restPosWeight = 0.0;
+        timeLimit   = 10;
 
         referenceGen = "minJerk";
         hittingConstraints = true;
@@ -199,6 +201,20 @@ public:
         yInfo(" ");
         yInfo("[reactController] will be reading reaching targets from a port.");
         return rctCtrlThrd->setStreamingTarget();   
+    }
+
+    bool go_home() override
+    {
+        yInfo(" ");
+        yInfo("[reactController] robot will move to his home configuration.");
+        return rctCtrlThrd->goHome();
+    }
+
+    bool hold_position() override
+    {
+        yInfo(" ");
+        yInfo("[reactController] robot will hold his current position.");
+        return rctCtrlThrd->holdPosition();
     }
     
     bool set_tol(const double _tol) override
@@ -480,9 +496,18 @@ public:
                 yInfo("[reactController] globalTol to reach target set to %g m.",globalTol);
             }
             else yInfo("[reactController] Could not find globalTol in the config file; using %g as default",globalTol);
-            
-       
-          //*** generating positions for end-effector - trajectory between current pos and final target
+
+
+            //****************** timeLimit ******************
+            if (rf.check("timeLimit"))
+            {
+                timeLimit = rf.find("timeLimit").asDouble();
+                yInfo("[reactController] timeLimit to reach target set to %g s.",timeLimit);
+            }
+            else yInfo("[reactController] Could not find timeLimit in the config file; using %g as default",timeLimit);
+
+
+        //*** generating positions for end-effector - trajectory between current pos and final target
             if (rf.check("referenceGen"))
             {
                 referenceGen = rf.find("referenceGen").asString();
@@ -684,7 +709,7 @@ public:
             
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
                                           disableTorso, trajSpeed,
-                                          globalTol, vMax, tol, referenceGen, 
+                                          globalTol, vMax, tol, timeLimit, referenceGen,
                                           tactileCollisionPointsOn,visualCollisionPointsOn, proximityCollisionPointsOn,
                                           gazeControl,stiffInteraction,
                                           hittingConstraints, orientationControl, additionalControlPoints,

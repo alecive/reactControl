@@ -52,8 +52,22 @@ service reactController_IDL
   * @return true/false on success/failure.
   **/
   bool set_streaming_xd();
-  
-  
+
+
+  /**
+  * Moves robot to home configuration.
+  * @return true/false on success/failure.
+  **/
+  bool go_home();
+
+
+  /**
+  * Robot holds its current position.
+  * @return true/false on success/failure.
+  **/
+  bool hold_position();
+
+
   /**
   * Sets tolerance.
   * @param _tol the solver exits if norm(x_d-x)<tol.

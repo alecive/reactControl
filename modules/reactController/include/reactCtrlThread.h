@@ -48,8 +48,8 @@ class reactCtrlThread: public yarp::os::PeriodicThread
     
 public:
     // CONSTRUCTOR
-    reactCtrlThread(int , string  , string  , string _ ,
-                    int , bool , double , double , double , double , string ,
+    reactCtrlThread(int , string   , string   , string  _ ,
+                    int , bool , double , double , double , double , double , string  ,
                     bool , bool , bool, bool , bool , bool, bool , bool , bool , bool , bool ,
                     particleThread *, double, bool);
     // INIT
@@ -109,7 +109,13 @@ public:
 
     // Stops the control of the robot
     bool stopControlAndSwitchToPositionMode();
-    
+
+    // Moves robot to home configuration
+    bool goHome();
+
+    // Robot holds its current position
+    bool holdPosition();
+
 protected:
     /***************************************************************************/
     // EXTERNAL VARIABLES: change them from command line or through .ini file
@@ -140,7 +146,8 @@ protected:
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
     bool proximityCollisionPointsOn; //if on will be reading predicted collision points from proximity sensor
     bool selfColPoints; // add robot body parts as the collision points to the avoidance handler
-
+    double timeLimit;  // time limit to reach target
+    bool comingHome;
     bool gazeControl; //will follow target with gaze
     bool stiffInteraction; //stiff vs. compliant interaction mode
         
@@ -200,14 +207,19 @@ protected:
     yarp::sig::Vector x_t;  // Current end-effector position
     yarp::sig::Vector x_n;  // Desired next end-effector position
     yarp::sig::Vector x_d;  // Vector that stores the new target
+    yarp::sig::Vector x_home;  // Home end-effector position
 
     //All orientation in Euler angle format
     yarp::sig::Vector o_0;  // Initial end-effector orientation
     yarp::sig::Vector o_t;  // Current end-effector orientation
     yarp::sig::Vector o_n;  // Desired next end-effector orientation
     yarp::sig::Vector o_d;  // Vector that stores the new orientation
+    yarp::sig::Vector o_home;  // Home end-effector orientation
 
+    std::vector<double> fingerPos;
+    yarp::sig::Vector   homePos;
     bool movingTargetCircle;
+    bool holding_position;
     double radius;
     double frequency;
     yarp::sig::Vector circleCenter;
@@ -236,11 +248,12 @@ protected:
     yarp::os::BufferedPort<yarp::os::Bottle> aggregPPSeventsInPort; //coming from visuoTactileRF/pps_activations_aggreg:o 
     //expected format for both: (skinPart_s x y z o1 o2 o3 magnitude), with position x,y,z and normal o1 o2 o3 in link FoR
     yarp::os::Port outPort;
+    yarp::os::Port movementFinishedPort;
     ofstream fout_param; //log parameters that stay constant during the simulation, but are important for analysis - e.g. joint limits
     // Stamp for the setEnvelope for the ports
     yarp::os::Stamp ts;
-    double t_0, t_1;
-    int start_experiment, counter;
+    double t_0;
+    int counter;
  
     // QPSolver STUFF
     int solverExitCode;

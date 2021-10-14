@@ -36,7 +36,7 @@
 
 reactCtrlThread::reactCtrlThread(int _rate, string _name, string _robot,  string _part,
                                  int _verbosity, bool _disableTorso,
-                                 double _trajSpeed, double _globalTol, double _vMax, double _tol,
+                                 double _trajSpeed, double _globalTol, double _vMax, double _tol, double _timeLimit,
                                  string _referenceGen, bool _tactileCPOn, bool _visualCPOn, bool _proximityCPOn,
                                  bool _gazeControl, bool _stiffInteraction,
                                  bool _hittingConstraints, bool _orientationControl,
@@ -45,19 +45,20 @@ reactCtrlThread::reactCtrlThread(int _rate, string _name, string _robot,  string
                                  particleThread *_pT, double _restPosWeight, bool _selfColPoints) :
         PeriodicThread((double)_rate/1000.0), name(std::move(_name)), robot(std::move(_robot)),
         part(std::move(_part)), verbosity(_verbosity), useTorso(!_disableTorso), trajSpeed(_trajSpeed),
-        globalTol(_globalTol), vMax(_vMax), tol(_tol), referenceGen(std::move(_referenceGen)),
+        globalTol(_globalTol), vMax(_vMax), tol(_tol), timeLimit(_timeLimit), referenceGen(std::move(_referenceGen)),
         tactileCollisionPointsOn(_tactileCPOn), visualCollisionPointsOn(_visualCPOn),
         proximityCollisionPointsOn(_proximityCPOn), gazeControl(_gazeControl),
         stiffInteraction(_stiffInteraction), hittingConstraints(_hittingConstraints),
         orientationControl(_orientationControl), additionalControlPoints(_additionalControlPoints),
-        arm(nullptr), visualizeCollisionPointsInSim(_visCollisionPointsInSim), start_experiment(0),
-        counter(0), t_1(0), restPosWeight(_restPosWeight), selfColPoints(_selfColPoints),
+        arm(nullptr), visualizeCollisionPointsInSim(_visCollisionPointsInSim),
+        counter(0), restPosWeight(_restPosWeight), selfColPoints(_selfColPoints),
         state(STATE_WAIT), minJerkTarget(nullptr), I(nullptr), iencsA(nullptr), iposDirA(nullptr),
         imodA(nullptr), iintmodeA(nullptr), iimpA(nullptr), ilimA(nullptr), encsA(nullptr),
         jntsA(0), iencsT(nullptr), iposDirT(nullptr), imodT(nullptr), ilimT(nullptr), encsT(nullptr),
         jntsT(0), igaze(nullptr), contextGaze(0), chainActiveDOF(0), virtualArm(nullptr),
         movingTargetCircle(false), radius(0), frequency(0), streamingTarget(true),
-        t_0(0), solverExitCode(0), timeToSolveProblem_s(0),
+        t_0(0), solverExitCode(0), timeToSolveProblem_s(0), fingerPos({80,6,57,13,0,13,0,103}),
+        homePos({0, 0, 0, -34, 30, 0, 50, 0,  0, 0}), comingHome(false), holding_position(false),
         visuhdl(verbosity, (robot == "icubSim"), name, _visTargetInSim,
                                          referenceGen != "none" && _visParticleInSim)
 {
@@ -204,7 +205,7 @@ bool reactCtrlThread::threadInit()
         iimpA->setImpedance(1,0.4,0.03);
         iimpA->setImpedance(2,0.4,0.03);
         iimpA->setImpedance(3,0.2,0.01);
-        iimpA->setImpedance(4,0.2,0.0);
+        iimpA->setImpedance(4,0.05,0.0);  // TODO: try 0.111, 0.014 everywhere
     }
 
     if (!alignJointsBounds())
@@ -253,13 +254,23 @@ bool reactCtrlThread::threadInit()
     x_t.resize(3,0.0);
     x_n.resize(3,0.0);
     x_d.resize(3,0.0);
-
-
+    //store the home position
+    Vector pose = arm->EndEffPose();
+    x_home = pose.subVector(0,2);
+    o_home = pose.subVector(3,5)*pose(6);
    //palm facing inwards
     o_0.resize(3,0.0);  o_0(1)=-0.707*M_PI;     o_0(2)=+0.707*M_PI;
     o_t.resize(3,0.0);  o_t(1)=-0.707*M_PI;     o_t(2)=+0.707*M_PI;
     o_n.resize(3,0.0);  o_n(1)=-0.707*M_PI;     o_n(2)=+0.707*M_PI;
     o_d.resize(3,0.0);  o_d(1)=-0.707*M_PI;     o_d(2)=+0.707*M_PI;
+
+//  set grasping pose for fingers
+//    for (size_t j=0; j<fingerPos.size(); j++)
+//    {
+//        imodA->setControlMode(8+j, VOCAB_CM_POSITION_DIRECT);
+//        iposDirA->setPosition(8+j, fingerPos[j]);
+//
+//    }
 
     virtualArm = new iCubArm(*arm);  //Creates a new Limb from an already existing Limb object - but they will be too independent limbs from now on
     I = new Integrator(dT,q,lim);
@@ -274,6 +285,7 @@ bool reactCtrlThread::threadInit()
     streamedTargets.open("/"+name+"/streamedWholeBodyTargets:i");
 
     outPort.open("/"+name +"/data:o"); //for dumping
+    movementFinishedPort.open("/" + name + "/finished:o");
 
     fout_param.open("param.log");
 
@@ -300,11 +312,9 @@ bool reactCtrlThread::threadInit()
     avhdl = std::make_unique<AvoidanceHandlerTactile>(*arm->asChain(),collisionPoints,selfColPoints,verbosity);
 
     solver = std::make_unique<QPSolver>(*virtualArm,additionalControlPointsVector, hittingConstraints,
-                                        orientationControl, additionalControlPoints, dT, restPosWeight);
+                                        orientationControl, additionalControlPoints, dT, homePos*CTRL_DEG2RAD, restPosWeight);
     printMessage(5,"[reactCtrlThread] threadInit() finished.\n");
     yarp::os::Time::delay(0.2);
-    t_0=Time::now();
-
     return true;
 }
 
@@ -367,20 +377,20 @@ void reactCtrlThread::run()
     ID  x   y   z   n1  n2  n3
     207 -0.027228   -0.054786   -0.0191051  -0.886  0.14    -0.431 */
 
-    if (t_1 > 0)
+    if (t_0 > 0 && robot == "icubSim")
     {
         collisionPoint_t collisionPointStruct{SKIN_LEFT_FOREARM};
-        if (yarp::os::Time::now() - t_1 > 10 && counter < 150) {
+        if (yarp::os::Time::now() - t_0 > 16 && counter < 150) {
             collisionPointStruct.x = {-0.0002, -0.0131,-0.0258434};//  {-0.02, 0.0, -0.005}; //  // {-0.031, -0.079, 0.005};
             collisionPointStruct.n = {-0.005, 0.238, -0.971}; //{0,0,-1}; // // {-0.739, 0.078, 0.105};
             counter++;
             collisionPoints.push_back(collisionPointStruct);
-        } else if (yarp::os::Time::now() - t_1 > 20 && counter < 450) {
+        } else if (yarp::os::Time::now() - t_0 > 25 && counter < 350) {
             collisionPointStruct.x = {0.026828, -0.054786, -0.0191051}; // {0.014, 0.081, 0.029};
             collisionPointStruct.n = {0.883, 0.15, -0.385}; // {0.612, 0.066, 0.630};
             counter++;
             collisionPoints.push_back(collisionPointStruct);
-        } else if (yarp::os::Time::now() - t_1 > 30 && counter < 500) {
+        } else if (yarp::os::Time::now() - t_0 > 35 && counter < 500) {
             collisionPointStruct.x = {-0.027228, -0.054786, -0.0191051}; // {0.018, 0.095, 0.024};
             collisionPointStruct.n = {-0.886, 0.14, -0.431 }; // {0.568, -0.18, 0.406};
             counter++;
@@ -410,48 +420,26 @@ void reactCtrlThread::run()
     {
         case STATE_WAIT:
         {
-            Vector v0(3,0.0);
-            switch(start_experiment) {
-//                case 1: { v0[2] = 0.0; setNewRelativeTarget(v0); break; }
-                case 1: { v0[2] = 0.1; setNewRelativeTarget(v0); break; }
-                case 2: { v0[2] = -0.15; setNewRelativeTarget(v0); break; }
-                case 3: { v0[2] = 0.1; setNewRelativeTarget(v0); break; }
-                case 4: setNewCircularTarget(0.08,0.2); break;
-                default: break;
-            }
             break;
         }
         case STATE_REACH:
         {
-//            yInfo("[reactCtrlThread] norm(x_t-x_d) = %g",norm(x_t-x_d));
-            if ((norm(x_t-x_d) < globalTol) && !movingTargetCircle) //we keep solving until we reach the desired target --  || yarp::os::Time::now() > 60+t_0
+            yInfo("[reactCtrlThread] norm(x_t-x_d) = %g",norm(x_t-x_d));
+            if ((norm(x_t-x_d) < globalTol) && !movingTargetCircle  &&!holding_position) //we keep solving until we reach the desired target --  || yarp::os::Time::now() > 60+t_0
             {
+                comingHome = false;
                 yDebug("[reactCtrlThread] norm(x_t-x_d) %g\tglobalTol %g",norm(x_t-x_d),globalTol);
+                state=STATE_IDLE;
+            }
+
+            if (!movingTargetCircle && !holding_position && yarp::os::Time::now()-t_0 > timeLimit) {
+                yDebug("[reactCtrlThread] Target not reachable -  norm(x_t-x_d) %g\tglobalTol %g",norm(x_t-x_d),globalTol);
                 state=STATE_IDLE;
             }
 
             if (movingTargetCircle) {
                 x_d = getPosMovingTargetOnCircle();
             }
-
-            if (referenceGen == "uniformParticle"){
-                if ( (norm(x_n-x_0) > norm(x_d-x_0)) || movingTargetCircle) //if the particle is farther than the final target, we reset the particle - it will stay with the target; or if target is moving
-                {
-                    prtclThrd->resetParticle(x_d);
-                }
-                x_n=prtclThrd->getParticle(); //to get next target
-            }
-            else if(referenceGen == "minJerk"){
-                minJerkTarget->computeNextValues(x_d);    
-                x_n = minJerkTarget->getPos();
-            }
-
-            else if(referenceGen == "none")
-            {
-                x_n = x_d;
-            }
-
-            visuhdl.visualizeObjects(x_d, x_n, additionalControlPointsVector);
 
             if(gazeControl)
                 igaze -> lookAtFixationPoint(x_d); //for now looking at final target (x_d), not at intermediate/next target x_n
@@ -460,27 +448,52 @@ void reactCtrlThread::run()
                 weighted_normal = {0,0,0};
                 vLimAdapted=avhdl->getVLIM(CTRL_DEG2RAD * vLimNominal, weighted_normal) * CTRL_RAD2DEG;
             }
+
+            if ((norm(x_t-x_d) >= globalTol || movingTargetCircle || !(vLimAdapted == vLimNominal))) {
+                if (referenceGen == "uniformParticle") {
+                    if ((norm(x_n - x_0) > norm(x_d - x_0)) ||
+                        movingTargetCircle) //if the particle is farther than the final target, we reset the particle - it will stay with the target; or if target is moving
+                    {
+                        prtclThrd->resetParticle(x_d);
+                    }
+                    x_n = prtclThrd->getParticle(); //to get next target
+                } else if (referenceGen == "minJerk") {
+                    minJerkTarget->computeNextValues(x_d);
+                    x_n = minJerkTarget->getPos();
+                } else if (referenceGen == "none") {
+                    x_n = x_d;
+                }
+
+                visuhdl.visualizeObjects(x_d, x_n, additionalControlPointsVector);
 //            yDebug("vLimAdapted = %s",vLimAdapted.toString(3,3).c_str());
-            double t_3=yarp::os::Time::now();
-            q_dot = solveIK(solverExitCode); //this is the key function call where the reaching opt problem is solved
-            timeToSolveProblem_s  = yarp::os::Time::now()-t_3;
+                double t_3 = yarp::os::Time::now();
+                //this is the key function call where the reaching opt problem is solved
+                q_dot = solveIK(solverExitCode);
+                timeToSolveProblem_s = yarp::os::Time::now() - t_3;
 
-            if (solverExitCode == OSQP_TIME_LIMIT_REACHED) // qpOASES::RET_MAX_NWSR_REACHED)
-                yWarning("[reactCtrlThread] OSQP cpu time was higher than the rate of the thread!");
-            else if (solverExitCode != OSQP_SOLVED) // qpOASES::SUCCESSFUL_RETURN)
-                yWarning("[reactCtrlThread] OSQP solve did not succeed!");
+                if (solverExitCode == OSQP_TIME_LIMIT_REACHED) // qpOASES::RET_MAX_NWSR_REACHED)
+                    yWarning("[reactCtrlThread] OSQP cpu time was higher than the rate of the thread!");
+                else if (solverExitCode != OSQP_SOLVED) // qpOASES::SUCCESSFUL_RETURN)
+                    yWarning("[reactCtrlThread] OSQP solve did not succeed!");
 
-            qIntegrated = I->integrate(q_dot);
-            if (!controlArm("positionDirect",qIntegrated)){
-                yError("I am not able to properly control the arm in positionDirect!");
+                qIntegrated = I->integrate(q_dot);
+                if (!controlArm("positionDirect", qIntegrated)) {
+                    yError("I am not able to properly control the arm in positionDirect!");
+                }
+                virtualArm->setAng(qIntegrated * CTRL_DEG2RAD);
             }
-            virtualArm->setAng(qIntegrated*CTRL_DEG2RAD);
-
             updateArmChain(); //N.B. This is the second call within run(); may give more precise data for the logging; may also cost time
             break;
         }
         case STATE_IDLE:
         {
+            yarp::os::Bottle b;
+            b.clear();
+            Vector p;
+            p = arm->EndEffPose();
+            for (int i = 0; i < 7; i++)
+                b.addInt(static_cast<int>(round(p(i)*1000)));
+            movementFinishedPort.write(b);
             yInfo("[reactCtrlThread] finished.");
             state=STATE_WAIT;
             break;
@@ -566,6 +579,8 @@ void reactCtrlThread::threadRelease()
     outPort.interrupt();
     outPort.close();
     visuhdl.closePorts();
+    movementFinishedPort.interrupt();
+    movementFinishedPort.close();
 }
 
 
@@ -650,23 +665,17 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
 {
     if (_x_d.size()==3)
     {
-        if (start_experiment == 0) {
-            t_0=Time::now();
-        }
-        start_experiment++;
+        t_0=Time::now();
+        holding_position = _x_d == x_t;
         movingTargetCircle = _movingCircle;
         q_dot.zero();
         updateArmChain(); //updates chain, q and x_t
         virtualArm->setAng(q*CTRL_DEG2RAD); //with new target, we make the two chains identical at the start
         I->reset(q);
-                
+        o_n = comingHome? o_home : o_d;
         x_0=x_t;
         x_n=x_0;
         x_d=_x_d;
-        if (start_experiment == 1) {
-            x_d[0] = -0.299; x_d[1] = -0.174; x_d[2] = 0.05;
-        }
-
                 
         if (referenceGen == "uniformParticle"){
             yarp::sig::Vector vel(3,0.0);
@@ -714,8 +723,7 @@ bool reactCtrlThread::setNewCircularTarget(const double _radius,const double _fr
     radius = _radius;
     frequency = _frequency;
     updateArmChain(); //updates chain, q and x_t
-    circleCenter = x_t; // set it to end-eff position at this point 
-    t_1 = yarp::os::Time::now();
+    circleCenter = x_t; // set it to end-eff position at this point
     setNewTarget(getPosMovingTargetOnCircle(),true);
     return true;
 }
@@ -728,6 +736,18 @@ bool reactCtrlThread::stopControlAndSwitchToPositionMode()
     else
         yWarning("reactCtrlThread::stopControlAndSwitchToPositionMode(): Controllers not stopped sucessfully"); 
     return stoppedOk;
+}
+
+bool reactCtrlThread::goHome()
+{
+    comingHome = true;
+    return setNewTarget(x_home, false);
+}
+
+
+bool reactCtrlThread::holdPosition()
+{
+    return setNewTarget(x_t, false);
 }
 
 
@@ -748,7 +768,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
 
     int count = 0;
     Vector res;
-    solver->init(xr, q_dot, vLimAdapted, weighted_normal);
+    solver->init(xr, q_dot, vLimAdapted, weighted_normal, comingHome? 10:restPosWeight);
     std::array<double,7> vals = {0, 0.1, 1.25, 2.5, 5, 10, std::numeric_limits<double>::max()};
     while(count < vals.size()) {
         _exit_code = solver->optimize(vals[count]);
@@ -991,8 +1011,8 @@ Vector reactCtrlThread::getPosMovingTargetOnCircle()
 {
       Vector _x_d=circleCenter; 
       //x-coordinate will stay constant; we set y, and z
-      _x_d[1]+=radius*cos(2.0*M_PI*frequency*(yarp::os::Time::now()-t_1));
-      _x_d[2]+=radius*sin(2.0*M_PI*frequency*(yarp::os::Time::now()-t_1));
+      _x_d[1]+=radius*cos(2.0*M_PI*frequency*(yarp::os::Time::now()-t_0));
+      _x_d[2]+=radius*sin(2.0*M_PI*frequency*(yarp::os::Time::now()-t_0));
 
       return _x_d;
 }
@@ -1022,7 +1042,7 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
              sp =  (SkinPart)(collPointBottle->get(0).asInt());
              //we take only those collision points that are relevant for the chain we are controlling + torso
              if( ((which_chain == "left") && ( (sp==SKIN_LEFT_HAND) || (sp==SKIN_LEFT_FOREARM) ||
-             (sp==SKIN_LEFT_UPPER_ARM)) ) || (sp==SKIN_FRONT_TORSO) || ((which_chain == "right") &&
+             (sp==SKIN_LEFT_UPPER_ARM)) ) || (sp==SKIN_FRONT_TORSO && useTorso) || ((which_chain == "right") &&
              ( (sp==SKIN_RIGHT_HAND) || (sp==SKIN_RIGHT_FOREARM) || (sp==SKIN_RIGHT_UPPER_ARM) ) ) ){
                 collPoint.skin_part = sp;
                 collPoint.x(0) = collPointBottle->get(1).asDouble();
@@ -1031,6 +1051,8 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
                 collPoint.n(0) = collPointBottle->get(4).asDouble();
                 collPoint.n(1) = collPointBottle->get(5).asDouble();
                 collPoint.n(2) = collPointBottle->get(6).asDouble();
+                if (sp==SKIN_FRONT_TORSO && useTorso)  // normal direction from skin is wrong
+                    collPoint.n(0) *= -1;
                 collPoint.magnitude = collPointBottle->get(13).asDouble() * gain;
                 collPoints.push_back(collPoint);
              }
