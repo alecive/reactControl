@@ -377,26 +377,29 @@ void reactCtrlThread::run()
     ID  x   y   z   n1  n2  n3
     207 -0.027228   -0.054786   -0.0191051  -0.886  0.14    -0.431 */
 
-    if (t_0 > 0 && robot == "icubSim")
-    {
-        collisionPoint_t collisionPointStruct{SKIN_LEFT_FOREARM};
-        if (yarp::os::Time::now() - t_0 > 16 && counter < 150) {
-            collisionPointStruct.x = {-0.0002, -0.0131,-0.0258434};//  {-0.02, 0.0, -0.005}; //  // {-0.031, -0.079, 0.005};
-            collisionPointStruct.n = {-0.005, 0.238, -0.971}; //{0,0,-1}; // // {-0.739, 0.078, 0.105};
-            counter++;
-            collisionPoints.push_back(collisionPointStruct);
-        } else if (yarp::os::Time::now() - t_0 > 25 && counter < 350) {
-            collisionPointStruct.x = {0.026828, -0.054786, -0.0191051}; // {0.014, 0.081, 0.029};
-            collisionPointStruct.n = {0.883, 0.15, -0.385}; // {0.612, 0.066, 0.630};
-            counter++;
-            collisionPoints.push_back(collisionPointStruct);
-        } else if (yarp::os::Time::now() - t_0 > 35 && counter < 500) {
-            collisionPointStruct.x = {-0.027228, -0.054786, -0.0191051}; // {0.018, 0.095, 0.024};
-            collisionPointStruct.n = {-0.886, 0.14, -0.431 }; // {0.568, -0.18, 0.406};
-            counter++;
-            collisionPoints.push_back(collisionPointStruct);
-        }
-    }
+//    if (t_0 > 0 && robot == "icubSim")
+//    {
+//        collisionPoint_t collisionPointStruct{SKIN_LEFT_FOREARM};
+//        if (yarp::os::Time::now() - t_0 > 16 && counter < 200) {
+////            collisionPointStruct.x = {-0.0002, -0.0131,-0.0258434};//  {-0.02, 0.0, -0.005}; //  // {-0.031, -0.079, 0.005};
+////            collisionPointStruct.n = {-0.005, 0.238, -0.971}; //{0,0,-1}; // // {-0.739, 0.078, 0.105};
+//            collisionPointStruct.skin_part = SKIN_LEFT_HAND;
+//            collisionPointStruct.x = {-0.02, 0, 0.01};
+//            collisionPointStruct.n = {0, 0, 1};
+//            counter++;
+//            collisionPoints.push_back(collisionPointStruct);
+//        } else if (yarp::os::Time::now() - t_0 > 25 && counter < 350) {
+//            collisionPointStruct.x = {0.026828, -0.054786, -0.0191051}; // {0.014, 0.081, 0.029};
+//            collisionPointStruct.n = {0.883, 0.15, -0.385}; // {0.612, 0.066, 0.630};
+//            counter++;
+//            collisionPoints.push_back(collisionPointStruct);
+//        } else if (yarp::os::Time::now() - t_0 > 35 && counter < 500) {
+//            collisionPointStruct.x = {-0.027228, -0.054786, -0.0191051}; // {0.018, 0.095, 0.024};
+//            collisionPointStruct.n = {-0.886, 0.14, -0.431 }; // {0.568, -0.18, 0.406};
+//            counter++;
+//            collisionPoints.push_back(collisionPointStruct);
+//        }
+//    }
     if (tactileCollisionPointsOn){
         printMessage(9,"[reactCtrlThread::run()] Getting tactile collisions from port.\n");
         getCollisionPointsFromPort(aggregSkinEventsInPort, TACTILE_INPUT_GAIN, part_short,collisionPoints);
@@ -408,6 +411,11 @@ void reactCtrlThread::run()
     if (proximityCollisionPointsOn) {
         printMessage(9,"[reactCtrlThread::run()] Getting proximity collisions from port.\n");
         getProximityFromPort(collisionPoints);
+//        if (!collisionPoints.empty())
+//            yInfo("Proximity collision point: x = %s\nn = %s\nmagnitude = %.3f\nskin part is left hand? %d\n", collisionPoints.front().x.toString(3,3).c_str(),
+//              collisionPoints.front().n.toString(3,3).c_str(), collisionPoints.front().magnitude,  collisionPoints.front().skin_part == SKIN_LEFT_HAND);
+//        else
+//            yInfo("No data from proximity\n");
     }
     //after this point, we don't care where did the collision points come from - our relative confidence in the two modalities is expressed in the gains
 
@@ -1219,6 +1227,5 @@ int reactCtrlThread::printMessage(const int l, const char *f, ...) const
     else
         return -1;
 }
-
 
 // empty line to make gcc happy

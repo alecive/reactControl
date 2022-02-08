@@ -27,7 +27,7 @@ function [t, data, proc]=processData(path_prefix, dT)
     v(:,2) = H(1,3,:)-H(3,1,:);
     v(:,3) = H(2,1,:)-H(1,2,:);
     r = sqrt(sum(v.^2,2));
-
+    d(1, 33:42)
     proc.posError = sqrt(sum((d(:, targetPosEE)-d(:, posEE)).^2,2));
     proc.theta = atan2(0.5*r,squeeze(0.5*(H(1,1,:)+H(3,3,:)+H(2,2,:)-1)));
 

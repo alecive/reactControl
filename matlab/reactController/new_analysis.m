@@ -5,11 +5,12 @@ joint_info(7).name = '1st elbow'; joint_info(8).name = '2nd elbow';  joint_info(
 dT = 0.02;
 vel_lim = 20;
 DEG2RAD = (pi/180);
-path_prefix = 'logs/obstacles_comparison/';
+path_prefix = 'logs/';
 folders={'MPC0_vmin', 'MPC0_omin', 'MPC0_omin_vmin','MPC0_omin_vmin_oc', 'MPC0_omin_vmin_oc2', 'MPC0_omin_sc', 'MPC0_omin_sc2', 'MPC0_omin_sc3', 'MPC0_omin_vmin_sc_oc'};%, 
 folders = { 'MPC0_omin', 'MPC0_omin_sc', 'MPC1_omin_pc', 'MPC1_omin_pc_sc', 'MPC1_omin_pmin', 'MPC1_omin_pmin_sc'};
 folders= {'omin','omin_sc0005','vmin_oc001', 'omin_vmin_oc004', 'omin_vmin_sc0005'};
 names = {'ori min', 'ori min + smooth con', 'dvel min + ori con', 'dvel min + ori min + ori con' 'dvel min + ori min + smooth con'};
+folders = {'obstacles_comparison/vmin_oc001','pokus', 'pokus2', 'pokus3'};
 num = length(folders);
 rmse = zeros(num,3);
 distances = zeros(num,10);

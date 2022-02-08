@@ -37,5 +37,6 @@ endif()
 ## then apps
 add_subdirectory(app)
 
+#icubcontrib_finalize_export(react-control)
 icubcontrib_add_uninstall_target()
 

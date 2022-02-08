@@ -79,10 +79,13 @@ def randomMovements(query, query_read, use_cart=False):
     print(feasible_poses)
 
 
-def classicScenario(query, query_read):
+def classicScenario(query, query_read, use_right=False):
     poses = [[-0.299, -0.174, 0.05], [-0.299, -0.174, 0.15], [-0.299, -0.174, 0.00], [-0.299, -0.174, 0.1]]
     for pos in poses:
-        message = f"set_xd ({pos[0]} {pos[1]} {pos[2]})"
+        if (use_right):
+            message = f"set_xd ({pos[0]} {-pos[1]} {pos[2]})"
+        else:
+            message = f"set_xd ({pos[0]} {pos[1]} {pos[2]})"
         comm(query,message)
         poseStr = None
         print(message)
@@ -101,10 +104,13 @@ def classicScenario(query, query_read):
     comm(query,message)
 
 
-def visualScenario(query, query_read):
+def visualScenario(query, query_read, use_right=False):
     poses = [[-0.299, -0.174, 0.05], [-0.299, -0.174, 0.15], [-0.299, -0.174, 0.00], [-0.299, -0.174, 0.1], [-0.299, -0.074, 0.1]]
     for pos in poses:
-        message = f"set_xd ({pos[0]} {pos[1]} {pos[2]})"
+        if (use_right):
+            message = f"set_xd ({pos[0]} {-pos[1]} {pos[2]})"
+        else:
+            message = f"set_xd ({pos[0]} {pos[1]} {pos[2]})"
         comm(query,message)
         poseStr = None
         print(message)
@@ -119,8 +125,8 @@ def visualScenario(query, query_read):
 if __name__=="__main__": 
      
     use_cart = False
-    name_server = ('localhost', 10000)
-     
+    name_server = ('10.0.0.111', 10000)
+    use_right = True
     port_name = "/testCart/target:i" if use_cart else "/reactController/rpc:i"
     port_name2 = "/testCart/finished:o" if use_cart else "/reactController/finished:o" 
     query = get_addr(comm(name_server,"query %s"%port_name))
@@ -129,6 +135,7 @@ if __name__=="__main__":
     print ("Listening from", port_name2, "here:", query_read)
     
     # randomMovements(query, query_read, use_cart)
-    classicScenario(query, query_read)
+    # classicScenario(query, query_read)
+    visualScenario(query, query_read, use_right)
 
         
