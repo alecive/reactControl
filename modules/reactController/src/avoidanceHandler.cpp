@@ -201,7 +201,7 @@ void AvoidanceHandlerTactile::setParameters(const Property &parameters)
 {
     if (parameters.check("avoidingVelocity"))
     {
-        avoidingSpeed=parameters.find("avoidingSpeed").asDouble();
+        avoidingSpeed=parameters.find("avoidingSpeed").asFloat64();
         this->parameters.unput("avoidingSpeed");
         this->parameters.put("avoidingSpeed",avoidingSpeed);
     }

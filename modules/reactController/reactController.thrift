@@ -136,7 +136,7 @@ service reactController_IDL
   * Stops the particle motion at the current state.
   * @return true/false on success/failure.
   **/
-  bool stop_particle();
+  bool particle_stop();
 
   /**
   * Gets the particle state. 

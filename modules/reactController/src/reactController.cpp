@@ -289,7 +289,7 @@ public:
         }
     }
 
-    bool stop_particle() override
+    bool particle_stop() override
     {
         if (referenceGen == "uniformParticle"){
             yInfo("[reactController] Stopping particle..");
@@ -355,7 +355,7 @@ public:
          //******************* VERBOSE ******************
             if (rf.check("verbosity"))
             {
-                verbosity = rf.find("verbosity").asInt();
+                verbosity = rf.find("verbosity").asInt32();
                 yInfo("[reactController] verbosity set to %i", verbosity);
             }
             else yInfo("[reactController] Could not find verbosity option in the config file; using %i as default",verbosity);
@@ -363,7 +363,7 @@ public:
         //****************** rctCtrlRate ******************
             if (rf.check("rctCtrlRate"))
             {
-                rctCtrlRate = rf.find("rctCtrlRate").asInt();
+                rctCtrlRate = rf.find("rctCtrlRate").asInt32();
                 yInfo("[reactController] rctCTrlThread working at %i ms.",rctCtrlRate);
             }
             else yInfo("[reactController] Could not find rctCtrlRate in the config file; using %i as default",rctCtrlRate);
@@ -492,7 +492,7 @@ public:
           //****************** globalTol ******************
             if (rf.check("globalTol"))
             {
-                globalTol = rf.find("globalTol").asDouble();
+                globalTol = rf.find("globalTol").asFloat64();
                 yInfo("[reactController] globalTol to reach target set to %g m.",globalTol);
             }
             else yInfo("[reactController] Could not find globalTol in the config file; using %g as default",globalTol);
@@ -501,7 +501,7 @@ public:
             //****************** timeLimit ******************
             if (rf.check("timeLimit"))
             {
-                timeLimit = rf.find("timeLimit").asDouble();
+                timeLimit = rf.find("timeLimit").asFloat64();
                 yInfo("[reactController] timeLimit to reach target set to %g s.",timeLimit);
             }
             else yInfo("[reactController] Could not find timeLimit in the config file; using %g as default",timeLimit);
@@ -524,7 +524,7 @@ public:
              //****************** prtclRate ******************
             if (rf.check("prtclRate"))
             {
-                prtclRate = rf.find("prtclRate").asInt();
+                prtclRate = rf.find("prtclRate").asInt32();
                 yInfo("[reactController] particleThread period (if referenceGen == uniformParticle)  %i ms.",prtclRate);
             }
             else yInfo("[reactController] Could not find prtclRate in the config file; using %i as default",prtclRate);
@@ -532,7 +532,7 @@ public:
         //****************** trajSpeed ******************
             if (rf.check("trajSpeed"))
             {
-                trajSpeed = rf.find("trajSpeed").asDouble();
+                trajSpeed = rf.find("trajSpeed").asFloat64();
                 yInfo("[reactController] trajSpeed (if referenceGen == uniformParticle) set to %g s.",trajSpeed);
             }
             else yInfo("[reactController] Could not find trajSpeed in the config file; using %g as default",trajSpeed);
@@ -541,7 +541,7 @@ public:
           //****************** vMax ******************
             if (rf.check("vMax"))
             {
-                vMax = rf.find("vMax").asDouble();
+                vMax = rf.find("vMax").asFloat64();
                 yInfo("[reactController] vMax (max joint vel) set to %g [deg/s].",vMax);
             }
             else yInfo("[reactController] Could not find vMax (max joint vel) in the config file; using %g [deg/s] as default",vMax);
@@ -550,7 +550,7 @@ public:
             //****************** tol ******************
             if (rf.check("tol"))
             {
-                tol = rf.find("tol").asDouble();
+                tol = rf.find("tol").asFloat64();
                 yInfo("[reactController] ipopt: tol set to %g m.",tol);
             }
             else yInfo("[reactController] Could not find tol in the config file; using %g as default",tol);
@@ -610,7 +610,7 @@ public:
             //****************** restPosWeight ******************
             if (rf.check("restPosWeight"))
             {
-                restPosWeight = rf.find("restPosWeight").asDouble();
+                restPosWeight = rf.find("restPosWeight").asFloat64();
                 yInfo("[reactController] restPosWeight set to %g m.",restPosWeight);
             }
             else yInfo("[reactController] Could not find restPosWeight in the config file; using %g as default",restPosWeight);

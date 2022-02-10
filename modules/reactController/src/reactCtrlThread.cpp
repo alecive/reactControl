@@ -500,7 +500,7 @@ void reactCtrlThread::run()
             Vector p;
             p = arm->EndEffPose();
             for (int i = 0; i < 7; i++)
-                b.addInt(static_cast<int>(round(p(i)*1000)));
+                b.addInt32(static_cast<int>(round(p(i)*1000)));
             movementFinishedPort.write(b);
             yInfo("[reactCtrlThread] finished.");
             state=STATE_WAIT;
@@ -883,7 +883,7 @@ bool reactCtrlThread::areJointsHealthyAndSet(vector<int> &jointsToSet, const str
         if (_s=="velocity")
         {
             if ((modes[i]!=VOCAB_CM_MIXED) && (modes[i]!=VOCAB_CM_VELOCITY)){ // we will set only those that are not in correct modes already
-                //printMessage(3,"    joint %d in %s mode, pushing to jointsToSet \n",i,Vocab::decode(modes[i]).c_str());
+                //printMessage(3,"    joint %d in %s mode, pushing to jointsToSet \n",i,Vocab32::decode(modes[i]).c_str());
                 jointsToSet.push_back(i);
             }
         }
@@ -902,7 +902,7 @@ bool reactCtrlThread::areJointsHealthyAndSet(vector<int> &jointsToSet, const str
     if(verbosity >= 10){
         printf("[reactCtrlThread::areJointsHealthyAndSet] %s: ctrl Modes retreived: ",_p.c_str());
         for (int mode : modes){
-                printf("%s ",Vocab::decode(mode).c_str());
+                printf("%s ",Vocab32::decode(mode).c_str());
         }
         printf("\n");
         printf("Indexes of joints to set: ");
@@ -1047,21 +1047,21 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
          for(int i=0; i< collPointsMultiBottle->size();i++){
              Bottle* collPointBottle = collPointsMultiBottle->get(i).asList();
              printMessage(5,"Bottle %d contains %s \n", i,collPointBottle->toString().c_str());
-             sp =  (SkinPart)(collPointBottle->get(0).asInt());
+             sp =  static_cast<SkinPart>(collPointBottle->get(0).asInt32());
              //we take only those collision points that are relevant for the chain we are controlling + torso
              if( ((which_chain == "left") && ( (sp==SKIN_LEFT_HAND) || (sp==SKIN_LEFT_FOREARM) ||
              (sp==SKIN_LEFT_UPPER_ARM)) ) || (sp==SKIN_FRONT_TORSO && useTorso) || ((which_chain == "right") &&
              ( (sp==SKIN_RIGHT_HAND) || (sp==SKIN_RIGHT_FOREARM) || (sp==SKIN_RIGHT_UPPER_ARM) ) ) ){
                 collPoint.skin_part = sp;
-                collPoint.x(0) = collPointBottle->get(1).asDouble();
-                collPoint.x(1) = collPointBottle->get(2).asDouble();
-                collPoint.x(2) = collPointBottle->get(3).asDouble();
-                collPoint.n(0) = collPointBottle->get(4).asDouble();
-                collPoint.n(1) = collPointBottle->get(5).asDouble();
-                collPoint.n(2) = collPointBottle->get(6).asDouble();
+                collPoint.x(0) = collPointBottle->get(1).asFloat64();
+                collPoint.x(1) = collPointBottle->get(2).asFloat64();
+                collPoint.x(2) = collPointBottle->get(3).asFloat64();
+                collPoint.n(0) = collPointBottle->get(4).asFloat64();
+                collPoint.n(1) = collPointBottle->get(5).asFloat64();
+                collPoint.n(2) = collPointBottle->get(6).asFloat64();
                 if (sp==SKIN_FRONT_TORSO && useTorso)  // normal direction from skin is wrong
                     collPoint.n(0) *= -1;
-                collPoint.magnitude = collPointBottle->get(13).asDouble() * gain;
+                collPoint.magnitude = collPointBottle->get(13).asFloat64() * gain;
                 collPoints.push_back(collPoint);
              }
          }
@@ -1088,19 +1088,19 @@ bool reactCtrlThread::getProximityFromPort(std::vector<collisionPoint_t> &collPo
     Bottle* collPointBottle = proximityEventsInPort.read(false);
     if(collPointBottle != nullptr){
         printMessage(0,"Bottle contains %s \n", collPointBottle->toString().c_str());
-        sp =  (SkinPart)(collPointBottle->get(0).asInt());
+        sp =  static_cast<SkinPart>(collPointBottle->get(0).asInt32());
         //we take only those collision points that are relevant for the chain we are controlling + torso
         if (((part_short == "left") && ((sp==SKIN_LEFT_HAND) || (sp==SKIN_LEFT_FOREARM) || (sp==SKIN_LEFT_UPPER_ARM)))
         || ((part_short == "right") &&
         ((sp==SKIN_RIGHT_HAND) || (sp==SKIN_RIGHT_FOREARM) || (sp==SKIN_RIGHT_UPPER_ARM)))) {
             collPoint.skin_part = sp;
-            collPoint.x(0) = collPointBottle->get(1).asDouble();
-            collPoint.x(1) = collPointBottle->get(2).asDouble();
-            collPoint.x(2) = collPointBottle->get(3).asDouble();
-            collPoint.n(0) = collPointBottle->get(4).asDouble();
-            collPoint.n(1) = collPointBottle->get(5).asDouble();
-            collPoint.n(2) = collPointBottle->get(6).asDouble();
-            collPoint.magnitude = collPointBottle->get(7).asDouble() * PROXIMITY_INPUT_GAIN;
+            collPoint.x(0) = collPointBottle->get(1).asFloat64();
+            collPoint.x(1) = collPointBottle->get(2).asFloat64();
+            collPoint.x(2) = collPointBottle->get(3).asFloat64();
+            collPoint.n(0) = collPointBottle->get(4).asFloat64();
+            collPoint.n(1) = collPointBottle->get(5).asFloat64();
+            collPoint.n(2) = collPointBottle->get(6).asFloat64();
+            collPoint.magnitude = collPointBottle->get(7).asFloat64() * PROXIMITY_INPUT_GAIN;
             collPoints.push_back(collPoint);
         }
         return true;
@@ -1123,7 +1123,7 @@ void reactCtrlThread::sendData()
             b.clear();
 
             //col 1
-            b.addInt(static_cast<int>(chainActiveDOF));
+            b.addInt32(static_cast<int>(chainActiveDOF));
             //position
             //cols 2-4: the desired final target (for end-effector)
             vectorIntoBottle(x_d,b);
@@ -1146,8 +1146,8 @@ void reactCtrlThread::sendData()
             vectorIntoBottle(q,b); 
             //variable - if torso on: 40:59; joint vel limits as input to ipopt, after avoidanceHandler,
             matrixIntoBottle(vLimAdapted,b); // assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
-            b.addInt(solverExitCode);
-            b.addDouble(timeToSolveProblem_s);
+            b.addInt32(solverExitCode);
+            b.addFloat64(timeToSolveProblem_s);
             //joint pos from virtual chain IPopt is operating onl variable - if torso on: 60:69
             vectorIntoBottle(qIntegrated,b);
             if(additionalControlPoints && (!additionalControlPointsVector.empty()))
@@ -1186,9 +1186,9 @@ bool reactCtrlThread::readMotionPlan(std::vector<Vector> &x_desired)
             if (Bottle* inListTraj = inPlan->get(i).asList())
             {
                 string ctrlPtName = inListTraj->find("control-point").asString();
-                if (inListTraj->find("number-waypoints").asInt()>0)
+                if (inListTraj->find("number-waypoints").asInt32()>0)
                 {
-                    int nDim = inListTraj->find("number-dimension").asInt();
+                    int nDim = inListTraj->find("number-dimension").asInt32();
                     if (nDim>=3)
                     {
                         Vector xCtrlPt(nDim, 0.0);
@@ -1197,7 +1197,7 @@ bool reactCtrlThread::readMotionPlan(std::vector<Vector> &x_desired)
                             if (coordinate->size()==nDim)
                             {
                                 for (size_t k=0; k<nDim; k++)
-                                    xCtrlPt[k]=coordinate->get(k).asDouble();
+                                    xCtrlPt[k]=coordinate->get(k).asFloat64();
                                 yInfo("\tControl point of %s\t: %s\n",ctrlPtName.c_str(),xCtrlPt.toString(3,3).c_str());
                                 x_desired.push_back(xCtrlPt);
                                 hasPlan = true;

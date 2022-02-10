@@ -177,21 +177,21 @@ public:
     void configure(ResourceFinder &rf)
     {
         name=rf.find("name").asString();
-        setPeriod((double)rf.check("period",Value(10)).asInt()/1000.0);
+        setPeriod((double)rf.check("period",Value(10)).asInt32()/1000.0);
         robot=rf.check("robot",Value("icub")).asString();
         part=rf.check("part",Value("right_arm")).asString();
-        joint=rf.check("joint",Value(0)).asInt();
-        T=rf.check("T",Value(10.0)).asDouble();
-        gain=rf.check("gain",Value(40.0)).asDouble();
-        fmin=rf.check("fmin",Value(0.01)).asDouble();
-        fmax=rf.check("fmax",Value(1.0)).asDouble();
+        joint=rf.check("joint",Value(0)).asInt32();
+        T=rf.check("T",Value(10.0)).asFloat64();
+        gain=rf.check("gain",Value(40.0)).asFloat64();
+        fmin=rf.check("fmin",Value(0.01)).asFloat64();
+        fmax=rf.check("fmax",Value(1.0)).asFloat64();
 
         Property props;
-        Ttraj=rf.check("Ttraj",Value(1.0)).asDouble();
-        props.put("Kp",rf.check("Kp",Value(1.0)).asDouble());
-        props.put("Tz",rf.check("Tz",Value(0.0)).asDouble());
-        props.put("Tw",rf.check("Tw",Value(0.0)).asDouble());
-        props.put("Zeta",rf.check("Zeta",Value(0.0)).asDouble());
+        Ttraj=rf.check("Ttraj",Value(1.0)).asFloat64();
+        props.put("Kp",rf.check("Kp",Value(1.0)).asFloat64());
+        props.put("Tz",rf.check("Tz",Value(0.0)).asFloat64());
+        props.put("Tw",rf.check("Tw",Value(0.0)).asFloat64());
+        props.put("Zeta",rf.check("Zeta",Value(0.0)).asFloat64());
         string str;
         str="(dimension_0 (";
         str+=props.toString();
@@ -200,13 +200,13 @@ public:
         plantParameters.fromString(str);
 
         if (pid_change_Kp=rf.check("PID_Kp"))
-            pid_Kp=rf.find("PID_Kp").asDouble();
+            pid_Kp=rf.find("PID_Kp").asFloat64();
 
         if (pid_change_Ki=rf.check("PID_Ki"))
-            pid_Ki=rf.find("PID_Ki").asDouble();
+            pid_Ki=rf.find("PID_Ki").asFloat64();
 
         if (pid_change_Kd=rf.check("PID_Kd"))
-            pid_Kd=rf.find("PID_Kd").asDouble();
+            pid_Kd=rf.find("PID_Kd").asFloat64();
 
         pid_change=pid_change_Kp||pid_change_Ki||pid_change_Kd;
     }
@@ -372,13 +372,13 @@ public:
             el.time=Time::now();
             Vector dfb=velEst.estimate(el);
 
-            out.addInt(cnt);
-            out.addDouble(vel[0]);
-            out.addDouble(ref);
+            out.addInt32(cnt);
+            out.addFloat64(vel[0]);
+            out.addFloat64(ref);
             for (size_t i=0; i<pwm.length(); i++)
-                out.addDouble(pwm[i]);
-            out.addDouble(fb);
-            out.addDouble(dfb[0]);
+                out.addFloat64(pwm[i]);
+            out.addFloat64(fb);
+            out.addFloat64(dfb[0]);
             
             port.setEnvelope(ts);
             port.write();

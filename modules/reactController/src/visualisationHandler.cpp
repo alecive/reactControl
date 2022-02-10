@@ -155,27 +155,27 @@ void VisualisationHandler::sendiCubGuiObject(const std::string& object_type, Vec
             obj.addString(object_type);
 
             // size
-            obj.addDouble(20.0);
-            obj.addDouble(20.0);
-            obj.addDouble(20.0);
+            obj.addFloat64(20.0);
+            obj.addFloat64(20.0);
+            obj.addFloat64(20.0);
 
             // positions - iCubGui works in mm
-            obj.addDouble(1000*x(0));
-            obj.addDouble(1000*x(1));
-            obj.addDouble(1000*x(2));
+            obj.addFloat64(1000*x(0));
+            obj.addFloat64(1000*x(1));
+            obj.addFloat64(1000*x(2));
 
             // orientation
-            obj.addDouble(0.0);
-            obj.addDouble(0.0);
-            obj.addDouble(0.0);
+            obj.addFloat64(0.0);
+            obj.addFloat64(0.0);
+            obj.addFloat64(0.0);
 
             // color
-            obj.addInt(125);
-            obj.addInt(255);
-            obj.addInt(125);
+            obj.addInt32(125);
+            obj.addInt32(255);
+            obj.addInt32(125);
 
             // transparency
-            obj.addDouble(0.9);
+            obj.addFloat64(0.9);
         }
         else if(object_type == "target")
         {
@@ -183,27 +183,27 @@ void VisualisationHandler::sendiCubGuiObject(const std::string& object_type, Vec
             obj.addString(object_type);
 
             // size
-            obj.addDouble(40.0);
-            obj.addDouble(40.0);
-            obj.addDouble(40.0);
+            obj.addFloat64(40.0);
+            obj.addFloat64(40.0);
+            obj.addFloat64(40.0);
 
             // positions - iCubGui works in mm
-            obj.addDouble(1000*x(0));
-            obj.addDouble(1000*x(1));
-            obj.addDouble(1000*x(2));
+            obj.addFloat64(1000*x(0));
+            obj.addFloat64(1000*x(1));
+            obj.addFloat64(1000*x(2));
 
             // orientation
-            obj.addDouble(0.0);
-            obj.addDouble(0.0);
-            obj.addDouble(0.0);
+            obj.addFloat64(0.0);
+            obj.addFloat64(0.0);
+            obj.addFloat64(0.0);
 
             // color
-            obj.addInt(0);
-            obj.addInt(255);
-            obj.addInt(0);
+            obj.addInt32(0);
+            obj.addInt32(255);
+            obj.addInt32(0);
 
             // transparency
-            obj.addDouble(0.7);
+            obj.addFloat64(0.7);
         }
         outPortiCubGui.write(obj);
 
@@ -219,27 +219,27 @@ void VisualisationHandler::sendiCubGuiObject(const std::vector<ControlPoint>& ad
             obj.addString("extra-target");
 
             // size
-            obj.addDouble(30.0);
-            obj.addDouble(30.0);
-            obj.addDouble(30.0);
+            obj.addFloat64(30.0);
+            obj.addFloat64(30.0);
+            obj.addFloat64(30.0);
 
             // positions - iCubGui works in mm
-            obj.addDouble(1000 * controlPoint.x_desired(0));
-            obj.addDouble(1000 * controlPoint.x_desired(1));
-            obj.addDouble(1000 * controlPoint.x_desired(2));
+            obj.addFloat64(1000 * controlPoint.x_desired(0));
+            obj.addFloat64(1000 * controlPoint.x_desired(1));
+            obj.addFloat64(1000 * controlPoint.x_desired(2));
 
             // orientation
-            obj.addDouble(0.0);
-            obj.addDouble(0.0);
-            obj.addDouble(0.0);
+            obj.addFloat64(0.0);
+            obj.addFloat64(0.0);
+            obj.addFloat64(0.0);
 
             // color
-            obj.addInt(0);
-            obj.addInt(255);
-            obj.addInt(0);
+            obj.addInt32(0);
+            obj.addInt32(255);
+            obj.addInt32(0);
 
             // transparency
-            obj.addDouble(0.7);
+            obj.addFloat64(0.7);
         }
         outPortiCubGui.write(obj);
     }
@@ -265,13 +265,13 @@ void VisualisationHandler::createStaticSphere(double _radius, const Vector &pos)
     cmd.addString("world");
     cmd.addString("mk");
     cmd.addString("ssph");
-    cmd.addDouble(_radius);
+    cmd.addFloat64(_radius);
 
-    cmd.addDouble(pos(0));
-    cmd.addDouble(pos(1));
-    cmd.addDouble(pos(2));
+    cmd.addFloat64(pos(0));
+    cmd.addFloat64(pos(1));
+    cmd.addFloat64(pos(2));
     // color
-    cmd.addInt(1);cmd.addInt(0);cmd.addInt(0);
+    cmd.addInt32(1);cmd.addInt32(0);cmd.addInt32(0);
     cmd.addString("false"); //no collisions
     printMessage(5,"createSphere(): sending %s \n",cmd.toString().c_str());
     portToSimWorld.write(cmd);
@@ -283,10 +283,10 @@ void VisualisationHandler::moveSphere(int index, const Vector &pos)
     cmd.addString("world");
     cmd.addString("set");
     cmd.addString("ssph");
-    cmd.addInt(index);
-    cmd.addDouble(pos(0));
-    cmd.addDouble(pos(1));
-    cmd.addDouble(pos(2));
+    cmd.addInt32(index);
+    cmd.addFloat64(pos(0));
+    cmd.addFloat64(pos(1));
+    cmd.addFloat64(pos(2));
     portToSimWorld.write(cmd);
 }
 
@@ -296,13 +296,13 @@ void VisualisationHandler::createStaticBox(const Vector &pos)
     cmd.addString("world");
     cmd.addString("mk");
     cmd.addString("sbox");
-    cmd.addDouble(0.01); cmd.addDouble(0.01); cmd.addDouble(0.01); //fixed size
+    cmd.addFloat64(0.01); cmd.addFloat64(0.01); cmd.addFloat64(0.01); //fixed size
 
-    cmd.addDouble(pos(0));
-    cmd.addDouble(pos(1));
-    cmd.addDouble(pos(2));
+    cmd.addFloat64(pos(0));
+    cmd.addFloat64(pos(1));
+    cmd.addFloat64(pos(2));
     // color
-    cmd.addInt(1);cmd.addInt(1);cmd.addInt(0); //blue
+    cmd.addInt32(1);cmd.addInt32(1);cmd.addInt32(0); //blue
     cmd.addString("false"); //no collisions
     printMessage(5,"createBox(): sending %s \n",cmd.toString().c_str());
     portToSimWorld.write(cmd);
@@ -314,10 +314,10 @@ void VisualisationHandler::moveBox(int index, const Vector &pos)
     cmd.addString("world");
     cmd.addString("set");
     cmd.addString("sbox");
-    cmd.addInt(index);
-    cmd.addDouble(pos(0));
-    cmd.addDouble(pos(1));
-    cmd.addDouble(pos(2));
+    cmd.addInt32(index);
+    cmd.addFloat64(pos(0));
+    cmd.addFloat64(pos(1));
+    cmd.addFloat64(pos(2));
     portToSimWorld.write(cmd);
 }
 
