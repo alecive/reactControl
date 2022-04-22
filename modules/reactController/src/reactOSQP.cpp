@@ -55,38 +55,34 @@ void QPSolver::computeBounds()
     for (size_t i=0; i < chain_dof; i++)
     {
         double qi=q0[i];
-        if ((qi>=qGuardMinInt[i]) && (qi<=qGuardMaxInt[i])) 
+        double dmin;
+        double dmax;
+        if ((qi>=qGuardMinInt[i]) && (qi<=qGuardMaxInt[i]))
         {
-            bounds(i, 0) = bounds(i, 1) = 1.0;
+            dmin=dmax=1.0;
         }
         else if (qi<qGuardMinInt[i])
         {
-            bounds(i,0)=(qi<=qGuardMinExt[i]?0.0:
-                         0.5*(1.0+tanh(+10.0*(qi-qGuardMinCOG[i])/qGuard[i])));
-            bounds(i,1)=1.0;
+            dmin=(qi<=qGuardMinExt[i] ? 0.0 : (qi- qGuardMinExt[i])/(qGuardMinInt[i]-qGuardMinExt[i]));
+            dmax=1.0;
         }
         else
         {
-            bounds(i,0)=1.0;
-            bounds(i,1)=(qi>=qGuardMaxExt[i]?0.0:
-                         0.5*(1.0+tanh(-10.0*(qi-qGuardMaxCOG[i])/qGuard[i])));
+            dmin=1.0;
+            dmax=(qi>=qGuardMaxExt[i] ? 0.0 : (qi- qGuardMaxExt[i])/(qGuardMaxInt[i]-qGuardMaxExt[i]));
         }
-    }
-
-    for (size_t i=0; i < chain_dof; i++)
-    {
-        bounds(i,0)*=v_lim(i,0);
-        bounds(i,1)*=v_lim(i,1);
+        bounds(i, 0) = max(dmin*-vmax, v_lim(i, 0));  // apply joint limit bounds only when it is stricter than the avoidance limits
+        bounds(i, 1) = min(dmax*vmax, v_lim(i, 1));
     }
 }
 
 
 //public:
 /****************************************************************/
-QPSolver::QPSolver(iCubArm &chain_, bool hittingConstraints_, bool orientationControl_,
+QPSolver::QPSolver(iCubArm &chain_, bool hittingConstraints_, double vmax_, bool orientationControl_,
                              double dT_, const Vector& restPos, double restPosWeight_) :
         arm(chain_), hitting_constraints(hittingConstraints_), dt(dT_), shou_m(0), shou_n(0), elb_m(0), elb_n(0),
-        w1(1), w2(restPosWeight_), w3(1), w4(0.1), min_type(1)
+        w1(1), w2(restPosWeight_), w3(1), w4(0.1), min_type(1), vmax(vmax_)
 {
     chain_dof = static_cast<int>(arm.getDOF());
     pr.resize(3,0.0);

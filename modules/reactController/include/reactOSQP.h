@@ -30,7 +30,7 @@ class QPSolver
     Matrix H0, J0;
     Vector pr, v_des;
     Matrix bounds;
-    double dt, w1, w2, w3, w4, min_type;
+    double dt, w1, w2, w3, w4, min_type, vmax;
 
     int chain_dof;
 
@@ -63,7 +63,7 @@ class QPSolver
     void update_constraints();
 
 public:
-    QPSolver(iCubArm &chain_, bool hittingConstraints_, bool orientationControl_, double dT_, const Vector& restPos,
+    QPSolver(iCubArm &chain_, bool hittingConstraints_, double vmax_, bool orientationControl_, double dT_, const Vector& restPos,
                   double restPosWeight=0.0);
     ~QPSolver();
     void init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, const Vector &col_normal, double rest_pos_w);
