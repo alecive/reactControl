@@ -33,7 +33,8 @@ AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &
                                                    chain(_chain), collisionPoints(_collisionPoints), verbosity(_verbosity), type("none")
 {
     selfColPoints = {};
-    if (_useSelfColPoints) {
+    if (_useSelfColPoints)
+    {
         // front chest, back, face, back of head, ears (2x), hip (3x), front chest low band
         std::vector<std::vector<double>> posx{{-0.13, -0.122, -0.084}, {0.05,  0.065, 0.08}, {-0.12, -0.112, -0.082},
                                               {0.07,  0.105,  0.115}, {-0.03, 0., 0.03}, {-0.03, -0.01, 0.01},
@@ -45,9 +46,12 @@ AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &
                                               {-0.1, -0.035, 0.03}, {-0.095, -0.005, 0.085}, {-0.075, -0.005, 0.065},
                                               {-0.09, 0.09}, {-0.1, 0.1}, {-0.11, 0.11}, {-0.025, 0.03,   0.085}};
 
-        for (int l = 0; l < posz.size(); ++l) {
-            for (int i = 0; i < posy[l].size(); ++i) {
-                for (int j = 0; j < posz[l].size(); ++j) {
+        for (int l = 0; l < posz.size(); ++l)
+        {
+            for (int i = 0; i < posy[l].size(); ++i)
+            {
+                for (int j = 0; j < posz[l].size(); ++j)
+                {
                     if (l == 4 && i == 1 && j == 1) continue;
                     Vector pos(4);
                     selfColPoints.push_back(pos);
@@ -95,7 +99,9 @@ deque<Vector> AvoidanceHandlerAbstract::getCtrlPointsPosition()
 {
     deque<Vector> ctrlPoints;
     for (auto & ctrlPointChain : ctrlPointChains)
+    {
         ctrlPoints.push_back(ctrlPointChain.EndEffPosition());
+    }
     return ctrlPoints;
 }
 
@@ -112,8 +118,7 @@ int AvoidanceHandlerAbstract::printMessage(const unsigned int l, const char *f, 
         va_end(ap);
         return ret;
     }
-    else
-        return -1;
+    return -1;
 }
 
 
@@ -157,19 +162,24 @@ void AvoidanceHandlerAbstract::checkSelfCollisions()
     transforms.push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_HAND].linkNum + 3))*chain.getH(2));
     transforms.push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_FOREARM].linkNum + 3))*chain.getH(2));
     int index = 0;
-    for (int k = 0; k < 2; ++k) {
-        for (const auto &colPoint: selfColPoints) {
+    for (int k = 0; k < 2; ++k)
+    {
+        for (const auto &colPoint: selfColPoints)
+        {
             Vector pos = transforms[k] * colPoint;
             int nearest = -1;
             double neardist = 10000;
-            for (int i = 0; i < selfControlPoints[k].size(); i++) {
+            for (int i = 0; i < selfControlPoints[k].size(); i++)
+            {
                 double n = yarp::math::norm2(pos.subVector(0, 2) - selfControlPoints[k][i]);
-                if (n < neardist) {
+                if (n < neardist)
+                {
                     nearest = i;
                     neardist = n;
                 }
             }
-            if (neardist < 0.0025) { // distance lower than 0.05 m
+            if (neardist < 0.0025)  // distance lower than 0.05 m
+            {
                 totalColPoints.emplace_back();
                 collisionPoint_t cp{(k == 0)? SKIN_LEFT_HAND : SKIN_LEFT_FOREARM, (1 - neardist * 100)};
                 cp.x = selfControlPoints[k][nearest];
@@ -218,9 +228,11 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, Vector& weighted_no
     ctrlPointChains.clear();
     totalColPoints = collisionPoints;
     checkSelfCollisions();
-    for(const auto & colPoint : totalColPoints) {
+    for(const auto & colPoint : totalColPoints)
+    {
         iKinChain customChain= chain; //instantiates a new chain, copying from the old (full) one
-        if (verbosity >= 5){
+        if (verbosity >= 5)
+        {
             printf("Full chain has %d DOF \n",dim);
             printf("chain.getH() (end-effector): \n %s \n",chain.getH().toString(3,3).c_str());
             printf("SkinPart %s, linkNum %d, chain.getH() (skin part frame): \n %s \n", SkinPart_s[colPoint.skin_part].c_str(), SkinPart_2_LinkNum[colPoint.skin_part].linkNum + dim_offset , chain.getH(SkinPart_2_LinkNum[colPoint.skin_part].linkNum + dim_offset).toString(3, 3).c_str());
@@ -228,17 +240,20 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, Vector& weighted_no
 
         // Remove all the more distal links after the collision point
         // if the skin part is a hand, no need to remove any links from the chain
-        if ((colPoint.skin_part == SKIN_LEFT_FOREARM) || (colPoint.skin_part == SKIN_RIGHT_FOREARM)){
+        if ((colPoint.skin_part == SKIN_LEFT_FOREARM) || (colPoint.skin_part == SKIN_RIGHT_FOREARM))
+        {
             customChain.rmLink(6+dim_offset); customChain.rmLink(5+dim_offset);
             // we keep link 4(+3) from elbow to wrist - it is getH(4(+3)) that is the FoR at the wrist in which forearm skin is expressed; and we want to keep the elbow joint part of the game
             printMessage(2,"obstacle threatening skin part %s, blocking links 5(+3) and 6(+3) on subchain for avoidance\n",SkinPart_s[colPoint.skin_part].c_str());
         }
-        else if ((colPoint.skin_part == SKIN_LEFT_UPPER_ARM) || (colPoint.skin_part == SKIN_RIGHT_UPPER_ARM)){
+        else if ((colPoint.skin_part == SKIN_LEFT_UPPER_ARM) || (colPoint.skin_part == SKIN_RIGHT_UPPER_ARM))
+        {
             customChain.rmLink(6+dim_offset); customChain.rmLink(5+dim_offset);
             customChain.rmLink(4+dim_offset); customChain.rmLink(3+dim_offset);
             printMessage(2,"obstacle threatening skin part %s, blocking links 3(+3)-6(+3) on subchain for avoidance\n",SkinPart_s[colPoint.skin_part].c_str());
         }
-        else if (colPoint.skin_part == SKIN_FRONT_TORSO) {
+        else if (colPoint.skin_part == SKIN_FRONT_TORSO)
+        {
             customChain.rmLink(6+dim_offset); customChain.rmLink(5+dim_offset); customChain.rmLink(4+dim_offset);
             customChain.rmLink(3+dim_offset); customChain.rmLink(2+dim_offset); customChain.rmLink(1+dim_offset);
             customChain.rmLink(0+dim_offset);
@@ -250,7 +265,8 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, Vector& weighted_no
         computeFoR(colPoint.x, colPoint.n, HN);
         printMessage(5,"HN matrix at collision point w.r.t. local frame: \n %s \n",HN.toString(3,3).c_str());
         customChain.setHN(HN); //setting the end-effector transform to the collision point w.r.t subchain
-        if (verbosity >=5){
+        if (verbosity >=5)
+        {
             yarp::sig::Matrix H = customChain.getH();
             printf("H matrix at collision point w.r.t. root: \n %s \n",H.toString(3,3).c_str());
         }
@@ -260,7 +276,8 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, Vector& weighted_no
         Vector normal = customChain.getH().getCol(2).subVector(0,2); //get the end-effector frame of the standard or custom chain (control point derived from skin), takes the z-axis (3rd column in transform matrix) ~ normal, only its first three elements of the 4 in the homogenous transf. format
         weighted_normal += (-colPoint.magnitude*normal);
         Vector s=(J.transposed()*normal) * avoidingSpeed * colPoint.magnitude; //project movement along the normal into joint velocity space and scale by default avoidingSpeed and magnitude of skin (or PPS) activation
-        if (verbosity>=2){
+        if (verbosity>=2)
+        {
             printf("J for positions at control point:\n %s \nJ.transposed:\n %s \nNormal at control point: (%s), norm: %f \n",J.toString(3,3).c_str(),J.transposed().toString(3,3).c_str(), normal.toString(3,3).c_str(),norm(normal));
             printf("s = (J.transposed()*normal) * avoidingSpeed * collisionPoints[i].magnitude \n (%s)T = (%s)T * %f * %f\n",s.toString(3,3).c_str(),(J.transposed()*normal).toString(3,3).c_str(),avoidingSpeed,colPoint.magnitude);
         }

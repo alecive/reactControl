@@ -189,11 +189,12 @@ public:
         yInfo(" ");
         yInfo("[reactController] received new relative circular x_d: radius %f, frequency: %f.",_radius,_frequency);
         if ((_radius>=0.0) && (_radius <= 0.3) && (_frequency >=0.0) && (_frequency<=1.0)  )
+        {
             return rctCtrlThrd->setNewCircularTarget(_radius,_frequency);
-        else{
-            yWarning("[reactController] set_relative_circular_xd(): expecting radius <0,0.3>, frequency <0,1>");
-            return false;
         }
+        yWarning("[reactController] set_relative_circular_xd(): expecting radius <0,0.3>, frequency <0,1>");
+        return false;
+
     }
     
     bool set_streaming_xd() override
@@ -260,22 +261,22 @@ public:
 
     bool setup_new_particle(const yarp::sig::Vector& _x_0_vel) override
     {
-        if (referenceGen == "uniformParticle"){
+        if (referenceGen == "uniformParticle")
+        {
             yarp::sig::Vector _x_0 = _x_0_vel.subVector(0,2);
             yarp::sig::Vector _vel = _x_0_vel.subVector(3,5);
             yInfo("[reactController] Setting up new particle.. x_0: %s\tvel: %s\n",
                 _x_0.toString(3,3).c_str(), _vel.toString(3,3).c_str());
             return prtclThrd->setupNewParticle(_x_0,_vel);
         }
-        else{
-            yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
-            return false;
-        }
+        yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
+        return false;
     }
 
     bool reset_particle(const yarp::sig::Vector& _x_0) override
     {
-        if (referenceGen == "uniformParticle"){
+        if (referenceGen == "uniformParticle")
+        {
             if (_x_0.size()<3)
             {
                 return false;
@@ -283,35 +284,32 @@ public:
             yInfo("[reactController] Resetting particle to %s..",_x_0.toString(3,3).c_str());
             return prtclThrd->resetParticle(_x_0);
         }
-        else{
-            yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
-            return false;
-        }
+        yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
+        return false;
     }
 
     bool particle_stop() override
     {
-        if (referenceGen == "uniformParticle"){
+        if (referenceGen == "uniformParticle")
+        {
             yInfo("[reactController] Stopping particle..");
             return prtclThrd->stopParticle();
         }
-        else{
-            yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
-            return false;
-        }
+        yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
+        return false;
     }
 
     yarp::sig::Vector get_particle() override
     {
-        if (referenceGen == "uniformParticle"){
+        if (referenceGen == "uniformParticle")
+        {
             yInfo("[reactController] Getting particle..");
             return prtclThrd->getParticle();
         }
-        else{
-            yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
-            yarp::sig::Vector v(3,0.0);
-            return v;
-        }
+        yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
+        yarp::sig::Vector v(3,0.0);
+        return v;
+
     }
 
     bool enable_torso() override
@@ -392,7 +390,8 @@ public:
         //********************** CONFIGS ***********************
             if (rf.check("disableTorso"))
             {
-                if(rf.find("disableTorso").asString()=="on"){
+                if(rf.find("disableTorso").asString()=="on")
+                {
                     disableTorso = true;
                     yInfo("[reactController] disableTorso flag set to on.");
                 }
@@ -409,7 +408,8 @@ public:
         //************** getting collision points either from aggregated skin events or from pps (predictions from vision)
         if (rf.check("tactileCollisionPoints"))
         {
-            if(rf.find("tactileCollisionPoints").asString()=="on"){
+            if(rf.find("tactileCollisionPoints").asString()=="on")
+            {
                 tactileCollisionPointsOn = true;
                 yInfo("[reactController] tactileCollisionPoints flag set to on.");
             }
@@ -425,7 +425,8 @@ public:
         
         if (rf.check("visualCollisionPoints"))
         {
-            if(rf.find("visualCollisionPoints").asString()=="on"){
+            if(rf.find("visualCollisionPoints").asString()=="on")
+            {
                 visualCollisionPointsOn = true;
                 yInfo("[reactController] visualCollisionPoints flag set to on.");
             }
@@ -441,7 +442,8 @@ public:
 
         if (rf.check("proximityCollisionPoints"))
         {
-            if(rf.find("proximityCollisionPoints").asString()=="on"){
+            if(rf.find("proximityCollisionPoints").asString()=="on")
+            {
                 proximityCollisionPointsOn = true;
                 yInfo("[reactController] proximityCollisionPoints flag set to on.");
             }
@@ -458,7 +460,8 @@ public:
         //************************** gazeControl ******************************************************8
         if (rf.check("gazeControl"))
         {
-            if(rf.find("gazeControl").asString()=="on"){
+            if(rf.find("gazeControl").asString()=="on")
+            {
                 gazeControl = true;
                 yInfo("[reactController] gazeControl flag set to on.");
             }
@@ -475,7 +478,8 @@ public:
         //************************** gazeControl ******************************************************8
         if (rf.check("stiff"))
         {
-            if(rf.find("stiff").asString()=="on"){
+            if(rf.find("stiff").asString()=="on")
+            {
                 stiffInteraction = true;
                 yInfo("[reactController] stiff interaction flag set to on.");
             }
@@ -516,8 +520,10 @@ public:
                     referenceGen="minJerk";
                     yWarning("[reactController] referenceGen was not in the admissible values (uniformParticle / minJerk / none). Using %s as default.",referenceGen.c_str());
                 }
-                else 
+                else
+                {
                     yInfo("[reactController] referenceGen to use is: %s", referenceGen.c_str());
+                }
             }
             else yInfo("[reactController] Could not find referenceGen option in the config file; using %s as default",referenceGen.c_str());
             
@@ -559,11 +565,13 @@ public:
             //*********** hitting constraints *************************************************/
             if (rf.check("hittingConstraints"))
             {
-                if(rf.find("hittingConstraints").asString()=="on"){
+                if(rf.find("hittingConstraints").asString()=="on")
+                {
                     hittingConstraints = true;
                     yInfo("[reactController] hittingConstraints flag set to on.");
                 }
-                else{
+                else
+                {
                     hittingConstraints = false;
                     yInfo("[reactController] hittingConstraints flag set to off.");
                 }
@@ -577,10 +585,12 @@ public:
             if (rf.check("orientationControl"))
             {
                 if(rf.find("orientationControl").asString()=="on"){
+
                     orientationControl = true;
                     yInfo("[reactController] orientationControl flag set to on.");
                 }
-                else{
+                else
+                {
                     orientationControl = false;
                     yInfo("[reactController] orientationControl flag set to off.");
                 }
@@ -593,11 +603,13 @@ public:
             //*********** additional control points *************************************************/
             if (rf.check("additionalControlPoints"))
             {
-                if(rf.find("additionalControlPoints").asString()=="on"){
+                if(rf.find("additionalControlPoints").asString()=="on")
+                {
                     additionalControlPoints = true;
                     yInfo("[reactController] additionalControlPoints flag set to on.");
                 }
-                else{
+                else
+                {
                     additionalControlPoints = false;
                     yInfo("[reactController] additionalControlPoints flag set to off.");
                 }
@@ -617,11 +629,13 @@ public:
             //****************** self-collision points ******************
             if (rf.check("selfColPoints"))
             {
-                if(rf.find("selfColPoints").asString()=="on"){
+                if(rf.find("selfColPoints").asString()=="on")
+                {
                     selfColPoints = true;
                     yInfo("[reactController] selfColPoints flag set to on.");
                 }
-                else{
+                else
+                {
                     selfColPoints = false;
                     yInfo("[reactController] selfColPoints flag set to off.");
                 }
@@ -636,11 +650,13 @@ public:
             if (robot == "icubSim"){
                 if (rf.check("visualizeTargetInSim"))
                 {
-                    if(rf.find("visualizeTargetInSim").asString()=="on"){
+                    if(rf.find("visualizeTargetInSim").asString()=="on")
+                    {
                         visualizeTargetInSim = true;
                         yInfo("[reactController] visualizeTargetInSim flag set to on.");
                     }
-                    else{
+                    else
+                    {
                         visualizeTargetInSim = false;
                         yInfo("[reactController] visualizeTargetInSim flag set to off.");
                     }
@@ -652,11 +668,13 @@ public:
                 
                 if (rf.check("visualizeParticleInSim"))
                 {
-                    if(rf.find("visualizeParticleInSim").asString()=="on"){
+                    if(rf.find("visualizeParticleInSim").asString()=="on")
+                    {
                         visualizeParticleInSim = true;
                         yInfo("[reactController] visualizeParticleInSim flag set to on.");
                     }
-                    else{
+                    else
+                    {
                         visualizeParticleInSim = false;
                         yInfo("[reactController] visualizeParticleInSim flag set to off.");
                     }
@@ -667,11 +685,13 @@ public:
                 }
                 if (rf.check("visualizeCollisionPointsInSim"))
                 {
-                    if(rf.find("visualizeCollisionPointsInSim").asString()=="on"){
+                    if(rf.find("visualizeCollisionPointsInSim").asString()=="on")
+                    {
                         visualizeCollisionPointsInSim = true;
                         yInfo("[reactController] visualizeCollisionPointsInSim flag set to on.");
                     }
-                    else{
+                    else
+                    {
                         visualizeCollisionPointsInSim = false;
                         yInfo("[reactController] visualizeCollisionPointsInSim flag set to off.");
                     }
@@ -693,7 +713,8 @@ public:
 
         //************* THREAD ******************************
         
-        if(referenceGen == "uniformParticle"){
+        if(referenceGen == "uniformParticle")
+        {
             prtclThrd = new particleThread(prtclRate, name, verbosity);
             if (!prtclThrd->start())
             {
@@ -704,8 +725,7 @@ public:
                 return false;
             }
         }
-        else
-            prtclThrd = nullptr;
+        else prtclThrd = nullptr;
             
         rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
                                           disableTorso, trajSpeed,

@@ -75,10 +75,11 @@ public:
     bool setNewCircularTarget(double _radius, double _frequency);
 
     //Will be reading reaching targets from a port
-    bool setStreamingTarget() {streamingTarget = true; return true; }
+    bool setStreamingTarget() { streamingTarget = true; return true; }
     
     // Sets the tolerance
-    bool setTol(const double _tol) {
+    bool setTol(const double _tol)
+    {
         if (_tol < 0) return false;
         tol = _tol; return true;
     }
@@ -93,7 +94,8 @@ public:
     double getVMax() const { return vMax; }
 
     // Sets the trajectory speed
-    bool setTrajSpeed(const double _traj_speed) {
+    bool setTrajSpeed(const double _traj_speed)
+    {
        if (_traj_speed < 0) return false;
        trajSpeed = _traj_speed; return true;
     }
