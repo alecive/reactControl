@@ -324,7 +324,7 @@ bool reactCtrlThread::threadInit()
     //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
     avhdl = std::make_unique<AvoidanceHandlerTactile>(*arm->asChain(),collisionPoints,selfColPoints,verbosity);
 
-    solver = std::make_unique<QPSolver>(*virtualArm, hittingConstraints,orientationControl,
+    solver = std::make_unique<QPSolver>(*virtualArm, hittingConstraints,vMax, orientationControl,
                                         dT, homePos*CTRL_DEG2RAD, restPosWeight);
     printMessage(5,"[reactCtrlThread] threadInit() finished.\n");
     yarp::os::Time::delay(0.2);
@@ -816,7 +816,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
 
     int count = 0;
     Vector res;
-    solver->init(xr, q_dot, vLimAdapted, weighted_normal, comingHome? 10:restPosWeight);
+    solver->init(xr, q_dot, vLimAdapted, comingHome? 10:restPosWeight);
     std::array<double,7> vals = {0, 0.1, 1.25, 2.5, 5, 10, std::numeric_limits<double>::max()};
     while(count < vals.size()) {
         _exit_code = solver->optimize(vals[count]);

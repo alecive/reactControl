@@ -27,25 +27,23 @@ void QPSolver::computeSelfAvoidanceConstraints()
 void QPSolver::computeGuard()
 {
     double guardRatio=0.1;
-    qGuard.resize(chain_dof);
     qGuardMinExt.resize(chain_dof);
     qGuardMinInt.resize(chain_dof);
-    qGuardMinCOG.resize(chain_dof);
     qGuardMaxExt.resize(chain_dof);
     qGuardMaxInt.resize(chain_dof);
-    qGuardMaxCOG.resize(chain_dof);
+    iKinChain &chain=*arm.asChain();
 
     for (size_t i=0; i < chain_dof; i++)
     {
-        qGuard[i]=0.25*guardRatio*(q_lim(i,1)-q_lim(i,0));
+        double q_min = chain(i).getMin();
+        double q_max = chain(i).getMax();
+        double qGuard=0.25*guardRatio*(q_max-q_min);
 
-        qGuardMinExt[i]=q_lim(i,0)+qGuard[i];
-        qGuardMinInt[i]=qGuardMinExt[i]+qGuard[i];
-        qGuardMinCOG[i]=0.5*(qGuardMinExt[i]+qGuardMinInt[i]);
+        qGuardMinExt[i]=q_min+qGuard;
+        qGuardMinInt[i]=qGuardMinExt[i]+qGuard;
 
-        qGuardMaxExt[i]=q_lim(i,1)-qGuard[i];
-        qGuardMaxInt[i]=qGuardMaxExt[i]-qGuard[i];
-        qGuardMaxCOG[i]=0.5*(qGuardMaxExt[i]+qGuardMaxInt[i]);
+        qGuardMaxExt[i]=q_max-qGuard;
+        qGuardMaxInt[i]=qGuardMaxExt[i]-qGuard;
     }
 }
 
@@ -87,21 +85,11 @@ QPSolver::QPSolver(iCubArm &chain_, bool hittingConstraints_, double vmax_, bool
     chain_dof = static_cast<int>(arm.getDOF());
     pr.resize(3,0.0);
     v0.resize(chain_dof, 0.0); v=v0;
-    q_lim.resize(chain_dof, 2);
     v_lim.resize(chain_dof, 2);
+    bounds.resize(chain_dof, 2);
    // normal.resize(3,0.0);
-    iKinChain &chain=*arm.asChain();
     if (!orientationControl_) w4 = 0;
 
-    for (size_t r=0; r < chain_dof; r++)
-    {
-        q_lim(r,0)=chain(r).getMin();
-        q_lim(r,1)=chain(r).getMax();
-
-        v_lim(r,1)=std::numeric_limits<double>::max();
-        v_lim(r,0)=-v_lim(r,1);
-    }
-    bounds=v_lim;
     if (hitting_constraints)
     {
         computeSelfAvoidanceConstraints();
@@ -182,7 +170,7 @@ QPSolver::QPSolver(iCubArm &chain_, bool hittingConstraints_, double vmax_, bool
 QPSolver::~QPSolver() = default;
 
 /****************************************************************/
-void QPSolver::init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, const Vector &col_normal, double rest_pos_w)
+void QPSolver::init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, double rest_pos_w)
 {
     yAssert(6 <= _xr.length())
     yAssert(v0.length() == _v0.length())
@@ -213,9 +201,7 @@ void QPSolver::init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, 
     v_des.setSubvector(0, (pr-p0) / dt);
     v_des.setSubvector(3, dcm2rpy(R) / dt);
 
-
     J0=arm.GeoJacobian();
-    
 
     computeBounds();
     update_gradient();

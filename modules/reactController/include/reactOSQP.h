@@ -25,7 +25,7 @@ class QPSolver
 
     bool hitting_constraints;
 
-    Matrix q_lim,v_lim;
+    Matrix v_lim;
     Vector q0,v0,v,p0, rest_jnt_pos, rest_weights, rest_err; //, normal;
     Matrix H0, J0;
     Vector pr, v_des;
@@ -37,13 +37,10 @@ class QPSolver
     double shou_m,shou_n;
     double elb_m,elb_n;
 
-    Vector qGuard;
     Vector qGuardMinExt;
     Vector qGuardMinInt;
-    Vector qGuardMinCOG;
     Vector qGuardMaxExt;
     Vector qGuardMaxInt;
-    Vector qGuardMaxCOG;
 
     Eigen::SparseMatrix<double> hessian;
     Eigen::VectorXd gradient;
@@ -66,7 +63,7 @@ public:
     QPSolver(iCubArm &chain_, bool hittingConstraints_, double vmax_, bool orientationControl_, double dT_, const Vector& restPos,
                   double restPosWeight=0.0);
     ~QPSolver();
-    void init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, const Vector &col_normal, double rest_pos_w);
+    void init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, double rest_pos_w);
 
     Vector get_resultInDegPerSecond()
     {
