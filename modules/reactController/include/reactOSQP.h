@@ -26,11 +26,11 @@ class QPSolver
     bool hitting_constraints;
 
     Matrix v_lim;
-    Vector q0,v0,v,p0, rest_jnt_pos, rest_weights, rest_err; //, normal;
+    Vector q0,v0,v,p0, rest_jnt_pos, rest_w, rest_err; //, normal;
     Matrix H0, J0;
-    Vector pr, v_des;
+    Vector pr, v_des, manip;
     Matrix bounds;
-    double dt, w1, w2, w3, w4, min_type, vmax;
+    double dt, w1, w2, w3, w4, w5, min_type, vmax;
 
     int chain_dof;
 
