@@ -1,0 +1,167 @@
+#!/usr/bin/python3
+import time
+import yarp
+
+def randomMovements(rpc_client, inport, use_cart=False, seed=0):
+    import numpy as np
+    np.random.seed(seed)
+    return_to_home = False
+    x = np.round(np.arange(-0.3, -0.05, 0.1),2)
+    y = np.round(np.arange(-0.2, 0.05, 0.1),2)
+    z = np.round(np.arange(-0.05, 0.35, 0.1),2)
+    poses = np.array(np.meshgrid(x, y, z)).T.reshape(-1, 3)
+    print("Size is ", poses.shape)
+
+    feasibility = [False] * poses.shape[0]
+    indexes = np.random.permutation(poses.shape[0])
+    feasible_poses = []
+    count = 0
+    for idx in indexes:
+        pos = poses[idx]
+        result = yarp.Bottle()
+        result.clear()
+        if use_cart:
+            result.addFloat64(pos[0])
+            result.addFloat64(pos[1])
+            result.addFloat64(pos[2])
+            rpc_client.write(result)
+        
+        else:
+            result.addString("set_xd")
+            l = result.addList()
+            l.addFloat64(pos[0])
+            l.addFloat64(pos[1])
+            l.addFloat64(pos[2])
+            send_command(rpc_client,result)
+        
+       # print(result.toString())
+        
+        poseStr = None
+        while not poseStr:
+            poseStr = read_once(inport)
+        
+        posErr = np.sqrt((pos[0]*1000-int(poseStr[0]))**2 + (pos[1]*1000-int(poseStr[1]))**2 + (pos[2]*1000-int(poseStr[2]))**2)
+        print(pos, idx, count, np.round(posErr,2))
+        count += 1
+        if (posErr < 10): # 1 cm
+            feasibility[idx] = True
+            feasible_poses.append(pos)
+        if return_to_home:
+            result = yarp.Bottle()
+            result.clear()
+            result.addString("go_home")
+        
+            send_command(rpc_client,result)
+            poseStr = None
+            while not poseStr:
+                poseStr = read_once(inport)
+            print(' '.join(poseStr[:3]))
+        
+
+
+    print(count, len(feasible_poses))
+    print(np.array(feasible_poses))
+
+
+def classicScenario(rpc_client, inport, use_right=False):
+    poses = [[-0.299, -0.174, 0.05], [-0.299, -0.174, 0.15], [-0.299, -0.174, 0.00], [-0.299, -0.174, 0.1]]
+    for pos in poses:
+        result = yarp.Bottle()
+        result.clear()
+        result.addString("set_xd")
+        l = result.addList()
+        l.addFloat64(pos[0])
+        l.addFloat64(-pos[1] if use_right else pos[1])
+        l.addFloat64(pos[2])
+        send_command(rpc_client,result)
+        poseStr = None
+        
+        while not poseStr:
+            poseStr = read_once(inport)
+
+    result = yarp.Bottle()
+    result.clear()
+    result.addString("set_relative_circular_xd")
+    result.addFloat64(0.08)
+    result.addFloat64(0.2)
+        
+    send_command(rpc_client,result)
+    start = time.time()
+    while time.time()-start < 60:
+        pass
+    result = yarp.Bottle()
+    result.clear()
+    result.addString("stop")
+    send_command(rpc_client,result)
+    
+    result = yarp.Bottle()
+    result.clear()
+    result.addString("hold_position")
+    send_command(rpc_client,result)
+
+
+def visualScenario(rpc_client, inport, use_right=False):
+    poses = [[-0.299, -0.174, 0.05], [-0.299, -0.174, 0.15], [-0.299, -0.174, 0.00], [-0.299, -0.174, 0.1], [-0.299, -0.074, 0.1]]
+    for pos in poses:
+        result = yarp.Bottle()
+        result.clear()
+        result.addString("set_xd")
+        l = result.addList()
+        l.addFloat64(pos[0])
+        l.addFloat64(-pos[1] if use_right else pos[1])
+        l.addFloat64(pos[2])
+
+        send_command(rpc_client, result)
+        poseStr = None
+        
+        while not poseStr:
+            poseStr = read_once(inport)
+            print(poseStr)
+        break
+
+    message = f"hold_position"
+    send_command(rpc_client, message)
+
+
+def send_command(rpc_client, command):
+    ans = yarp.Bottle()     
+    #print("Command sent: ", command.toString())
+    rpc_client.write(command, ans)
+    #print ("Reply received: ", ans.toString())
+    return ans.toString()
+
+
+def read_once(inport):
+    bottle = yarp.Bottle()
+    bottle.clear()
+    # read the messge
+    inport.read(bottle)
+    #print("Received ", bottle.toString())
+    return bottle.toString().split(' ')
+
+
+if __name__=="__main__": 
+    yarp.Network.init() # Initialise YARP
+     
+    use_cart = False
+    use_right = False
+    port_name = "/testCart/target:i" if use_cart else "/reactController/rpc:i"
+    port_name2 = "/testCart/finished:o" if use_cart else "/reactController/finished:o" 
+    
+    inport = yarp.Port()
+    # activate ports
+    inport.open("/reader")
+    yarp.Network.connect(port_name2, inport.getName())
+
+    outPort = yarp.Port() if use_cart else yarp.RpcClient()
+
+    outPort.open('/pokus:o')
+    yarp.Network.connect(outPort.getName(), port_name)
+    
+
+    randomMovements(outPort, inport, use_cart, 0)
+   # classicScenario(rpc_client, inport)
+    # visualScenario(rpc_client, inport, use_right)
+
+    # close the network
+    yarp.Network.fini()

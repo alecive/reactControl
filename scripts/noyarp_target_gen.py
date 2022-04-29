@@ -8,20 +8,25 @@ def get_addr(s):
  
 # get a single line of text from a socket
 def getline(sock):
-    result = ""
+    result =  ""
     while result.find('\n')==-1:
-        result = result + sock.recv(1024).decode()
+        result = result + sock.recv(1024).decode() #
     result = re.sub('[\r\n].*','',result)
     return result
  
 # send a message and expect a reply
 def comm(addr,message):
+    print("Addr = ", addr)
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect(addr)
     sock.send(b'CONNACK extern\n')
     getline(sock)
     sock.send(b'd\n%s\n' % message.encode())
+    print(b'd\n%s\n' % message.encode())
     result = getline(sock)
+    print(result)
+    sock.send(b'q\n')
+    getline(sock)
     sock.close()
     return result
 
@@ -35,8 +40,9 @@ def read_once(addr):
     return data
 
 
-def randomMovements(query, query_read, use_cart=False):
+def randomMovements(query, query_read, use_cart=False, seed=0):
     import numpy as np
+    np.random.seed(seed)
     return_to_home = True
     x, y, z = np.meshgrid(np.round(np.arange(-0.4, 0.0, 0.05),2), np.round(np.arange(-0.2, 0.1, 0.05),2), np.round(np.arange(-0.2, 0.4, 0.05),2), indexing='ij')
     x, y, z = np.meshgrid(np.round(np.arange(-0.3, 0.0, 0.05),2), np.round(np.arange(-0.2, 0.1, 0.05),2), np.round(np.arange(-0.1, 0.4, 0.05),2), indexing='ij')
@@ -52,6 +58,7 @@ def randomMovements(query, query_read, use_cart=False):
     for idx in indexes:
         pos = [x[idx], y[idx], z[idx]]
         message = f"{pos[0]} {pos[1]} {pos[2]}" if use_cart else f"set_xd ({pos[0]} {pos[1]} {pos[2]})"
+        print(message)
         comm(query,message)
         poseStr = None
         print(message)
@@ -125,17 +132,46 @@ def visualScenario(query, query_read, use_right=False):
 if __name__=="__main__": 
      
     use_cart = False
-    name_server = ('10.0.0.111', 10000)
+    name_server = ('127.0.0.1', 10000)
     use_right = True
     port_name = "/testCart/target:i" if use_cart else "/reactController/rpc:i"
     port_name2 = "/testCart/finished:o" if use_cart else "/reactController/finished:o" 
-    query = get_addr(comm(name_server,"query %s"%port_name))
+    query = ('127.0.0.1', 10092)
+    query_read = ('127.0.0.1', 10091)
+
+    # p_name = "/icubSim/left_arm/rpc:i"
+    # message = "set pos 4 90"
+    # query = get_addr(comm(name_server,"query %s"%p_name))
+    # print ("Talking to", p_name, "here:", query)
+    # print (comm(query,message))
+
+
+    #query = get_addr(comm(name_server,"query %s"%port_name))
     print ("Talking to", port_name, "here:", query)
-    query_read = get_addr(comm(name_server,"query %s"%port_name2))
+    #query_read = get_addr(comm(name_server,"query %s"%port_name2))
     print ("Listening from", port_name2, "here:", query_read)
+
     
-    # randomMovements(query, query_read, use_cart)
-    # classicScenario(query, query_read)
-    visualScenario(query, query_read, use_right)
+    message = "get_tol"
+    #comm(query,message)
+    addr = query
+    print("Addr = ", addr)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect(addr)
+    sock.send(b'CONNACK extern\n')
+    getline(sock)
+    sock.send(b'd\nset_tol 0.005\n')
+    print(b'd\n%s\n' % message.encode())
+    result = getline(sock)
+    sock.send(b'q\n')
+    getline(sock)
+    print(result)
+    sock.close()
+   # return result
+
+   
+   # randomMovements(query, query_read, use_cart, 0)
+   # classicScenario(query, query_read)
+    # visualScenario(query, query_read, use_right)
 
         
