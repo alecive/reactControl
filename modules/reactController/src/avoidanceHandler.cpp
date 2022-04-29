@@ -168,7 +168,7 @@ void AvoidanceHandlerAbstract::checkSelfCollisions()
         {
             Vector pos = transforms[k] * colPoint;
             int nearest = -1;
-            double neardist = 10000;
+            double neardist = std::numeric_limits<double>::max();
             for (int i = 0; i < selfControlPoints[k].size(); i++)
             {
                 double n = yarp::math::norm2(pos.subVector(0, 2) - selfControlPoints[k][i]);
@@ -178,10 +178,10 @@ void AvoidanceHandlerAbstract::checkSelfCollisions()
                     neardist = n;
                 }
             }
-            if (neardist < 0.0025)  // distance lower than 0.05 m
+            //if (neardist < 0.0025)  // distance lower than 0.05 m
+            if (neardist < 0.001)  // distance lower than 0.03 m
             {
-                totalColPoints.emplace_back();
-                collisionPoint_t cp{(k == 0)? SKIN_LEFT_HAND : SKIN_LEFT_FOREARM, (1 - neardist * 100)};
+                collisionPoint_t cp{(k == 0)? SKIN_LEFT_HAND : SKIN_LEFT_FOREARM, 1 - 100*sqrt(neardist)/3.5};
                 cp.x = selfControlPoints[k][nearest];
                 Vector n = pos.subVector(0, 2) - selfControlPoints[k][nearest];
                 cp.n = n / yarp::math::norm(n);
@@ -200,7 +200,7 @@ AvoidanceHandlerTactile::AvoidanceHandlerTactile(const iCub::iKin::iKinChain &_c
                                                  AvoidanceHandlerAbstract(_chain,_collisionPoints, _useSelfColPoints, _verbosity)
 {
     type="tactile";
-    avoidingSpeed = 1;  // produce collisionPoint.magnitude * avoidingSpeed rad/s repulsive speed
+    avoidingSpeed = 0.5;  // produce collisionPoint.magnitude * avoidingSpeed rad/s repulsive speed
 
     parameters.unput("avoidingSpeed");
     parameters.put("avoidingSpeed",avoidingSpeed);
