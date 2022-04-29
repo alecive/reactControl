@@ -80,7 +80,7 @@ void QPSolver::computeBounds()
 QPSolver::QPSolver(iCubArm &chain_, bool hittingConstraints_, double vmax_, bool orientationControl_,
                              double dT_, const Vector& restPos, double restPosWeight_) :
         arm(chain_), hitting_constraints(hittingConstraints_), dt(dT_), shou_m(0), shou_n(0), elb_m(0), elb_n(0),
-        w1(1), w2(restPosWeight_), w3(1), w4(0.1), w5(1),  min_type(1), vmax(vmax_)
+        w1(1), w2(restPosWeight_), w3(10), w4(1), w5(0),  min_type(1), vmax(vmax_), adapt_w5(1), manip_thr(0.03)
 {
     chain_dof = static_cast<int>(arm.getDOF());
     pr.resize(3,0.0);
@@ -203,16 +203,24 @@ void QPSolver::init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, 
     v_des.setSubvector(3, dcm2rpy(R) / dt);
 
     J0=arm.GeoJacobian();
-    Vector offset = Vector(chain_dof,0.0);
-    double delta = 0.02;
-    for (int i = 0; i < chain_dof; ++i) {
-        offset[i] = delta;
-        Matrix Jplus = arm.GeoJacobian(q0+offset); // Be aware - arm joint angles are changed
-        Matrix Jminus = arm.GeoJacobian(q0-offset);
-        manip[i] = (sqrt(det(Jplus*Jplus.transposed())) - sqrt(det(Jminus*Jminus.transposed())))/(2*delta);
-        offset[i] = 0.0;
+    adapt_w5 = 1 - sqrt(det(J0*J0.transposed()))/manip_thr;
+    if (adapt_w5 <= 0)
+    {
+        adapt_w5 = 0;
     }
-    arm.setAng(q0); //restore original joint angles
+    else
+    {
+        Vector offset = Vector(chain_dof, 0.0);
+        double delta = 0.02;
+        for (int i = 0; i < chain_dof; ++i) {
+            offset[i] = delta;
+            Matrix Jplus = arm.GeoJacobian(q0 + offset); // Be aware - arm joint angles are changed
+            Matrix Jminus = arm.GeoJacobian(q0 - offset);
+            manip[i] = (sqrt(det(Jplus * Jplus.transposed())) - sqrt(det(Jminus * Jminus.transposed()))) / (2 * delta);
+            offset[i] = 0.0;
+        }
+        arm.setAng(q0); //restore original joint angles
+    }
 
     computeBounds();
     update_gradient();
@@ -285,7 +293,7 @@ void QPSolver::update_gradient()
 
     for (int i=0; i < chain_dof; i++)
     {
-        gradient[i] = -2*w1*v0[i]*min_type + w2 * rest_w[i] * dt * 2 * (q0[i] - rest_jnt_pos[i]) - w5 * dt * manip[i];
+        gradient[i] = -2 * w1 * v0[i] * min_type + w2 * rest_w[i] * dt * 2 * (q0[i] - rest_jnt_pos[i]) - w5 * adapt_w5 * dt * manip[i];
     }
     if (chain_dof == 10)
     {

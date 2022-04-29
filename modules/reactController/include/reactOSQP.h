@@ -30,7 +30,7 @@ class QPSolver
     Matrix H0, J0;
     Vector pr, v_des, manip;
     Matrix bounds;
-    double dt, w1, w2, w3, w4, w5, min_type, vmax;
+    double dt, w1, w2, w3, w4, w5, min_type, vmax, adapt_w5, manip_thr;
 
     int chain_dof;
 

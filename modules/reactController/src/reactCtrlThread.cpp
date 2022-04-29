@@ -232,10 +232,10 @@ bool reactCtrlThread::threadInit()
             return false;
         }
 
-        igaze -> storeContext(&contextGaze);
-        igaze -> setSaccadesMode(false);
-        igaze -> setNeckTrajTime(0.75);
-        igaze -> setEyesTrajTime(0.5);
+        igaze->storeContext(&contextGaze);
+        igaze->setSaccadesMode(false);
+        igaze->setNeckTrajTime(0.75);
+        igaze->setEyesTrajTime(0.5);
     }
 
     //filling joint pos limits Matrix
@@ -322,7 +322,7 @@ bool reactCtrlThread::threadInit()
 
     weighted_normal.resize(3,0);
     //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
-    avhdl = std::make_unique<AvoidanceHandlerTactile>(*arm->asChain(),collisionPoints,selfColPoints,verbosity);
+    avhdl = std::make_unique<AvoidanceHandlerTactile>(*virtualArm->asChain(),collisionPoints,selfColPoints,verbosity);
 
     solver = std::make_unique<QPSolver>(*virtualArm, hittingConstraints,vMax, orientationControl,
                                         dT, homePos*CTRL_DEG2RAD, restPosWeight);
@@ -334,10 +334,10 @@ bool reactCtrlThread::threadInit()
 void reactCtrlThread::run()
 {
     double t2 = yarp::os::Time::now();
-    if (state == STATE_REACH)
-    {
-        std::cout << t2-t_0 << " ";
-    }
+//    if (state == STATE_REACH)
+//    {
+//        std::cout << t2-t_0 << " ";
+//    }
     //printMessage(2,"[reactCtrlThread::run()] started, state: %d.\n",state);
     //std::lock_guard<std::mutex> lg(mut);
     updateArmChain();
@@ -543,10 +543,10 @@ void reactCtrlThread::run()
             yFatal("[reactCtrlThread] reactCtrlThread should never be here!!! Step: %d",state);
     }
 
-    if (state == STATE_REACH)
-    {
-        std::cout << yarp::os::Time::now()-t_0 << " ";
-    }
+//    if (state == STATE_REACH)
+//    {
+//        std::cout << yarp::os::Time::now()-t_0 << " ";
+//    }
     sendData();
     if (tactileCollisionPointsOn || visualCollisionPointsOn)
     {
@@ -556,9 +556,9 @@ void reactCtrlThread::run()
     if (state == STATE_REACH) {
         double t3 = yarp::os::Time::now();
 
-        std::cout << t3-t_0 << " " << timeToSolveProblem_s << " " << t3-t2;
-        if (t3-t2 > 0.02) { std::cout << " Alert!"; }
-        std::cout << "\n";
+     //   std::cout << t3-t_0 << " " << timeToSolveProblem_s << " " << t3-t2;
+        if (t3-t2 > 0.01) { std::cout << " Alert!"; }
+     //   std::cout << "\n";
     }
 }
 
@@ -815,18 +815,18 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
     xr.setSubvector(3,o_n);
 
     int count = 0;
-    Vector res;
+    Vector res(chainActiveDOF, 0.0);
     solver->init(xr, q_dot, vLimAdapted, comingHome? 10:restPosWeight);
-    std::array<double,7> vals = {0, 0.1, 1.25, 2.5, 5, 10, std::numeric_limits<double>::max()};
+    std::array<double,3> vals = {0, 0.05, std::numeric_limits<double>::max()};
     while(count < vals.size()) {
         _exit_code = solver->optimize(vals[count]);
         if (_exit_code == OSQP_SOLVED) {
             yInfo("Problem solved in %d runs\n", count+1);
+            res = solver->get_resultInDegPerSecond();
             break;
         }
         count++;
     }
-    res = solver->get_resultInDegPerSecond();
 
     // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
     if(verbosity >= 1){ 
