@@ -254,7 +254,7 @@ protected:
     ofstream fout_param; //log parameters that stay constant during the simulation, but are important for analysis - e.g. joint limits
     // Stamp for the setEnvelope for the ports
     yarp::os::Stamp ts;
-    double t_0;
+    double t_0, t_1;
     int counter;
  
     // QPSolver STUFF
@@ -265,6 +265,8 @@ protected:
     VisualisationHandler visuhdl;
     std::vector<collisionPoint_t> collisionPoints; //list of "avoidance vectors" from peripersonal space / safety margin
     std::unique_ptr<AvoidanceHandlerAbstract> avhdl;
+    std::vector<yarp::sig::Vector> last_trajectory;
+    bool tactileColAvoidance;
         
     /**
     * Solves the Inverse Kinematic task

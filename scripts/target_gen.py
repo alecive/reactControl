@@ -1,9 +1,21 @@
 #!/usr/bin/python3
 import time
 import yarp
+import numpy as np
+    
+def sampleTargetOnCircle(center, radius, res=10):
+    points = []
+
+    for theta in np.deg2rad(np.arange(-180, 180, res)):
+        x = center[0]
+        y = center[1] + radius * np.cos(theta)
+        z = center[2] + radius * np.sin(theta)
+        points.append((x, y, z))
+
+    return np.array(points)
+
 
 def randomMovements(rpc_client, inport, use_cart=False, seed=0):
-    import numpy as np
     np.random.seed(seed)
     return_to_home = False
     x = np.round(np.arange(-0.3, -0.05, 0.1),2)
@@ -65,6 +77,7 @@ def randomMovements(rpc_client, inport, use_cart=False, seed=0):
 
 def classicScenario(rpc_client, inport, use_right=False):
     poses = [[-0.299, -0.174, 0.05], [-0.299, -0.174, 0.15], [-0.299, -0.174, 0.00], [-0.299, -0.174, 0.1]]
+    #circ_poses = sampleTargetOnCircle(poses[-1], 0.08,1)
     for pos in poses:
         result = yarp.Bottle()
         result.clear()
@@ -78,7 +91,6 @@ def classicScenario(rpc_client, inport, use_right=False):
         
         while not poseStr:
             poseStr = read_once(inport)
-
     result = yarp.Bottle()
     result.clear()
     result.addString("set_relative_circular_xd")
@@ -86,9 +98,30 @@ def classicScenario(rpc_client, inport, use_right=False):
     result.addFloat64(0.2)
         
     send_command(rpc_client,result)
+    
     start = time.time()
+    #index = 0
     while time.time()-start < 60:
+        '''
+        pos = circ_poses[index]
+        index += 1
+        if index == len(circ_poses):
+            index = 0
+        result = yarp.Bottle()
+        result.clear()
+        result.addString("set_xd")
+        l = result.addList()
+        l.addFloat64(pos[0])
+        l.addFloat64(-pos[1] if use_right else pos[1])
+        l.addFloat64(pos[2])
+        send_command(rpc_client,result)
+        poseStr = None
+        
+        while not poseStr:
+            poseStr = read_once(inport)
+        '''
         pass
+        
     result = yarp.Bottle()
     result.clear()
     result.addString("stop")
@@ -101,7 +134,13 @@ def classicScenario(rpc_client, inport, use_right=False):
 
 
 def visualScenario(rpc_client, inport, use_right=False):
-    poses = [[-0.299, -0.174, 0.05], [-0.299, -0.174, 0.15], [-0.299, -0.174, 0.00], [-0.299, -0.174, 0.1], [-0.299, -0.074, 0.1]]
+    poses = [#[-0.299, -0.174, 0.05], [-0.299, -0.174, 0.15], [-0.299, -0.174, 0.00], [-0.299, -0.174, 0.1], [-0.299, -0.074, 0.1], 
+    [-0.299, -0.174, 0.05], [-0.299, -0.174, 0.15], [-0.299, -0.174, 0.00],
+    [-0.299, -0.174, 0.05], [-0.299, -0.174, 0.15], [-0.299, -0.174, 0.00],
+    [-0.299, -0.174, 0.05], [-0.299, -0.174, 0.15], [-0.299, -0.174, 0.00],
+    [-0.299, -0.174, 0.05], [-0.299, -0.174, 0.15], [-0.299, -0.174, 0.00]]
+ #   [-0.299, -0.174, 0.1], [-0.299, -0.074, 0.1], [-0.299, -0.174, 0.1], [-0.299, -0.074, 0.1], [-0.299, -0.174, 0.1], [-0.299, -0.074, 0.1],
+ #   [-0.299, -0.174, 0.1], [-0.299, -0.074, 0.1], [-0.299, -0.174, 0.1], [-0.299, -0.074, 0.1], [-0.299, -0.174, 0.1], [-0.299, -0.074, 0.1]]
     for pos in poses:
         result = yarp.Bottle()
         result.clear()
@@ -116,11 +155,12 @@ def visualScenario(rpc_client, inport, use_right=False):
         
         while not poseStr:
             poseStr = read_once(inport)
-            print(poseStr)
-        break
-
-    message = f"hold_position"
-    send_command(rpc_client, message)
+        print(pos)
+        
+    result = yarp.Bottle()
+    result.clear()
+    result.addString("hold_position")
+    send_command(rpc_client, result)
 
 
 def send_command(rpc_client, command):
@@ -159,9 +199,9 @@ if __name__=="__main__":
     yarp.Network.connect(outPort.getName(), port_name)
     
 
-    randomMovements(outPort, inport, use_cart, 0)
-   # classicScenario(rpc_client, inport)
-    # visualScenario(rpc_client, inport, use_right)
+   # randomMovements(outPort, inport, use_cart, 0)
+    classicScenario(outPort, inport)
+   # visualScenario(outPort, inport, use_right)
 
     # close the network
     yarp.Network.fini()

@@ -56,7 +56,7 @@ reactCtrlThread::reactCtrlThread(int _rate, string _name, string _robot,  string
         imodA(nullptr), iintmodeA(nullptr), iimpA(nullptr), ilimA(nullptr), encsA(nullptr),
         jntsA(0), iencsT(nullptr), iposDirT(nullptr), imodT(nullptr), ilimT(nullptr), encsT(nullptr),
         jntsT(0), igaze(nullptr), contextGaze(0), chainActiveDOF(0), virtualArm(nullptr),
-        movingTargetCircle(false), radius(0), frequency(0), streamingTarget(true),
+        movingTargetCircle(false), radius(0), frequency(0), streamingTarget(true), tactileColAvoidance(false),
         t_0(0), solverExitCode(0), timeToSolveProblem_s(0), fingerPos({80,6,57,13,0,13,0,103}),
         homePos({0, 0, 0, -34, 30, 0, 50, 0,  0, 0}), comingHome(false), holding_position(false),
         visuhdl(verbosity, (robot == "icubSim"), name, _visTargetInSim,
@@ -328,6 +328,7 @@ bool reactCtrlThread::threadInit()
                                         dT, homePos*CTRL_DEG2RAD, restPosWeight);
     printMessage(5,"[reactCtrlThread] threadInit() finished.\n");
     yarp::os::Time::delay(0.2);
+    t_1=Time::now();
     return true;
 }
 
@@ -390,11 +391,13 @@ void reactCtrlThread::run()
     3) right, outermost, proximal triangle - ID 207, row 1 in triangle_centers_CAD_upperPatch_wristFoR8
     ID  x   y   z   n1  n2  n3
     207 -0.027228   -0.054786   -0.0191051  -0.886  0.14    -0.431 */
+    bool tactileCollision = false;
 
-//    if (t_0 > 0 && robot == "icubSim")
+//    if (t_1 > 0 && robot == "icubSim")
 //    {
 //        collisionPoint_t collisionPointStruct{SKIN_LEFT_FOREARM};
-//        if (yarp::os::Time::now() - t_0 > 16 && counter < 200) {
+//        if (yarp::os::Time::now() - t_1 > 16 && counter < 100)
+//        {
 ////            collisionPointStruct.x = {-0.0002, -0.0131,-0.0258434};//  {-0.02, 0.0, -0.005}; //  // {-0.031, -0.079, 0.005};
 ////            collisionPointStruct.n = {-0.005, 0.238, -0.971}; //{0,0,-1}; // // {-0.739, 0.078, 0.105};
 //            collisionPointStruct.skin_part = SKIN_LEFT_HAND;
@@ -402,22 +405,30 @@ void reactCtrlThread::run()
 //            collisionPointStruct.n = {0, 0, 1};
 //            counter++;
 //            collisionPoints.push_back(collisionPointStruct);
-//        } else if (yarp::os::Time::now() - t_0 > 25 && counter < 350) {
+//            tactileCollision = true;
+//        }
+//        else if (yarp::os::Time::now() - t_1 > 25 && counter < 200)
+//        {
 //            collisionPointStruct.x = {0.026828, -0.054786, -0.0191051}; // {0.014, 0.081, 0.029};
 //            collisionPointStruct.n = {0.883, 0.15, -0.385}; // {0.612, 0.066, 0.630};
 //            counter++;
 //            collisionPoints.push_back(collisionPointStruct);
-//        } else if (yarp::os::Time::now() - t_0 > 35 && counter < 500) {
+//            tactileCollision = true;
+//        }
+//        else if (yarp::os::Time::now() - t_1 > 35 && counter < 500)
+//        {
 //            collisionPointStruct.x = {-0.027228, -0.054786, -0.0191051}; // {0.018, 0.095, 0.024};
 //            collisionPointStruct.n = {-0.886, 0.14, -0.431 }; // {0.568, -0.18, 0.406};
 //            counter++;
 //            collisionPoints.push_back(collisionPointStruct);
+//            tactileCollision = true;
 //        }
 //    }
-    if (tactileCollisionPointsOn)
+     if (tactileCollisionPointsOn)
     {
         printMessage(9,"[reactCtrlThread::run()] Getting tactile collisions from port.\n");
         getCollisionPointsFromPort(aggregSkinEventsInPort, TACTILE_INPUT_GAIN, part_short,collisionPoints);
+        if (!collisionPoints.empty()) { tactileCollision = true; }
     }
     if (visualCollisionPointsOn) //note, these are not mutually exclusive - they can co-exist
     {
@@ -450,6 +461,11 @@ void reactCtrlThread::run()
         }
         case STATE_REACH:
         {
+            if (tactileColAvoidance)
+            {
+                last_trajectory.push_back(x_t);
+                tactileColAvoidance = false;
+            }
             yInfo("[reactCtrlThread] norm(x_t-x_d) = %g",norm(x_t-x_d));
             if ((norm(x_t-x_d) < globalTol) && !movingTargetCircle  &&!holding_position) //we keep solving until we reach the desired target --  || yarp::os::Time::now() > 60+t_0
             {
@@ -481,6 +497,8 @@ void reactCtrlThread::run()
             }
 
             if ((norm(x_t-x_d) >= globalTol || movingTargetCircle || !(vLimAdapted == vLimNominal))) {
+                tactileColAvoidance = tactileCollision;
+
                 if (referenceGen == "uniformParticle") {
                     if ((norm(x_n - x_0) > norm(x_d - x_0)) || movingTargetCircle) //if the particle is farther than the final target, we reset the particle - it will stay with the target; or if target is moving
                     {
@@ -496,6 +514,23 @@ void reactCtrlThread::run()
                 else if (referenceGen == "none")
                 {
                     x_n = x_d;
+                }
+
+                if (!tactileColAvoidance && !last_trajectory.empty())
+                {
+                    x_n = last_trajectory.back();
+                    if (last_trajectory.size() > 1)
+                    {
+                        last_trajectory.pop_back();
+                        last_trajectory.pop_back();
+                    }
+                    else
+                    {
+                        last_trajectory.pop_back();
+                    }
+                    vLimAdapted /= 2;
+
+                    std::cout << last_trajectory.size() <<  "; Recovery path " << x_n.toString(3,3) << "\n";
                 }
 
                 visuhdl.visualizeObjects(x_d, x_n, additionalControlPointsVector);
@@ -522,6 +557,7 @@ void reactCtrlThread::run()
                 virtualArm->setAng(qIntegrated * CTRL_DEG2RAD);
             }
             updateArmChain(); //N.B. This is the second call within run(); may give more precise data for the logging; may also cost time
+
             break;
         }
         case STATE_IDLE:
@@ -711,6 +747,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
     if (_x_d.size()==3)
     {
         t_0=Time::now();
+        t_1=Time::now();
         holding_position = _x_d == x_t;
         movingTargetCircle = _movingCircle;
         q_dot.zero();
