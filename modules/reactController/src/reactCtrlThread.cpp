@@ -21,8 +21,8 @@
 
 
 #define TACTILE_INPUT_GAIN 1.5
-#define VISUAL_INPUT_GAIN 0.5
-#define PROXIMITY_INPUT_GAIN 0.5
+#define VISUAL_INPUT_GAIN 1
+#define PROXIMITY_INPUT_GAIN 1
 
 #define STATE_WAIT              0
 #define STATE_REACH             1
@@ -434,6 +434,7 @@ void reactCtrlThread::run()
     {
         printMessage(9,"[reactCtrlThread::run()] Getting visual collisions from port.\n");
         getCollisionPointsFromPort(aggregPPSeventsInPort, VISUAL_INPUT_GAIN, part_short,collisionPoints);
+        if (!collisionPoints.empty()) { tactileCollision = true; }
     }
     if (proximityCollisionPointsOn)
     {
@@ -518,19 +519,24 @@ void reactCtrlThread::run()
 
                 if (!tactileColAvoidance && !last_trajectory.empty())
                 {
-                    x_n = last_trajectory.back();
-                    if (last_trajectory.size() > 1)
+                    if (norm(x_d-x_t) < 0.08) // TODO: find appropriate value
                     {
-                        last_trajectory.pop_back();
-                        last_trajectory.pop_back();
+                        last_trajectory.clear();
+                        std::cout << "Close to target position, recovery path aborted.\n";
                     }
                     else
                     {
+                        x_n = last_trajectory.back();
+                        if (last_trajectory.size() > 1)
+                        {
+                            last_trajectory.pop_back();
+                        }
                         last_trajectory.pop_back();
-                    }
-                    vLimAdapted /= 2;
+                        vLimAdapted *= 0.75;
 
-                    std::cout << last_trajectory.size() <<  "; Recovery path " << x_n.toString(3,3) << "\n";
+                        std::cout << last_trajectory.size() <<  "; Recovery path " << x_n.toString(3,3) << "\n";
+                    }
+
                 }
 
                 visuhdl.visualizeObjects(x_d, x_n, additionalControlPointsVector);
@@ -568,7 +574,7 @@ void reactCtrlThread::run()
             p = arm->EndEffPose();
             for (int i = 0; i < 7; i++)
             {
-                b.addInt32(static_cast<int>(round(p(i) * 1000)));
+                b.addInt32(static_cast<int>(round(p(i) * M2MM)));
             }
             movementFinishedPort.write(b);
             yInfo("[reactCtrlThread] finished.");
