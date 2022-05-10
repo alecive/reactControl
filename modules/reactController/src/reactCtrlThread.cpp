@@ -70,17 +70,21 @@ bool reactCtrlThread::threadInit()
 {
 
     printMessage(2,"[reactCtrlThread] threadInit()\n");
+    std::string second_part;
     if (part=="left_arm")
     {
         part_short="left";
+        second_part = "right";
     }
     else if (part=="right_arm")
     {
         part_short="right";
+        second_part = "left";
     }
 
     /******** iKin chain and variables, and transforms init *************************/
     arm = new iCub::iKin::iCubArm(part_short+"_v2");
+    second_arm = new iCub::iKin::iCubArm(second_part+"_v2");
     // Release / block torso links (blocked by default)
     for (int i = 0; i < NR_TORSO_JOINTS; i++)
     {
@@ -112,7 +116,7 @@ bool reactCtrlThread::threadInit()
         vLimNominal(1,0)=vLimNominal(1,1)=0.0;
         vLimAdapted(1,0)=vLimAdapted(1,1)=0.0;
     }
-    else
+    else // TODO chainActiveDOF is still 10
     {
         // disable torso pitch
         vLimNominal(0,0)=vLimNominal(0,1)=0.0;
@@ -321,8 +325,8 @@ bool reactCtrlThread::threadInit()
     fout_param.close();
 
     weighted_normal.resize(3,0);
-    //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
-    avhdl = std::make_unique<AvoidanceHandlerTactile>(*virtualArm->asChain(),collisionPoints,selfColPoints,verbosity);
+    //the "tactile" handler will currently be applied to visual inputs (from PPS) as well TODO: use pointer or reference instead of copy?
+    avhdl = std::make_unique<AvoidanceHandlerTactile>(*virtualArm->asChain(),collisionPoints,*second_arm->asChain(), selfColPoints, part_short, verbosity);
 
     solver = std::make_unique<QPSolver>(*virtualArm, hittingConstraints,vMax, orientationControl,
                                         dT, homePos*CTRL_DEG2RAD, restPosWeight);
@@ -451,7 +455,7 @@ void reactCtrlThread::run()
     if (visualizeCollisionPointsInSim)
     {
         printMessage(5,"[reactCtrlThread::run()] will visualize collision points in simulator.\n");
-        visuhdl.showCollisionPointsInSim(*arm, collisionPoints, avhdl->getSelfColPoints());
+        visuhdl.showCollisionPointsInSim(*arm, collisionPoints, avhdl->getSelfColPointsTorso());
     }
 
     switch (state)
@@ -561,6 +565,8 @@ void reactCtrlThread::run()
                     yError("I am not able to properly control the arm in positionDirect!");
                 }
                 virtualArm->setAng(qIntegrated * CTRL_DEG2RAD);
+                second_arm->setAng(0, qIntegrated[0] * CTRL_DEG2RAD);
+                second_arm->setAng(2, qIntegrated[2] * CTRL_DEG2RAD);
             }
             updateArmChain(); //N.B. This is the second call within run(); may give more precise data for the logging; may also cost time
 
@@ -929,13 +935,12 @@ bool reactCtrlThread::alignJointsBounds()
 
 void reactCtrlThread::printJointsBounds()
 {
-    double min, max;
     iCub::iKin::iKinChain &chain=*arm->asChain();
 
     for (size_t i = 0; i < chainActiveDOF; i++)
     {
-        min=chain(i).getMin()*CTRL_RAD2DEG;
-        max=chain(i).getMax()*CTRL_RAD2DEG;
+        double min=chain(i).getMin()*CTRL_RAD2DEG;
+        double max=chain(i).getMax()*CTRL_RAD2DEG;
         yDebug("[jointsBounds (deg)] i: %lu\tmin: %g\tmax %g",i,min,max);
     }
 }

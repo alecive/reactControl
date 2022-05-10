@@ -183,6 +183,7 @@ protected:
     IControlLimits        *ilimA;
     yarp::sig::Vector     *encsA;
     iCub::iKin::iCubArm   *arm;
+    iCub::iKin::iCubArm   *second_arm;
     int jntsA;
     
     vector<InteractionModeEnum> interactionModesOrig;
