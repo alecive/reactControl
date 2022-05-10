@@ -4,6 +4,8 @@
 
 #ifndef COMMON_H
 #define COMMON_H
+#define M2MM 1000
+#define M2CM 100
 
 #include <sstream>
 #include <iCub/skinDynLib/common.h>

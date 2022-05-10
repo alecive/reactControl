@@ -20,12 +20,13 @@ VisualisationHandler::VisualisationHandler(int _verbosity, bool _use_sim, const 
     visualizeParticleInSim = visualizeParticleIniCubGui = visualizeParticle;
     visualizeTargetInSim = visualizeTargetIniCubGui = visualizeTarget;
 
-    if (visualizeIniCubGui)
-        outPortiCubGui.open("/"+port_name+"/gui:o");
+    if (visualizeIniCubGui) { outPortiCubGui.open("/"+port_name+"/gui:o"); }
 
-    if(use_sim){
+    if(use_sim)
+    {
         string port2icubsim = "/" + port_name + "/sim:o";
-        if (!portToSimWorld.open(port2icubsim)) {
+        if (!portToSimWorld.open(port2icubsim))
+        {
             yError("[reactCtrlThread] Unable to open port << port2icubsim << endl");
         }
         std::string port2world = "/icubSim/world";
@@ -86,8 +87,7 @@ void VisualisationHandler::convertPosFromLinkToRootFoR(iCub::iKin::iCubArm& arm,
 
 void VisualisationHandler::closePorts()
 {
-    if (visualizeIniCubGui)
-        yInfo("Resetting objects in iCubGui..");
+    if (visualizeIniCubGui) { yInfo("Resetting objects in iCubGui.."); }
     if (outPortiCubGui.getOutputCount()>0)
     {
         Bottle b;
@@ -95,7 +95,8 @@ void VisualisationHandler::closePorts()
         outPortiCubGui.write(b);
     }
 
-    if(use_sim){
+    if(use_sim)
+    {
         yInfo("Deleting objects from simulator world.");
         cmd.clear();
         cmd.addString("world");
@@ -105,11 +106,13 @@ void VisualisationHandler::closePorts()
     }
 
     yInfo("Closing ports..");
-    if (outPortiCubGui.isOpen()){
+    if (outPortiCubGui.isOpen())
+    {
         outPortiCubGui.interrupt();
         outPortiCubGui.close();
     }
-    if (portToSimWorld.isOpen()){
+    if (portToSimWorld.isOpen())
+    {
         portToSimWorld.interrupt();
         portToSimWorld.close();
     }
@@ -117,19 +120,24 @@ void VisualisationHandler::closePorts()
 
 void VisualisationHandler::visualizeObjects(const Vector& x_d, const Vector& x_n, const std::vector<ControlPoint>& additionalControlPoints)
 {
-    if(visualizeTargetInSim){
+    if(visualizeTargetInSim)
+    {
         Vector x_d_sim(3,0.0);
         convertPosFromRootToSimFoR(x_d,x_d_sim);
         moveSphere(1,x_d_sim);
     }
 
-    if (visualizeTargetIniCubGui){
+    if (visualizeTargetIniCubGui)
+    {
         sendiCubGuiObject("target", x_d);
         if(!additionalControlPoints.empty())
+        {
             sendiCubGuiObject(additionalControlPoints);
+        }
     }
 
-    if(visualizeParticleIniCubGui){
+    if(visualizeParticleIniCubGui)
+    {
         sendiCubGuiObject("particle", x_n);
     }
 
@@ -160,9 +168,9 @@ void VisualisationHandler::sendiCubGuiObject(const std::string& object_type, Vec
             obj.addFloat64(20.0);
 
             // positions - iCubGui works in mm
-            obj.addFloat64(1000*x(0));
-            obj.addFloat64(1000*x(1));
-            obj.addFloat64(1000*x(2));
+            obj.addFloat64(M2MM*x(0));
+            obj.addFloat64(M2MM*x(1));
+            obj.addFloat64(M2MM*x(2));
 
             // orientation
             obj.addFloat64(0.0);
@@ -188,9 +196,9 @@ void VisualisationHandler::sendiCubGuiObject(const std::string& object_type, Vec
             obj.addFloat64(40.0);
 
             // positions - iCubGui works in mm
-            obj.addFloat64(1000*x(0));
-            obj.addFloat64(1000*x(1));
-            obj.addFloat64(1000*x(2));
+            obj.addFloat64(M2MM*x(0));
+            obj.addFloat64(M2MM*x(1));
+            obj.addFloat64(M2MM*x(2));
 
             // orientation
             obj.addFloat64(0.0);
@@ -212,9 +220,11 @@ void VisualisationHandler::sendiCubGuiObject(const std::string& object_type, Vec
 
 void VisualisationHandler::sendiCubGuiObject(const std::vector<ControlPoint>& additionalControlPointsVector)
 {
-    if (outPortiCubGui.getOutputCount()>0) {
+    if (outPortiCubGui.getOutputCount()>0)
+    {
         Bottle obj;
-        for (const auto &controlPoint : additionalControlPointsVector) {
+        for (const auto &controlPoint : additionalControlPointsVector)
+        {
             obj.addString("object");
             obj.addString("extra-target");
 
@@ -224,9 +234,9 @@ void VisualisationHandler::sendiCubGuiObject(const std::vector<ControlPoint>& ad
             obj.addFloat64(30.0);
 
             // positions - iCubGui works in mm
-            obj.addFloat64(1000 * controlPoint.x_desired(0));
-            obj.addFloat64(1000 * controlPoint.x_desired(1));
-            obj.addFloat64(1000 * controlPoint.x_desired(2));
+            obj.addFloat64(M2MM * controlPoint.x_desired(0));
+            obj.addFloat64(M2MM * controlPoint.x_desired(1));
+            obj.addFloat64(M2MM * controlPoint.x_desired(2));
 
             // orientation
             obj.addFloat64(0.0);
@@ -327,8 +337,10 @@ void VisualisationHandler::showCollisionPointsInSim(iCub::iKin::iCubArm& arm,
 {
     size_t nrCollisionPoints = collisionPoints.size()+selfColPoints.size();
     Vector pos(3,0.0);
-    if (nrCollisionPoints > collisionPointsVisualizedCount){
-        for(int i=1; i<= (nrCollisionPoints - collisionPointsVisualizedCount);i++){
+    if (nrCollisionPoints > collisionPointsVisualizedCount)
+    {
+        for(int i=1; i<= (nrCollisionPoints - collisionPointsVisualizedCount);i++)
+        {
             pos = collisionPointsSimReservoirPos;
             pos(2)=pos(2)+0.03*i;
             printMessage(5,"There are more collision points, %d, than available boxes in sim, %d, adding one at %s\n",
@@ -341,7 +353,8 @@ void VisualisationHandler::showCollisionPointsInSim(iCub::iKin::iCubArm& arm,
     int j=1;
     Vector posRoot(3,0.0);
     Vector posSim(3,0.0);
-    for(const auto & collisionPoint : collisionPoints) {
+    for(const auto & collisionPoint : collisionPoints)
+    {
         convertPosFromLinkToRootFoR(arm, collisionPoint.x,collisionPoint.skin_part,posRoot);
         convertPosFromRootToSimFoR(posRoot,posSim);
         moveBox(j,posSim); //just move a box from the sim world
@@ -350,7 +363,8 @@ void VisualisationHandler::showCollisionPointsInSim(iCub::iKin::iCubArm& arm,
     }
 
 
-    for(const auto & collisionPoint : selfColPoints) {
+    for(const auto & collisionPoint : selfColPoints)
+    {
         convertPosFromLinkToRootFoR(arm, collisionPoint,SKIN_FRONT_TORSO,posRoot);
         sendiCubGuiObject("particle", posRoot);
         convertPosFromRootToSimFoR(posRoot,posSim);
@@ -362,8 +376,10 @@ void VisualisationHandler::showCollisionPointsInSim(iCub::iKin::iCubArm& arm,
     //if there have been more boxes allocated, just move them to the reservoir in the world
     //(icubSim does not support deleting individual objects)
 
-    if (nrCollisionPoints < collisionPointsVisualizedCount){
-        for(int k=collisionPointsVisualizedCount; k> nrCollisionPoints;k--){
+    if (nrCollisionPoints < collisionPointsVisualizedCount)
+    {
+        for(int k=collisionPointsVisualizedCount; k> nrCollisionPoints;k--)
+        {
             pos = collisionPointsSimReservoirPos;
             pos(2) = pos(2) + +0.03*k;
             printMessage(5,"There are fewer collision points, %d, than available boxes in sim, %d, "
@@ -387,8 +403,8 @@ int VisualisationHandler::printMessage(const int l, const char *f, ...) const
         va_end(ap);
         return ret;
     }
-    else
-        return -1;
+
+    return -1;
 }
 
 
