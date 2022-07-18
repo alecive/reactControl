@@ -28,10 +28,10 @@ using namespace yarp::os;
 using namespace iCub::iKin;
 using namespace iCub::skinDynLib;
 
-AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_collisionPoints,
-                                                   const iCub::iKin::iKinChain &_secondChain, bool _useSelfColPoints, const std::string& _part,
+AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
+                                                   iCub::iKin::iKinChain* _secondChain, bool _useSelfColPoints, const std::string& _part,
                                                    const unsigned int _verbosity):
-        chain(_chain), collisionPoints(_collisionPoints), secondChain(_secondChain), part(_part), verbosity(_verbosity), type("none")
+        chain(_chain), collisionPoints(_colPoints), secondChain(_secondChain), part(_part), verbosity(_verbosity), type("none")
 {
     selfColPoints.resize(4);
     selfControlPoints.resize(2);
@@ -99,6 +99,13 @@ AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &
             selfControlPoints[1] = {{0.0112, 0.0872, -0.0450}, {-0.0297, 0.0899, -0.0237}, {-0.0277, 0.0557, 0.0143}, {0.0022, 0.0510, -0.0426}, {0.0249, 0.0457, 0.0208},
                                     {-0.0275, 0.0571, -0.0237}, {0.0307, 0.0932, -0.0224}, {0.0241, 0.0744, -0.0347}, {0.0254, 0.0571, 0.0184}, {-0.0156, 0.0677, -0.0408},
                                     {0.0281, 0.0566, -0.0243}, {-0.0114, 0.0351, 0.0301}, {0.0313, 0.0643, 0.0101}, {0.0102, 0.0318, 0.0309}, {-0.0117, 0.0898, -0.0444}};
+        }
+        for (int i = 0; i < 3; ++i)
+        {
+            for (auto & j : selfColPoints[i])
+            {
+                j.push_back(1);
+            }
         }
     }
 }
@@ -169,13 +176,20 @@ void AvoidanceHandlerAbstract::checkSelfCollisions()
 {
     std::vector<std::vector<Matrix>> transforms;
     transforms.resize(2);
-    std::vector<int> indexes = {SkinPart_2_LinkNum[SKIN_LEFT_HAND].linkNum + 3, SkinPart_2_LinkNum[SKIN_LEFT_FOREARM].linkNum + 3,
-                                SkinPart_2_LinkNum[SKIN_LEFT_UPPER_ARM].linkNum + 3,  SkinPart_2_LinkNum[SKIN_FRONT_TORSO].linkNum};
-    for (int i = 0; i < 4; ++i)
+    std::vector<int> indexes = {SkinPart_2_LinkNum[SKIN_LEFT_HAND].linkNum + 3,
+                                SkinPart_2_LinkNum[SKIN_LEFT_FOREARM].linkNum + 3,
+                                SkinPart_2_LinkNum[SKIN_LEFT_UPPER_ARM].linkNum + 3};
+    for (int i = 0; i < 3; ++i)
     {
-        transforms[0].push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_HAND].linkNum + 3))*secondChain.getH(indexes[i]));
-        transforms[1].push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_FOREARM].linkNum + 3))*secondChain.getH(indexes[i]));
+        transforms[0].push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_HAND].linkNum + 3))*
+                                secondChain->getH(indexes[i], true));
+        transforms[1].push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_FOREARM].linkNum + 3))*
+                                secondChain->getH(indexes[i], true));
     }
+    transforms[0].push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_HAND].linkNum + 3))*
+                            chain.getH(SkinPart_2_LinkNum[SKIN_FRONT_TORSO].linkNum));
+    transforms[1].push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_FOREARM].linkNum + 3))*
+                            chain.getH(SkinPart_2_LinkNum[SKIN_FRONT_TORSO].linkNum));
     int index = 0;
     for (int k = 0; k < 2; ++k)
     {
@@ -196,14 +210,15 @@ void AvoidanceHandlerAbstract::checkSelfCollisions()
                     }
                 }
                 // if (neardist < 0.0025)  // distance lower than 0.05 m
-                if (neardist < 0.001) // distance lower than 0.03 m
+                if (neardist < 0.0015) // distance lower than 0.03 m
                 {
-                    collisionPoint_t cp {(k == 0) ? SKIN_LEFT_HAND : SKIN_LEFT_FOREARM, 1 - M2CM * sqrt(neardist) / 3.5};
+                    neardist = sqrt(neardist);
+                    collisionPoint_t cp {(k == 0) ? SKIN_LEFT_HAND : SKIN_LEFT_FOREARM, 1 - M2CM * neardist / 3.5};
                     cp.x = selfControlPoints[k][nearest];
                     Vector n = pos.subVector(0, 2) - selfControlPoints[k][nearest];
                     cp.n = n / yarp::math::norm(n);
                     totalColPoints.push_back(cp);
-                    printf("colPoint %d with pos = %s\n", index, cp.x.toString().c_str());
+                    yDebug("colPoint %d with pos = %s and dist = %.3f\n", index, cp.x.toString().c_str(), neardist);
                 }
                 index++;
             }
@@ -213,10 +228,11 @@ void AvoidanceHandlerAbstract::checkSelfCollisions()
 
 
 /****************************************************************/
-AvoidanceHandlerTactile::AvoidanceHandlerTactile(const iCub::iKin::iKinChain &_chain,const std::vector<collisionPoint_t> &_collisionPoints,
-                                                 const iCub::iKin::iKinChain &_secondChain, bool _useSelfColPoints, const std::string& _part,
+AvoidanceHandlerTactile::AvoidanceHandlerTactile(const iCub::iKin::iKinChain &_chain,const std::vector<collisionPoint_t> &_colPoints,
+                                                 iCub::iKin::iKinChain* _secondChain, bool _useSelfColPoints, const std::string& _part,
                                                  const unsigned int _verbosity):
-        AvoidanceHandlerAbstract(_chain,_collisionPoints, _secondChain,_useSelfColPoints, _part, _verbosity)
+        AvoidanceHandlerAbstract(_chain,_colPoints, _secondChain,
+                                 _useSelfColPoints, _part, _verbosity)
 {
     type="tactile";
     avoidingSpeed = 0.5;  // produce collisionPoint.magnitude * avoidingSpeed rad/s repulsive speed
@@ -237,7 +253,7 @@ void AvoidanceHandlerTactile::setParameters(const Property &parameters)
 }
 
 /****************************************************************/
-Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, Vector& weighted_normal)
+Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, Vector& weighted_normal) // TODO extend for second arm
 {
     printMessage(2,"AvoidanceHandlerTactile::getVLIM\n");
     Matrix VLIM=v_lim;

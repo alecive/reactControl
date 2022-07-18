@@ -21,18 +21,18 @@ using namespace iCub::iKin;
 /****************************************************************/
 class QPSolver
 {
-    iCubArm &arm;
+    iCubArm &arm, *second_arm;
 
     bool hitting_constraints;
 
-    Matrix v_lim;
-    Vector q0,v0,v,p0, rest_jnt_pos, rest_w, rest_err; //, normal;
-    Matrix H0, J0;
-    Vector pr, v_des, manip;
+    Matrix v_lim, v2_lim;
+    Vector q0,v0, q02, v02, p02, p0, rest_jnt_pos, rest_w, rest_err; //, normal;
+    Matrix H0, J0, H02, J02;
+    Vector pr, v_des, manip, pr2, v2_des, manip2;
     Matrix bounds;
-    double dt, w1, w2, w3, w4, w5, min_type, vmax, adapt_w5, manip_thr;
+    double dt, w1, w2, w3, w4, w5, min_type, vmax, adapt_w5, manip_thr, orig_w2, adapt_w52;
 
-    int chain_dof;
+    int chain_dof, secondchain_dof, vars_offset, constr_offset;
 
     double shou_m,shou_n;
     double elb_m,elb_n;
@@ -60,40 +60,56 @@ class QPSolver
     void update_constraints();
 
 public:
-    QPSolver(iCubArm &chain_, bool hittingConstraints_, double vmax_, bool orientationControl_, double dT_, const Vector& restPos,
+    QPSolver(iCubArm &chain_, bool hittingConstraints_, iCubArm* second_chain_, double vmax_, bool orientationControl_, double dT_, const Vector& restPos,
                   double restPosWeight=0.0);
     ~QPSolver();
-    void init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, double rest_pos_w);
+    void init(const Vector &_xr, const Vector &_xr2, const Vector &_v0, const Vector &_v02, const Matrix &_v_lim, const Matrix &_v2_lim, double rest_pos_w);
 
     Vector get_resultInDegPerSecond()
     {
         Eigen::VectorXd sol = solver.getSolution();
+        Vector v(chain_dof,0.0);
         for (int i = 0; i < chain_dof; ++i)
         {
-            if (sol[i] < lowerBound[i])
-            {
-                v[i] = lowerBound[i];
-            }
-            else if (sol[i] > upperBound[i])
-            {
-                v[i] = upperBound[i];
-            }
-            else
-            {
-                v[i] = sol[i];
-            }
+            v[i] = max(min(sol[i], upperBound[i]), lowerBound[i]);
         }
         return CTRL_RAD2DEG*v;
+    }
+
+    Vector get_result2InDegPerSecond()
+    {
+        if (secondchain_dof == 0)
+        {
+            return Vector(10, 0.0);
+        }
+        Eigen::VectorXd sol = solver.getSolution();
+        Vector res(secondchain_dof+3);
+        for (int i = 0; i < 3; ++i)
+        {
+            res[i] = max(min(sol[i], upperBound[i]), lowerBound[i]);
+        }
+        for (int i = 0; i < secondchain_dof; ++i)
+        {
+            res[i+3] = max(min(sol[i+vars_offset], upperBound[i+constr_offset]), lowerBound[i+constr_offset]);
+        }
+        return CTRL_RAD2DEG*res;
     }
 
     int optimize(double pos_error)
     {
         update_bounds(pos_error);
-        Eigen::VectorXd primalVar(chain_dof+6);
+        Eigen::VectorXd primalVar(hessian.rows());
         primalVar.setZero();
         for (int i = 0; i < chain_dof; i++)
         {
             primalVar[i] = std::min(std::max(bounds(i, 0), v0[i]), bounds(i, 1));
+        }
+        if (secondchain_dof > 0)
+        {
+            for (int i = 0; i < secondchain_dof; i++)
+            {
+                primalVar[i+vars_offset] = std::min(std::max(bounds(i+chain_dof, 0), v02[i]), bounds(i+chain_dof, 1));
+            }
         }
         solver.setPrimalVariable(primalVar);
         solver.solve();

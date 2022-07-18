@@ -33,8 +33,9 @@ class AvoidanceHandlerAbstract
 
 
 public:
-    AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_collisionPoints, const iCub::iKin::iKinChain &_secondChain,
-                             bool _useSelfColPoints, const std::string& _part, unsigned int _verbosity=0);
+    AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
+                             iCub::iKin::iKinChain* _secondChain, bool _useSelfColPoints, const std::string& _part,
+                             unsigned int _verbosity=0);
     
     std::string getType() const { return type; }
 
@@ -57,7 +58,7 @@ protected:
     std::string type;
     std::string part;
     iCub::iKin::iKinChain chain;
-    iCub::iKin::iKinChain secondChain;
+    iCub::iKin::iKinChain* secondChain;
     const std::vector<collisionPoint_t> &collisionPoints;
     std::deque<iCub::iKin::iKinChain> ctrlPointChains;
     std::vector<collisionPoint_t> totalColPoints;
@@ -83,8 +84,9 @@ class AvoidanceHandlerTactile : public virtual AvoidanceHandlerAbstract
 {
 
 public:
-    AvoidanceHandlerTactile(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_collisionPoints, const iCub::iKin::iKinChain &_secondChain,
-                            bool _useSelfColPoints, const std::string& _part,  unsigned int _verbosity=0);
+    AvoidanceHandlerTactile(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
+                            iCub::iKin::iKinChain* _secondChain, bool _useSelfColPoints, const std::string& _part,
+                            unsigned int _verbosity=0);
     void setParameters(const yarp::os::Property &params) override;
     yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim, yarp::sig::Vector &normal) override;
 

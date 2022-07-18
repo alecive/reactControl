@@ -45,7 +45,7 @@ using namespace std;
 
 class reactCtrlThread: public yarp::os::PeriodicThread
 {
-    
+
 public:
     // CONSTRUCTOR
     reactCtrlThread(int , string   , string   , string  _ ,
@@ -76,7 +76,7 @@ public:
 
     //Will be reading reaching targets from a port
     bool setStreamingTarget() { streamingTarget = true; return true; }
-    
+
     // Sets the tolerance
     bool setTol(const double _tol)
     {
@@ -152,7 +152,7 @@ protected:
     bool comingHome;
     bool gazeControl; //will follow target with gaze
     bool stiffInteraction; //stiff vs. compliant interaction mode
-        
+
     bool hittingConstraints; //inequality constraints for safety of shoudler assembly and to prevent self-collisions torso-upper arm, upper-arm - forearm
     bool orientationControl; //if orientation should be minimized as well
     bool additionalControlPoints; //if there are additional control points - Cartesian targets for others parts of the robot body - e.g. elbow
@@ -166,30 +166,39 @@ protected:
     particleThread  *prtclThrd;     // Pointer to the particleThread in order to access its data - if referenceGen is "uniformParticle"
     iCub::ctrl::minJerkTrajGen *minJerkTarget; //if referenceGen is "minJerk"
     iCub::ctrl::Integrator *I; //if controlMode == positionDirect, we need to integrate the velocity control commands
+    iCub::ctrl::Integrator *I2; //if controlMode == positionDirect, we need to integrate the velocity control commands
 
     int        state;        // Flag to know in which state the thread is in
-    
+
     // Driver for "classical" interfaces
     PolyDriver       ddA;
+    PolyDriver       ddA2;
     PolyDriver       ddT;
     PolyDriver       ddG; // gaze  controller  driver
-    
+
     // "Classical" interfaces for the arm
     IEncoders             *iencsA;
+    IEncoders             *iencsA2;
     IPositionDirect       *iposDirA;
+    IPositionDirect       *iposDirA2;
     IControlMode          *imodA;
+    IControlMode          *imodA2;
     IInteractionMode      *iintmodeA;
+    IInteractionMode      *iintmodeA2;
     IImpedanceControl     *iimpA;
+    IImpedanceControl     *iimpA2;
     IControlLimits        *ilimA;
+    IControlLimits        *ilimA2;
     yarp::sig::Vector     *encsA;
+    yarp::sig::Vector     *encsA2;
     iCub::iKin::iCubArm   *arm;
     iCub::iKin::iCubArm   *second_arm;
-    int jntsA;
-    
+    int jntsA, jntsA2;
+
     vector<InteractionModeEnum> interactionModesOrig;
     vector<InteractionModeEnum> interactionModesNew;
     vector<int> jointsToSetInteractionA;
-    
+
     // "Classical" interfaces for the torso
     IEncoders         *iencsT;
     IPositionDirect   *iposDirT;
@@ -197,27 +206,33 @@ protected:
     IControlLimits    *ilimT;
     yarp::sig::Vector *encsT;
     int jntsT;
-    
+
     // Gaze interface
     IGazeControl    *igaze;
     int contextGaze;
-    
+
     size_t chainActiveDOF;
+    size_t chainActiveDOF2;
     //parallel virtual arm and chain on which ipopt will be working in the positionDirect mode case
     iCub::iKin::iCubArm    *virtualArm;
-    
+    iCub::iKin::iCubArm    *virtualsecondArm;
+
     yarp::sig::Vector x_0;  // Initial end-effector position
     yarp::sig::Vector x_t;  // Current end-effector position
+    yarp::sig::Vector x2_t;  // Current end-effector position
     yarp::sig::Vector x_n;  // Desired next end-effector position
     yarp::sig::Vector x_d;  // Vector that stores the new target
     yarp::sig::Vector x_home;  // Home end-effector position
+    yarp::sig::Vector x2_home;  // Home end-effector position
 
     //All orientation in Euler angle format
     yarp::sig::Vector o_0;  // Initial end-effector orientation
     yarp::sig::Vector o_t;  // Current end-effector orientation
+    yarp::sig::Vector o2_t;  // Current end-effector orientation
     yarp::sig::Vector o_n;  // Desired next end-effector orientation
     yarp::sig::Vector o_d;  // Vector that stores the new orientation
     yarp::sig::Vector o_home;  // Home end-effector orientation
+    yarp::sig::Vector o2_home;  // Home end-effector orientation
 
     std::vector<double> fingerPos;
     yarp::sig::Vector   homePos;
@@ -229,26 +244,32 @@ protected:
 
     bool streamingTarget;
     yarp::os::BufferedPort<yarp::os::Bottle> streamedTargets;
-    std::vector<ControlPoint> additionalControlPointsVector; 
-  
-    
+    std::vector<ControlPoint> additionalControlPointsVector;
+
     //N.B. All angles in this thread are in degrees
     yarp::sig::Vector qA; //current values of arm joints (should be 7)
+    yarp::sig::Vector q2A; //current values of arm joints (should be 7)
     yarp::sig::Vector qT; //current values of torso joints (3, in the order expected for iKin: yaw, roll, pitch)
     yarp::sig::Vector q; //current joint angle values (10 if torso is on, 7 if off)
+    yarp::sig::Vector q2; //current joint angle values (7)
     yarp::sig::Vector qIntegrated; //joint angle values integrated from velocity commands by Integrator - controlMode positionDirect only
+    yarp::sig::Vector q2Integrated; //joint angle values integrated from velocity commands by Integrator - controlMode positionDirect only
 
     yarp::sig::Vector q_dot;  // Computed joint velocities to reach the target
-    
+    yarp::sig::Vector q2_dot;  // Computed joint velocities to reach the target
+
     yarp::sig::Matrix lim;  //matrix with joint position limits for the current chain
+    yarp::sig::Matrix lim2;  //matrix with joint position limits for the current chain
     yarp::sig::Matrix vLimNominal;     //matrix with min/max velocity limits for the current chain
+    yarp::sig::Matrix vLimNominal2;     //matrix with min/max velocity limits for the current chain
     yarp::sig::Matrix vLimAdapted;  //matrix with min/max velocity limits after adptation by avoidanceHandler
+    yarp::sig::Matrix vLimAdapted2;  //matrix with min/max velocity limits after adptation by avoidanceHandler
     yarp::sig::Vector weighted_normal; // weighted collision normal
-      
+
     // ports and files
     yarp::os::BufferedPort<yarp::os::Bottle> proximityEventsInPort; //coming from proximity sensor
     yarp::os::BufferedPort<yarp::os::Bottle> aggregSkinEventsInPort; //coming from /skinEventsAggregator/skin_events_aggreg:o
-    yarp::os::BufferedPort<yarp::os::Bottle> aggregPPSeventsInPort; //coming from visuoTactileRF/pps_activations_aggreg:o 
+    yarp::os::BufferedPort<yarp::os::Bottle> aggregPPSeventsInPort; //coming from visuoTactileRF/pps_activations_aggreg:o
     //expected format for both: (skinPart_s x y z o1 o2 o3 magnitude), with position x,y,z and normal o1 o2 o3 in link FoR
     yarp::os::Port outPort;
     yarp::os::Port movementFinishedPort;
@@ -257,7 +278,7 @@ protected:
     yarp::os::Stamp ts;
     double t_0, t_1;
     int counter;
- 
+
     // QPSolver STUFF
     int solverExitCode;
     double timeToSolveProblem_s; //time taken by q_dot = solveIK(solverExitCode) ~ ipopt + avoidance handler
@@ -265,17 +286,19 @@ protected:
 
     VisualisationHandler visuhdl;
     std::vector<collisionPoint_t> collisionPoints; //list of "avoidance vectors" from peripersonal space / safety margin
+    std::vector<collisionPoint_t> collisionPoints2; //list of "avoidance vectors" from peripersonal space / safety margin
     std::unique_ptr<AvoidanceHandlerAbstract> avhdl;
+    std::unique_ptr<AvoidanceHandlerAbstract> avhdl2;
     std::vector<yarp::sig::Vector> last_trajectory;
     bool tactileColAvoidance;
-        
+
     /**
     * Solves the Inverse Kinematic task
     */
     yarp::sig::Vector solveIK(int &);
 
     /**** kinematic chain, control, ..... *****************************/
-    
+
     /**
     * Aligns joint bounds according to the actual limits of the robot
     */
@@ -294,7 +317,7 @@ protected:
     /**
     * Sends the computed velocities or positions to the robot, depending on controlMode
     */
-    bool controlArm(const string& controlMode,const yarp::sig::Vector &);
+    bool controlArm(const string& controlMode,const yarp::sig::Vector &, const yarp::sig::Vector &);
 
     /**
      * Check the state of each joint to be controlled
@@ -331,9 +354,11 @@ protected:
 
    /************************** communication through ports in/out ***********************************/
 
-    bool getCollisionPointsFromPort(yarp::os::BufferedPort<yarp::os::Bottle> &inPort, double gain, const string& whichChain,std::vector<collisionPoint_t> &collPoints);
+    bool getCollisionPointsFromPort(yarp::os::BufferedPort<yarp::os::Bottle> &inPort, double gain,
+                                    const string& whichChain,std::vector<collisionPoint_t> &collPoints,
+                                    std::vector<collisionPoint_t> &collPoints2);
 
-    bool getProximityFromPort(std::vector<collisionPoint_t> &collPoints);
+    bool getProximityFromPort(std::vector<collisionPoint_t> &collPoints, std::vector<collisionPoint_t> &collPoints2);
 
     /**
     * Sends useful data to a port in order to track it on matlab
