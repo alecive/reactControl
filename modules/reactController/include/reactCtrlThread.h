@@ -168,6 +168,7 @@ protected:
     iCub::ctrl::Integrator *I; //if controlMode == positionDirect, we need to integrate the velocity control commands
     iCub::ctrl::Integrator *I2; //if controlMode == positionDirect, we need to integrate the velocity control commands
 
+    string second_part;  // second arm to use (short version): either left or right
     int        state;        // Flag to know in which state the thread is in
 
     // Driver for "classical" interfaces
@@ -193,10 +194,12 @@ protected:
     yarp::sig::Vector     *encsA2;
     iCub::iKin::iCubArm   *arm;
     iCub::iKin::iCubArm   *second_arm;
-    int jntsA, jntsA2;
+    int jntsA;
 
     vector<InteractionModeEnum> interactionModesOrig;
+    vector<InteractionModeEnum> interactionModesOrig2;
     vector<InteractionModeEnum> interactionModesNew;
+    vector<InteractionModeEnum> interactionModesNew2;
     vector<int> jointsToSetInteractionA;
 
     // "Classical" interfaces for the torso
@@ -297,6 +300,8 @@ protected:
     */
     yarp::sig::Vector solveIK(int &);
 
+    yarp::sig::Vector updateNextTarget();
+
     /**** kinematic chain, control, ..... *****************************/
 
     /**
@@ -339,9 +344,9 @@ protected:
                       const string &_p, const string &_s);
 
 
-//    bool stopControlHelper() { return ivelA->stop() && ivelT->stop(); }
-
     bool stopControlAndSwitchToPositionModeHelper();
+
+    bool prepareDrivers();
 
     /***************** auxiliary computations  *******************************/
 
@@ -351,7 +356,9 @@ protected:
     **/
     yarp::sig::Vector  getPosMovingTargetOnCircle();
 
+    bool insertTestingCollisions();
 
+    bool processCollisions();
    /************************** communication through ports in/out ***********************************/
 
     bool getCollisionPointsFromPort(yarp::os::BufferedPort<yarp::os::Bottle> &inPort, double gain,

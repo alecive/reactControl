@@ -439,8 +439,8 @@ void QPSolver::update_bounds(double pos_error)
         upperBound[8+secondchain_dof+6+constr_offset]=213.30*CTRL_DEG2RAD-(q02[4]+q02[5]);
         if (hitting_constraints)
         {
-            // avoid hitting torso TODO: not working
-            lowerBound[9+secondchain_dof+6+constr_offset]=-std::numeric_limits<double>::max();//shou_n - (q02[4] + shou_m*q02[5]);
+            // avoid hitting torso
+            lowerBound[9+secondchain_dof+6+constr_offset]=-shou_n - (q02[4] + shou_m*q02[5]);
             upperBound[9+secondchain_dof+6+constr_offset]=std::numeric_limits<double>::max();
 
             // avoid hitting forearm

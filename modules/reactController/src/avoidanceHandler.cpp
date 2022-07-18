@@ -28,7 +28,7 @@ using namespace yarp::os;
 using namespace iCub::iKin;
 using namespace iCub::skinDynLib;
 
-AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
+AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
                                                    iCub::iKin::iKinChain* _secondChain, bool _useSelfColPoints, const std::string& _part,
                                                    const unsigned int _verbosity):
         chain(_chain), collisionPoints(_colPoints), secondChain(_secondChain), part(_part), verbosity(_verbosity), type("none")
@@ -210,7 +210,7 @@ void AvoidanceHandlerAbstract::checkSelfCollisions()
                     }
                 }
                 // if (neardist < 0.0025)  // distance lower than 0.05 m
-                if (neardist < 0.0015) // distance lower than 0.03 m
+                if (neardist < 0.001) // distance lower than 0.03 m
                 {
                     neardist = sqrt(neardist);
                     collisionPoint_t cp {(k == 0) ? SKIN_LEFT_HAND : SKIN_LEFT_FOREARM, 1 - M2CM * neardist / 3.5};
@@ -228,7 +228,7 @@ void AvoidanceHandlerAbstract::checkSelfCollisions()
 
 
 /****************************************************************/
-AvoidanceHandlerTactile::AvoidanceHandlerTactile(const iCub::iKin::iKinChain &_chain,const std::vector<collisionPoint_t> &_colPoints,
+AvoidanceHandlerTactile::AvoidanceHandlerTactile(iCub::iKin::iKinChain &_chain,const std::vector<collisionPoint_t> &_colPoints,
                                                  iCub::iKin::iKinChain* _secondChain, bool _useSelfColPoints, const std::string& _part,
                                                  const unsigned int _verbosity):
         AvoidanceHandlerAbstract(_chain,_colPoints, _secondChain,
@@ -253,7 +253,7 @@ void AvoidanceHandlerTactile::setParameters(const Property &parameters)
 }
 
 /****************************************************************/
-Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, Vector& weighted_normal) // TODO extend for second arm
+Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, Vector& weighted_normal)
 {
     printMessage(2,"AvoidanceHandlerTactile::getVLIM\n");
     Matrix VLIM=v_lim;

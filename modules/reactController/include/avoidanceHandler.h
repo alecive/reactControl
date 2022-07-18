@@ -33,7 +33,7 @@ class AvoidanceHandlerAbstract
 
 
 public:
-    AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
+    AvoidanceHandlerAbstract(iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
                              iCub::iKin::iKinChain* _secondChain, bool _useSelfColPoints, const std::string& _part,
                              unsigned int _verbosity=0);
     
@@ -57,7 +57,7 @@ protected:
     unsigned int verbosity;
     std::string type;
     std::string part;
-    iCub::iKin::iKinChain chain;
+    iCub::iKin::iKinChain& chain;
     iCub::iKin::iKinChain* secondChain;
     const std::vector<collisionPoint_t> &collisionPoints;
     std::deque<iCub::iKin::iKinChain> ctrlPointChains;
@@ -84,7 +84,7 @@ class AvoidanceHandlerTactile : public virtual AvoidanceHandlerAbstract
 {
 
 public:
-    AvoidanceHandlerTactile(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
+    AvoidanceHandlerTactile(iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
                             iCub::iKin::iKinChain* _secondChain, bool _useSelfColPoints, const std::string& _part,
                             unsigned int _verbosity=0);
     void setParameters(const yarp::os::Property &params) override;
