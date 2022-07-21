@@ -324,6 +324,7 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, Vector& weighted_no
             printMessage(2,"        Joint: %d, s[j]: %f, limits before: Min: %f, Max: %f\n",j,s[j],VLIM(j,0),VLIM(j,1));
             if (s[j]>=0.0) //joint contributes to avoidance, we will set the min velocity accordingly
             {
+                if (colPoint.magnitude < 0.3) s[j] = 0.0;
                 s[j]=std::min(v_lim(j,1),s[j]); //make sure new min vel is <= max vel
                 VLIM(j,0)=std::max(VLIM(j,0),s[j]); // set min vel to max of s[j] and current limit ~ avoiding action
                 VLIM(j,1)=std::max(VLIM(j,0),VLIM(j,1)); //make sure current max is at least equal to current min
@@ -331,6 +332,7 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, Vector& weighted_no
             }
             else //joint acts to bring control point toward obstacle - we will shape the max vel
             {
+                if (colPoint.magnitude < 0.3) s[j] = 0.0;
                 s[j]=std::max(v_lim(j,0),s[j]);
                 VLIM(j,1)=std::min(VLIM(j,1),s[j]);
                 VLIM(j,0)=std::min(VLIM(j,0),VLIM(j,1));

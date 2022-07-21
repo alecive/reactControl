@@ -201,6 +201,8 @@ protected:
     vector<InteractionModeEnum> interactionModesNew;
     vector<InteractionModeEnum> interactionModesNew2;
     vector<int> jointsToSetInteractionA;
+    vector<int> jointsToSetPosT{0,1,2};
+    vector<int> jointsToSetPosA{0,1,2,3,4,5,6};
 
     // "Classical" interfaces for the torso
     IEncoders         *iencsT;

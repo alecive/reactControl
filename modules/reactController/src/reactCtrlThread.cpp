@@ -151,8 +151,8 @@ bool reactCtrlThread::threadInit()
    Vector pose = arm->EndEffPose();
    x_home = pose.subVector(0,2);
    o_home = pose.subVector(3,5)*pose(6);
-   x2_home = {-0.304,  0.202, 0.023};
-   o2_home = {-0.470, -2.440, 1.843};
+   x2_home = (part_short == "right")? Vector{-0.304, -0.202, 0.023}:Vector{-0.304, 0.202, 0.023};
+   o2_home = (part_short == "right")? Vector{-0.071, 1.710, -2.264}:Vector{-0.470, -2.440, 1.843};
    //palm facing inwards
    o_0.resize(3,0.0);  o_0(1)=-0.707*M_PI;     o_0(2)=+0.707*M_PI;
    o_t.resize(3,0.0);  o_t(1)=-0.707*M_PI;     o_t(2)=+0.707*M_PI;
@@ -323,7 +323,7 @@ bool reactCtrlThread::prepareDrivers()
        iintmodeA->setInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.data(),interactionModesNew.data());
        iintmodeA2->setInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.data(),interactionModesNew2.data());
    }
-   else
+   else // not working -> joints in HW fault
    {
        interactionModesNew.resize(NR_ARM_JOINTS_FOR_INTERACTION_MODE,VOCAB_IM_COMPLIANT);
        interactionModesNew2.resize(NR_ARM_JOINTS_FOR_INTERACTION_MODE,VOCAB_IM_COMPLIANT);
@@ -333,7 +333,7 @@ bool reactCtrlThread::prepareDrivers()
        iimpA->setImpedance(1,0.4,0.03);
        iimpA->setImpedance(2,0.4,0.03);
        iimpA->setImpedance(3,0.2,0.01);
-       iimpA->setImpedance(4,0.05,0.0);  // TODO: try 0.111, 0.014 everywhere
+       iimpA->setImpedance(4,0.05,0.0);
        iimpA2->setImpedance(0,0.4,0.03);
        iimpA2->setImpedance(1,0.4,0.03);
        iimpA2->setImpedance(2,0.4,0.03);
@@ -399,7 +399,17 @@ bool reactCtrlThread::insertTestingCollisions()
            collisionPointStruct.x = {-0.02, 0, 0.01};
            collisionPointStruct.n = {0, 0, 1};
            counter++;
-           collisionPoints.push_back(collisionPointStruct);
+           bool exists = false;
+           for (auto& colPoint : collisionPoints)
+           {
+               if (colPoint.x == collisionPointStruct.x)
+               {
+                   colPoint.reset();
+                   exists = true;
+                   break;
+               }
+           }
+           if (!exists) collisionPoints.push_back(collisionPointStruct);
            tactileCollision = true;
        }
        else if (yarp::os::Time::now() - t_1 > 25 && counter < 300)
@@ -407,7 +417,17 @@ bool reactCtrlThread::insertTestingCollisions()
            collisionPointStruct.x = {0.026828, -0.054786, -0.0191051}; // {0.014, 0.081, 0.029};
            collisionPointStruct.n = {0.883, 0.15, -0.385}; // {0.612, 0.066, 0.630};
            counter++;
-           collisionPoints.push_back(collisionPointStruct);
+           bool exists = false;
+           for (auto& colPoint : collisionPoints)
+           {
+               if (colPoint.x == collisionPointStruct.x)
+               {
+                   colPoint.reset();
+                   exists = true;
+                   break;
+               }
+           }
+           if (!exists) collisionPoints.push_back(collisionPointStruct);
            tactileCollision = true;
        }
        else if (yarp::os::Time::now() - t_1 > 35 && counter < 800)
@@ -415,7 +435,17 @@ bool reactCtrlThread::insertTestingCollisions()
            collisionPointStruct.x = {-0.027228, -0.054786, -0.0191051}; // {0.018, 0.095, 0.024};
            collisionPointStruct.n = {-0.886, 0.14, -0.431 }; // {0.568, -0.18, 0.406};
            counter++;
-           collisionPoints.push_back(collisionPointStruct);
+           bool exists = false;
+           for (auto& colPoint : collisionPoints)
+           {
+               if (colPoint.x == collisionPointStruct.x)
+               {
+                   colPoint.reset();
+                   exists = true;
+                   break;
+               }
+           }
+           if (!exists) collisionPoints.push_back(collisionPointStruct);
            tactileCollision = true;
        }
    }
@@ -442,11 +472,7 @@ bool reactCtrlThread::processCollisions()
    {
        printMessage(9,"[reactCtrlThread::run()] Getting proximity collisions from port.\n");
        getProximityFromPort(collisionPoints, collisionPoints2);
-       //        if (!collisionPoints.empty())
-       //            yInfo("Proximity collision point: x = %s\nn = %s\nmagnitude = %.3f\nskin part is left hand? %d\n", collisionPoints.front().x.toString(3,3).c_str(),
-       //              collisionPoints.front().n.toString(3,3).c_str(), collisionPoints.front().magnitude,  collisionPoints.front().skin_part == SKIN_LEFT_HAND);
-       //        else
-       //            yInfo("No data from proximity\n");
+       if (!collisionPoints.empty()) { tactileCollision = true; }
    }
    //after this point, we don't care where did the collision points come from - our relative confidence in the two modalities is expressed in the gains
 
@@ -474,7 +500,7 @@ yarp::sig::Vector reactCtrlThread::updateNextTarget()
        next_x = minJerkTarget->getPos();
    }
 
-   if (!tactileColAvoidance && !last_trajectory.empty())
+   if (!tactileColAvoidance && !last_trajectory.empty()) // TODO improve it for proximity (i.e., hysteresis)
    {
        if (norm(x_d-x_t) < 0.08) // TODO: find appropriate value
        {
@@ -491,7 +517,7 @@ yarp::sig::Vector reactCtrlThread::updateNextTarget()
            last_trajectory.pop_back();
            vLimAdapted *= 0.75;
 
-           std::cout << last_trajectory.size() <<  "; Recovery path " << x_n.toString(3,3) << "\n";
+           yWarning() << last_trajectory.size() <<  "; Recovery path " << x_n.toString(3,3) << "\n";
        }
    }
    return next_x;
@@ -514,11 +540,27 @@ void reactCtrlThread::run()
        }
    }
 
-   collisionPoints.clear();
-   collisionPoints2.clear();
+   for (auto& colP : collisionPoints)
+   {
+       colP.duration -= dT;
+       colP.magnitude *= 0.8;
+   }
+   for (auto& colP : collisionPoints2)
+   {
+       colP.duration -= dT;
+       colP.magnitude *= 0.8;
+   }
+   collisionPoints.erase(std::remove_if(collisionPoints.begin(), collisionPoints.end(),
+                                        [](const collisionPoint_t & colP) { return colP.duration <= 0; }),
+                         collisionPoints.end());
+   collisionPoints2.erase(std::remove_if(collisionPoints2.begin(), collisionPoints2.end(),
+                                        [](const collisionPoint_t & colP) { return colP.duration <= 0; }),
+                         collisionPoints2.end());
+//   bool tactileCollision = insertTestingCollisions();
+   bool tactileCollision = processCollisions();
 
-   bool tactileCollision = insertTestingCollisions();
-//   bool tactileCollision = processCollisions();
+
+
    bool vel_limited = false;
    switch (state)
    {
@@ -564,7 +606,8 @@ void reactCtrlThread::run()
            weighted_normal = {0,0,0};
            vLimAdapted=avhdl->getVLIM(CTRL_DEG2RAD * vLimNominal, weighted_normal) * CTRL_RAD2DEG;
            vLimAdapted2=avhdl2->getVLIM(CTRL_DEG2RAD * vLimNominal2, weighted_normal) * CTRL_RAD2DEG;
-           vel_limited = !(vLimAdapted == vLimNominal); // || !(vLimAdapted2 == vLimNominal2);
+           vel_limited = !(vLimAdapted == vLimNominal) || !(vLimAdapted2 == vLimNominal2);
+           if (vel_limited) yDebug("VlimAdapted = \n%s\n", vLimAdapted.toString(3,3).c_str());
        }
 
        if ((norm(x_t-x_d) >= globalTol || movingTargetCircle || vel_limited))
@@ -1180,9 +1223,9 @@ bool reactCtrlThread::controlArm(const string& _controlMode, const yarp::sig::Ve
        posT[2] = _targetValues[0]; //swapping pitch and yaw as per iKin vs. motor interface convention
 
        printMessage(2,"    positionDirect: torso (swap pitch & yaw): %s\n",posT.toString(3,3).c_str());
-       iposDirT->setPositions(posT.data());
-       iposDirA->setPositions(_targetValues.subVector(3,9).data()); //indexes 3 to 9 are the arm joints
-       iposDirA2->setPositions(_targetValues2.subVector(3,9).data()); //indexes 3 to 9 are the arm joints
+       iposDirT->setPositions(NR_TORSO_JOINTS, jointsToSetPosT.data(),posT.data());
+       iposDirA->setPositions(NR_ARM_JOINTS, jointsToSetPosA.data(), _targetValues.subVector(3,9).data()); //indexes 3 to 9 are the arm joints
+       iposDirA2->setPositions(NR_ARM_JOINTS, jointsToSetPosA.data(), _targetValues2.subVector(3,9).data()); //indexes 3 to 9 are the arm joints
    }
 
    return true;
@@ -1191,11 +1234,9 @@ bool reactCtrlThread::controlArm(const string& _controlMode, const yarp::sig::Ve
 bool reactCtrlThread::stopControlAndSwitchToPositionModeHelper()
 {
    state=STATE_IDLE;
-   vector<int> jointsToSetA{0,1,2,3,4,5,6};
-   vector<int> jointsToSetT{0,1,2};
-   return  setCtrlModes(jointsToSetA,"arm","position")  &&
-          setCtrlModes(jointsToSetA,"second_arm","position") &&
-          setCtrlModes(jointsToSetT,"torso","position");
+   return  setCtrlModes(jointsToSetPosA,"arm","position")  &&
+          setCtrlModes(jointsToSetPosA,"second_arm","position") &&
+          setCtrlModes(jointsToSetPosT,"torso","position");
 }
 
 
@@ -1222,53 +1263,50 @@ bool reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
    //printMessage(9,"[reactCtrlThread::getCollisionPointsFromPort].\n");
    collisionPoint_t collPoint;
    SkinPart sp;
-
-   collPoint.skin_part = SKIN_PART_UNKNOWN;
-   collPoint.x.resize(3,0.0);
-   collPoint.n.resize(3,0.0);
-   collPoint.magnitude=0.0;
-
    Bottle* collPointsMultiBottle = inPort.read(false);
-   if(collPointsMultiBottle != nullptr)
+   if(collPointsMultiBottle == nullptr)
    {
-       printMessage(5,"[reactCtrlThread::getCollisionPointsFromPort]: There were %d bottles on the port.\n",
-                    collPointsMultiBottle->size());
-       for(int i=0; i< collPointsMultiBottle->size();i++)
+       printMessage(9,"[reactCtrlThread::getCollisionPointsFromPort]: no avoidance vectors on the port.\n") ;
+       return false;
+   }
+   printMessage(5,"[reactCtrlThread::getCollisionPointsFromPort]: There were %d bottles on the port.\n",
+                collPointsMultiBottle->size());
+   for(int i=0; i< collPointsMultiBottle->size();i++)
+   {
+       Bottle* bot = collPointsMultiBottle->get(i).asList();
+       printMessage(5, "Bottle %d contains %s \n", i, bot->toString().c_str());
+       sp = static_cast<SkinPart>(bot->get(0).asInt32());
+       // we take only those collision points that are relevant for the chain we are controlling + torso
+       if (SkinPart_2_BodyPart[sp].body == LEFT_ARM || (sp == SKIN_FRONT_TORSO && useTorso) ||
+           SkinPart_2_BodyPart[sp].body == RIGHT_ARM)
        {
-           Bottle* collPointBottle = collPointsMultiBottle->get(i).asList();
-           printMessage(5, "Bottle %d contains %s \n", i, collPointBottle->toString().c_str());
-           sp = static_cast<SkinPart>(collPointBottle->get(0).asInt32());
-           // we take only those collision points that are relevant for the chain we are controlling + torso
-           if (SkinPart_2_BodyPart[sp].body == LEFT_ARM || (sp == SKIN_FRONT_TORSO && useTorso) ||
-               SkinPart_2_BodyPart[sp].body == RIGHT_ARM)
+           collPoint.skin_part = sp;
+           collPoint.x = {bot->get(1).asFloat64(), bot->get(2).asFloat64(), bot->get(3).asFloat64()};
+           collPoint.n = {bot->get(4).asFloat64(), bot->get(5).asFloat64(), bot->get(6).asFloat64()};
+           if (sp == SKIN_FRONT_TORSO) // normal direction from torso skin is wrong
            {
-               collPoint.skin_part = sp;
-               collPoint.x(0) = collPointBottle->get(1).asFloat64();
-               collPoint.x(1) = collPointBottle->get(2).asFloat64();
-               collPoint.x(2) = collPointBottle->get(3).asFloat64();
-               collPoint.n(0) = collPointBottle->get(4).asFloat64();
-               collPoint.n(1) = collPointBottle->get(5).asFloat64();
-               collPoint.n(2) = collPointBottle->get(6).asFloat64();
-               if (sp == SKIN_FRONT_TORSO && useTorso) // normal direction from skin is wrong
+               collPoint.n(0) *= -1;
+           }
+           collPoint.magnitude = bot->get(13).asFloat64() * gain;
+           std::vector<collisionPoint_t>* col_pts_ptr =
+               ((which_chain == "left" && SkinPart_2_BodyPart[sp].body == RIGHT_ARM) ||
+                (which_chain == "right" && SkinPart_2_BodyPart[sp].body == LEFT_ARM)) ?
+                   &collPoints2 : &collPoints;
+
+           bool exists = false;
+           for (auto& colPoint : *col_pts_ptr)
+           {
+               if (colPoint.x == collPoint.x)
                {
-                   collPoint.n(0) *= -1;
-               }
-               collPoint.magnitude = collPointBottle->get(13).asFloat64() * gain;
-               if ((which_chain == "left" && SkinPart_2_BodyPart[sp].body == RIGHT_ARM) ||
-                   (which_chain == "right" && SkinPart_2_BodyPart[sp].body == LEFT_ARM))
-               {
-                   collPoints2.push_back(collPoint);
-               }
-               else
-               {
-                   collPoints.push_back(collPoint);
+                   colPoint.reset(collPoint.magnitude);
+                   exists = true;
+                   break;
                }
            }
+           if (!exists) col_pts_ptr->push_back(collPoint);
        }
-       return true;
    }
-   printMessage(9,"[reactCtrlThread::getCollisionPointsFromPort]: no avoidance vectors on the port.\n") ;
-   return false;
+   return true;
 }
 
 
@@ -1278,46 +1316,38 @@ bool reactCtrlThread::getProximityFromPort(std::vector<collisionPoint_t> &collPo
    //    printMessage(9,"[reactCtrlThread::getProximityPointsFromPort].\n");
    collisionPoint_t collPoint;
    SkinPart sp;
-
-   collPoint.skin_part = SKIN_PART_UNKNOWN;
-   collPoint.x.resize(3,0.0);
-   collPoint.n.resize(3,0.0);
-   collPoint.magnitude=0.0;
-
-   Bottle* collPointBottle = proximityEventsInPort.read(false);
-   if(collPointBottle != nullptr)
+   Bottle* bot = proximityEventsInPort.read(false);
+   if(bot == nullptr)
    {
-       printMessage(0,"Bottle contains %s \n", collPointBottle->toString().c_str());
-       sp =  static_cast<SkinPart>(collPointBottle->get(0).asInt32());
-       if (SkinPart_2_BodyPart[sp].body == LEFT_ARM || (sp == SKIN_FRONT_TORSO && useTorso) ||
-           SkinPart_2_BodyPart[sp].body == RIGHT_ARM)
-       {
-           collPoint.skin_part = sp;
-           collPoint.x(0) = collPointBottle->get(1).asFloat64();
-           collPoint.x(1) = collPointBottle->get(2).asFloat64();
-           collPoint.x(2) = collPointBottle->get(3).asFloat64();
-           collPoint.n(0) = collPointBottle->get(4).asFloat64();
-           collPoint.n(1) = collPointBottle->get(5).asFloat64();
-           collPoint.n(2) = collPointBottle->get(6).asFloat64();
-           if (sp == SKIN_FRONT_TORSO) collPoint.n(0) *= -1; // normal direction from skin is wrong
+       printMessage(9,"[reactCtrlThread::getProximityPointsFromPort]: no avoidance vectors on the port.\n") ;
+       return false;
+   }
+   sp =  static_cast<SkinPart>(bot->get(0).asInt32());
+   if (SkinPart_2_BodyPart[sp].body == LEFT_ARM || (sp == SKIN_FRONT_TORSO && useTorso) ||
+       SkinPart_2_BodyPart[sp].body == RIGHT_ARM)
+   {
+       printMessage(0,"Proximity magnitude %.2f \n", bot->get(7).asFloat64());
+       collPoint.skin_part = sp;
+       collPoint.x = {bot->get(1).asFloat64(), bot->get(2).asFloat64(), bot->get(3).asFloat64()};
+       collPoint.n = {bot->get(4).asFloat64(), bot->get(5).asFloat64(), bot->get(6).asFloat64()};
+       collPoint.magnitude = bot->get(7).asFloat64() * PROXIMITY_INPUT_GAIN;
+       std::vector<collisionPoint_t>* col_pts_ptr =
+           ((part_short == "left" && SkinPart_2_BodyPart[sp].body == RIGHT_ARM) ||
+            (part_short == "right" && SkinPart_2_BodyPart[sp].body == LEFT_ARM)) ? &collPoints2 : &collPoints;
 
-           collPoint.magnitude = collPointBottle->get(7).asFloat64() * PROXIMITY_INPUT_GAIN;
-           if ((part_short == "left" && SkinPart_2_BodyPart[sp].body == RIGHT_ARM) ||
-               (part_short == "right" && SkinPart_2_BodyPart[sp].body == LEFT_ARM))
+       bool exists = false;
+       for (auto& colPoint : *col_pts_ptr)
+       {
+           if (colPoint.x == collPoint.x)
            {
-               collPoints2.push_back(collPoint);
-           }
-           else
-           {
-               collPoints.push_back(collPoint);
+               colPoint.reset(collPoint.magnitude);
+               exists = true;
+               break;
            }
        }
-
-       return true;
+       if (!exists) col_pts_ptr->push_back(collPoint);
    }
-   printMessage(9,"[reactCtrlThread::getProximityPointsFromPort]: no avoidance vectors on the port.\n") ;
-   return false;
-
+   return true;
 }
 
 void reactCtrlThread::sendData()
