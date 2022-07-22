@@ -40,7 +40,6 @@ reactCtrlThread::reactCtrlThread(int _rate, string _name, string _robot,  string
                                 string _referenceGen, bool _tactileCPOn, bool _visualCPOn, bool _proximityCPOn,
                                 bool _gazeControl, bool _stiffInteraction,
                                 bool _hittingConstraints, bool _orientationControl,
-                                bool _additionalControlPoints,
                                 bool _visTargetInSim, bool _visParticleInSim, bool _visCollisionPointsInSim,
                                 particleThread *_pT, double _restPosWeight, bool _selfColPoints) :
        PeriodicThread(static_cast<double>(_rate)/1000.0), name(std::move(_name)), robot(std::move(_robot)),
@@ -49,8 +48,7 @@ reactCtrlThread::reactCtrlThread(int _rate, string _name, string _robot,  string
        tactileCollisionPointsOn(_tactileCPOn), visualCollisionPointsOn(_visualCPOn),
        proximityCollisionPointsOn(_proximityCPOn), gazeControl(_gazeControl),
        stiffInteraction(_stiffInteraction), hittingConstraints(_hittingConstraints),
-       orientationControl(_orientationControl), additionalControlPoints(_additionalControlPoints),
-       arm(nullptr), visualizeCollisionPointsInSim(_visCollisionPointsInSim),
+       orientationControl(_orientationControl), arm(nullptr), visualizeCollisionPointsInSim(_visCollisionPointsInSim),
        counter(0), restPosWeight(_restPosWeight), selfColPoints(_selfColPoints),
        state(STATE_WAIT), minJerkTarget(nullptr), I(nullptr), iencsA(nullptr), iposDirA(nullptr),
        imodA(nullptr), iintmodeA(nullptr), iimpA(nullptr), ilimA(nullptr), encsA(nullptr),I2(nullptr),
@@ -136,8 +134,6 @@ bool reactCtrlThread::threadInit()
        minJerkTarget = new minJerkTrajGen(3,dT,1.0); //dim 3, dT, trajTime 1s - will be overwritten later
    }
 
-   additionalControlPointsVector.clear();
-
    circleCenter.resize(3,0.0);
    circleCenter(0) = -0.3; //for safety, we assign the x-coordinate on in it within iCub's reachable space
    Time::delay(1);
@@ -201,7 +197,7 @@ bool reactCtrlThread::threadInit()
    fout_param<<"2 "; // positionDirect
    fout_param<<"0 0 0 "; //used to be ipOptMemoryOn, ipOptFilterOn, filterTc
    if(stiffInteraction) fout_param<<"1 "; else fout_param<<"0 ";
-   if(additionalControlPoints) fout_param<<"1 "; else fout_param<<"0 ";
+   fout_param<<"0 "; // used to be additionalControlPoints
    fout_param<<endl;
 
    yInfo("Written to param file and closing..");
@@ -618,7 +614,7 @@ void reactCtrlThread::run()
        {
            tactileColAvoidance = tactileCollision;
            x_n = updateNextTarget();
-           visuhdl.visualizeObjects(x_d, x_n, additionalControlPointsVector);
+           visuhdl.visualizeObjects(x_d, x_n);
            //                yDebug("vLimAdapted = %s\n\n",vLimAdapted.toString(3,3).c_str());
            //                yDebug("vLimAdapted2 = %s\n",vLimAdapted2.toString(3,3).c_str());
            double t_3 = yarp::os::Time::now();
@@ -717,7 +713,6 @@ void reactCtrlThread::threadRelease()
    collisionPoints.clear();
    collisionPoints2.clear();
 
-   additionalControlPointsVector.clear();
    if(minJerkTarget != nullptr)
    {
        yDebug("deleting minJerkTarget..");
@@ -889,7 +884,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
        yInfo("[reactCtrlThread]                 x_d: %s",x_d.toString(3,3).c_str());
        //yInfo("[reactCtrlThread]                 vel: %s",vel.toString(3,3).c_str());
 
-       visuhdl.visualizeObjects(x_d, x_0, additionalControlPointsVector);
+       visuhdl.visualizeObjects(x_d, x_0);
 
        state=STATE_REACH;
 
@@ -998,12 +993,6 @@ int reactCtrlThread::solveIK()
               norm(x_n-x_t), norm(x_d-x_n), norm(x_d-x_t));
        printf("x2_home: %s\tx2_t: %s\tnorm(x2_home-x2_t): %g\n",
               x2_home.toString(3,3).c_str(),x2_t.toString(3,3).c_str(),norm(x2_home-x2_t));
-       if(additionalControlPoints)
-       {
-           //additionalControlPointsVector.front(); //let's print the first one - assume it's the elbow for now
-           printf("elbow_x_n == elbow_x_d: %s\telbow_x_t: %s\n", additionalControlPointsVector.front().x_desired.toString(3,3).c_str(), additionalControlPointsVector.front().p0.toString(3,3).c_str());
-           printf("norm elbow pos error: %g\n",norm(additionalControlPointsVector.front().x_desired - additionalControlPointsVector.front().p0));
-       }
        printf("Result (solved velocities (deg/s)): %s\n",res.toString(3,3).c_str());
        printf("Result (solved velocities (deg/s)): %s\n",q2_dot.toString(3,3).c_str());
    }
@@ -1394,17 +1383,10 @@ void reactCtrlThread::sendData()
            b.addFloat64(timeToSolveProblem_s);
            //joint pos from virtual chain IPopt is operating onl variable - if torso on: 60:69
            vectorIntoBottle(qIntegrated,b);
-           if(additionalControlPoints && (!additionalControlPointsVector.empty()))
-           {
-               //we assume there will be only one - elbow - now
-               //desired elbow position; variable - if torso on and positionDirect: 70:72 ;
-               vectorIntoBottle( (*additionalControlPointsVector.begin()).x_desired , b);
-           }
-           else
-           {
-               Vector elbow_d(3,0.0);
-               vectorIntoBottle( elbow_d , b);
-           }
+
+           //TODO - remove and update indexes - desired elbow position; variable - if torso on and positionDirect: 70:72 ;
+           Vector elbow_d(3,0.0);
+           vectorIntoBottle( elbow_d , b);
 
            //actual elbow position on real chain; variable - if torso on and positionDirect: 73:75 ;
            vectorIntoBottle( (*(arm->asChain())).getH((*(arm->asChain())).getDOF()-4-1).getCol(3).subVector(0,2) , b);

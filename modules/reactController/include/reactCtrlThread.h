@@ -50,7 +50,7 @@ public:
     // CONSTRUCTOR
     reactCtrlThread(int , string   , string   , string  _ ,
                     int , bool , double , double , double , double , double , string  ,
-                    bool , bool , bool, bool , bool , bool, bool , bool , bool , bool , bool ,
+                    bool , bool , bool, bool , bool , bool, bool , bool , bool , bool ,
                     particleThread *, double, bool);
     // INIT
     bool threadInit() override;
@@ -155,7 +155,6 @@ protected:
 
     bool hittingConstraints; //inequality constraints for safety of shoudler assembly and to prevent self-collisions torso-upper arm, upper-arm - forearm
     bool orientationControl; //if orientation should be minimized as well
-    bool additionalControlPoints; //if there are additional control points - Cartesian targets for others parts of the robot body - e.g. elbow
     // will use the yarp rpc /icubSim/world to visualize the potential collision points
     bool visualizeCollisionPointsInSim;
 
@@ -249,8 +248,7 @@ protected:
 
     bool streamingTarget;
     yarp::os::BufferedPort<yarp::os::Bottle> streamedTargets;
-    std::vector<ControlPoint> additionalControlPointsVector;
-
+    
     //N.B. All angles in this thread are in degrees
     yarp::sig::Vector qA; //current values of arm joints (should be 7)
     yarp::sig::Vector q2A; //current values of arm joints (should be 7)
