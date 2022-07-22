@@ -129,19 +129,16 @@ QPSolver::QPSolver(iCubArm &chain_, bool hittingConstraints_, iCubArm* second_ch
     bounds.resize(chain_dof, 2);
     manip.resize(chain_dof);
     // normal.resize(3,0.0);
-    if (!orientationControl_)
-        w4 = 0;
+    if (!orientationControl_) w4 = 0;
 
     if (hitting_constraints) {
         computeSelfAvoidanceConstraints();
     }
 
-    if (second_chain_ != nullptr)
-        secondchain_dof = 7; // static_cast<int>(second_arm->getDOF());
+    if (second_chain_ != nullptr) secondchain_dof = 7; // static_cast<int>(second_arm->getDOF());
     computeGuard();
     rest_jnt_pos = restPos;
     rest_w = {1, 1, 1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
-    rest_err.resize(chain_dof, 0.0);
     vars_offset = chain_dof + 6;
     constr_offset = chain_dof + 12 + 3 + hitting_constraints * 3;
 
@@ -247,8 +244,7 @@ QPSolver::QPSolver(iCubArm &chain_, bool hittingConstraints_, iCubArm* second_ch
 QPSolver::~QPSolver() = default;
 
 /****************************************************************/
-void QPSolver::init(const Vector &_xr, const Vector &_xr2, const Vector &_v0, const Vector &_v02,
-                    const Matrix &_v_lim, const Matrix &_v2_lim, double rest_pos_w)
+void QPSolver::init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, double rest_pos_w)
 {
     yAssert(6 <= _xr.length())
     yAssert(v0.length() == _v0.length())
@@ -295,7 +291,18 @@ void QPSolver::init(const Vector &_xr, const Vector &_xr2, const Vector &_v0, co
         }
         arm.setAng(q0); //restore original joint angles
     }
+    if (secondchain_dof == 0)
+    {
+        computeBounds();
+        update_gradient();
+        update_constraints();
+    }
+}
 
+void QPSolver::init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim,
+                    const Vector &_xr2, const Vector &_v02, const Matrix &_v2_lim, double rest_pos_w)
+{
+    init(_xr, _v0, _v_lim, rest_pos_w);
     if (secondchain_dof > 0) {
         v2_lim= CTRL_DEG2RAD * _v2_lim;
         v02= CTRL_DEG2RAD * _v02;
@@ -304,13 +311,13 @@ void QPSolver::init(const Vector &_xr, const Vector &_xr2, const Vector &_v0, co
         p02=H02.getCol(3).subVector(0,2);
         pr2=_xr2.subVector(0, 2);
 
-        ang=_xr2.subVector(3,5);
-        ang_mag=norm(ang);
+        Vector ang=_xr2.subVector(3,5);
+        double ang_mag=norm(ang);
         if (ang_mag>0.0)  ang/=ang_mag;
 
         ang.push_back(ang_mag);
 
-        R = axis2dcm(ang).submatrix(0,2,0,2)*H02.submatrix(0,2,0,2).transposed();
+        Matrix R = axis2dcm(ang).submatrix(0,2,0,2)*H02.submatrix(0,2,0,2).transposed();
         v2_des.resize(6,0);
         v2_des.setSubvector(0, (pr2-p02) / dt);
         v2_des.setSubvector(3, dcm2rpy(R) / dt);
@@ -334,11 +341,10 @@ void QPSolver::init(const Vector &_xr, const Vector &_xr2, const Vector &_v0, co
             }
             second_arm->setAng(q02); // restore original joint angles
         }
+        computeBounds();
+        update_gradient();
+        update_constraints();
     }
-
-    computeBounds();
-    update_gradient();
-    update_constraints();
 }
 
 

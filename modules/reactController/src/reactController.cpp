@@ -81,7 +81,8 @@ private:
 
     string robot;       // Name of the robot
     string  name;       // Name of the module
-    string  part;       // Part to use
+    string  main_part;       // Part to use
+    string  second_part;       // Part to use
 
     int     verbosity;  // Verbosity level
     int   rctCtrlRate;  // rate of the reactCtrlThread
@@ -124,8 +125,8 @@ public:
 
         robot =         "icubSim";
         name  = "reactController";
-        part  =        "left_arm";
-
+        main_part  = "left_arm";
+        second_part = "None";
         verbosity    =     0;
         rctCtrlRate  =    10;    
         prtclRate    =    10;
@@ -367,23 +368,26 @@ public:
          //******************* PART ******************
             if (rf.check("part"))
             {
-                part = rf.find("part").asString();
-                if (part=="left")
+                auto* parts = rf.find("part").asList();
+                main_part = parts->get(0).asString();
+                second_part = parts->size() > 1 ? parts->get(1).asString() : "None";
+                if (main_part == "left" || main_part == "right") main_part += "_arm";
+                if (second_part == "left" || second_part == "right") second_part += "_arm";
+
+                if (main_part!="left_arm" && main_part!="right_arm")
                 {
-                    part="left_arm";
+                    main_part="left_arm";
+                    yWarning("[reactController] main part was not in the admissible values. Using %s as default.",main_part.c_str());
                 }
-                else if (part=="right")
+                if (second_part!="left_arm" && second_part!="right_arm")
                 {
-                    part="right_arm";
+                    second_part="None";
+                    yWarning("[reactController] second part was not in the admissible values. Using %s as default.",second_part.c_str());
                 }
-                else if (part!="left_arm" && part!="right_arm")
-                {
-                    part="left_arm";
-                    yWarning("[reactController] part was not in the admissible values. Using %s as default.",part.c_str());
-                }
-                yInfo("[reactController] part to use is: %s", part.c_str());
+                yInfo("[reactController] part to use is: %s", main_part.c_str());
+                yInfo("[reactController] second part to use is: %s", second_part.c_str());
             }
-            else yInfo("[reactController] Could not find part option in the config file; using %s as default",part.c_str());
+            else yInfo("[reactController] Could not find part option in the config file; using %s as default",main_part.c_str());
 
         //********************** CONFIGS ***********************
             if (rf.check("disableTorso"))
@@ -706,7 +710,7 @@ public:
         }
         else prtclThrd = nullptr;
             
-        rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
+        rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, main_part, verbosity,
                                           disableTorso, trajSpeed,
                                           globalTol, vMax, tol, timeLimit, referenceGen,
                                           tactileCollisionPointsOn,visualCollisionPointsOn, proximityCollisionPointsOn,

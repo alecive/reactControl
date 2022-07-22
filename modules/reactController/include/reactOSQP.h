@@ -26,7 +26,7 @@ class QPSolver
     bool hitting_constraints;
 
     Matrix v_lim, v2_lim;
-    Vector q0,v0, q02, v02, p02, p0, rest_jnt_pos, rest_w, rest_err; //, normal;
+    Vector q0,v0, q02, v02, p02, p0, rest_jnt_pos, rest_w; //, normal;
     Matrix H0, J0, H02, J02;
     Vector pr, v_des, manip, pr2, v2_des, manip2;
     Matrix bounds;
@@ -63,7 +63,8 @@ public:
     QPSolver(iCubArm &chain_, bool hittingConstraints_, iCubArm* second_chain_, double vmax_, bool orientationControl_, double dT_, const Vector& restPos,
                   double restPosWeight=0.0);
     ~QPSolver();
-    void init(const Vector &_xr, const Vector &_xr2, const Vector &_v0, const Vector &_v02, const Matrix &_v_lim, const Matrix &_v2_lim, double rest_pos_w);
+    void init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, double rest_pos_w);
+    void init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, const Vector &_xr2, const Vector &_v02, const Matrix &_v2_lim, double rest_pos_w);
 
     Vector get_resultInDegPerSecond()
     {

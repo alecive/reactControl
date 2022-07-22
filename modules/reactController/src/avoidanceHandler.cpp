@@ -179,12 +179,13 @@ void AvoidanceHandlerAbstract::checkSelfCollisions()
     std::vector<int> indexes = {SkinPart_2_LinkNum[SKIN_LEFT_HAND].linkNum + 3,
                                 SkinPart_2_LinkNum[SKIN_LEFT_FOREARM].linkNum + 3,
                                 SkinPart_2_LinkNum[SKIN_LEFT_UPPER_ARM].linkNum + 3};
-    for (int i = 0; i < 3; ++i)
+    if (secondChain)
     {
-        transforms[0].push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_HAND].linkNum + 3))*
-                                secondChain->getH(indexes[i], true));
-        transforms[1].push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_FOREARM].linkNum + 3))*
-                                secondChain->getH(indexes[i], true));
+        for (int i = 0; i < 3; ++i)
+        {
+            transforms[0].push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_HAND].linkNum + 3)) * secondChain->getH(indexes[i], true));
+            transforms[1].push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_FOREARM].linkNum + 3)) * secondChain->getH(indexes[i], true));
+        }
     }
     transforms[0].push_back(yarp::math::SE3inv(chain.getH(SkinPart_2_LinkNum[SKIN_LEFT_HAND].linkNum + 3))*
                             chain.getH(SkinPart_2_LinkNum[SKIN_FRONT_TORSO].linkNum));
@@ -193,7 +194,7 @@ void AvoidanceHandlerAbstract::checkSelfCollisions()
     int index = 0;
     for (int k = 0; k < 2; ++k)
     {
-        for (int j = 0; j < 4; ++j)
+        for (int j = 0; j < transforms[0].size(); ++j)
         {
             for (const auto& colPoint : selfColPoints[j])
             {
