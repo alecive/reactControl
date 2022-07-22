@@ -452,8 +452,30 @@ bool reactCtrlThread::insertTestingCollisions()
    return tactileCollision;
 }
 
+bool reactCtrlThread::preprocCollisions()
+{
+    for (auto& colP : collisionPoints)
+    {
+        colP.duration -= dT;
+        colP.magnitude *= 0.8;
+    }
+    for (auto& colP : collisionPoints2)
+    {
+        colP.duration -= dT;
+        colP.magnitude *= 0.8;
+    }
+    collisionPoints.erase(std::remove_if(collisionPoints.begin(), collisionPoints.end(),
+                                         [](const collisionPoint_t & colP) { return colP.duration <= 0; }),
+                          collisionPoints.end());
+    collisionPoints2.erase(std::remove_if(collisionPoints2.begin(), collisionPoints2.end(),
+                                          [](const collisionPoint_t & colP) { return colP.duration <= 0; }),
+                           collisionPoints2.end());
+    //   bool tactileCollision = insertTestingCollisions();
+    bool tactileCollision = getCollisionsFromPorts();
+    return tactileCollision;
+}
 
-bool reactCtrlThread::processCollisions()
+bool reactCtrlThread::getCollisionsFromPorts()
 {
    bool tactileCollision = false;
    if (tactileCollisionPointsOn)
@@ -540,27 +562,7 @@ void reactCtrlThread::run()
        }
    }
 
-   for (auto& colP : collisionPoints)
-   {
-       colP.duration -= dT;
-       colP.magnitude *= 0.8;
-   }
-   for (auto& colP : collisionPoints2)
-   {
-       colP.duration -= dT;
-       colP.magnitude *= 0.8;
-   }
-   collisionPoints.erase(std::remove_if(collisionPoints.begin(), collisionPoints.end(),
-                                        [](const collisionPoint_t & colP) { return colP.duration <= 0; }),
-                         collisionPoints.end());
-   collisionPoints2.erase(std::remove_if(collisionPoints2.begin(), collisionPoints2.end(),
-                                        [](const collisionPoint_t & colP) { return colP.duration <= 0; }),
-                         collisionPoints2.end());
-//   bool tactileCollision = insertTestingCollisions();
-   bool tactileCollision = processCollisions();
-
-
-
+   bool tactileCollision = preprocCollisions();
    bool vel_limited = false;
    switch (state)
    {
@@ -576,7 +578,9 @@ void reactCtrlThread::run()
            tactileColAvoidance = false;
        }
        yInfo("[reactCtrlThread] norm(x_t-x_d) = %g",norm(x_t-x_d));
-       if ((norm(x_t-x_d) < globalTol) && !movingTargetCircle  &&!holding_position) //we keep solving until we reach the desired target
+
+       //we keep solving until we reach the desired target
+       if ((norm(x_t-x_d) < globalTol) && (norm(x2_t-x2_home) < globalTol) && !movingTargetCircle  &&!holding_position)
        {
            comingHome = false;
            yDebug("[reactCtrlThread] norm(x_t-x_d) %g\tglobalTol %g",norm(x_t-x_d),globalTol);
@@ -607,10 +611,10 @@ void reactCtrlThread::run()
            vLimAdapted=avhdl->getVLIM(CTRL_DEG2RAD * vLimNominal, weighted_normal) * CTRL_RAD2DEG;
            vLimAdapted2=avhdl2->getVLIM(CTRL_DEG2RAD * vLimNominal2, weighted_normal) * CTRL_RAD2DEG;
            vel_limited = !(vLimAdapted == vLimNominal) || !(vLimAdapted2 == vLimNominal2);
-           if (vel_limited) yDebug("VlimAdapted = \n%s\n", vLimAdapted.toString(3,3).c_str());
+       //    if (vel_limited) yDebug("VlimAdapted = \n%s\n", vLimAdapted.toString(3,3).c_str());
        }
 
-       if ((norm(x_t-x_d) >= globalTol || movingTargetCircle || vel_limited))
+       if (norm(x_t-x_d) >= globalTol || norm(x2_t-x2_home) >= globalTol || movingTargetCircle || vel_limited)
        {
            tactileColAvoidance = tactileCollision;
            x_n = updateNextTarget();
@@ -619,7 +623,7 @@ void reactCtrlThread::run()
            //                yDebug("vLimAdapted2 = %s\n",vLimAdapted2.toString(3,3).c_str());
            double t_3 = yarp::os::Time::now();
            //this is the key function call where the reaching opt problem is solved
-           q_dot = solveIK(solverExitCode);
+           solverExitCode = solveIK();
            timeToSolveProblem_s = yarp::os::Time::now() - t_3;
 
            qIntegrated = I->integrate(q_dot);
@@ -659,10 +663,10 @@ void reactCtrlThread::run()
    //        std::cout << yarp::os::Time::now()-t_0 << " ";
    //    }
    sendData();
-   if (vel_limited)
+   if (vel_limited) //if vLim was changed by the avoidanceHandler, we reset it
    {
-       vLimAdapted = vLimNominal; //if it was changed by the avoidanceHandler, we reset it
-       vLimAdapted2 = vLimNominal2; //if it was changed by the avoidanceHandler, we reset it
+       vLimAdapted = vLimNominal;
+       vLimAdapted2 = vLimNominal2;
    }
    printMessage(2,"[reactCtrlThread::run()] finished, state: %d.\n\n\n",state);
    //    if (state == STATE_REACH) {
@@ -694,7 +698,7 @@ void reactCtrlThread::threadRelease()
    delete   second_arm;   second_arm = nullptr;
    bool stoppedOk = stopControlAndSwitchToPositionMode();
    if (stoppedOk) { yInfo("Sucessfully stopped arm and torso controllers"); }
-   else { yWarning("Controllers not stopped sucessfully"); }
+   else { yWarning("Controllers not stopped successfully"); }
    yInfo("Closing controllers..");
    ddA.close();
    ddA2.close();
@@ -919,11 +923,11 @@ bool reactCtrlThread::stopControlAndSwitchToPositionMode()
    bool stoppedOk = stopControlAndSwitchToPositionModeHelper();
    if (stoppedOk)
    {
-       yInfo("reactCtrlThread::stopControlAndSwitchToPositionMode(): Sucessfully stopped controllers");
+       yInfo("reactCtrlThread::stopControlAndSwitchToPositionMode(): Successfully stopped controllers");
    }
    else
    {
-       yWarning("reactCtrlThread::stopControlAndSwitchToPositionMode(): Controllers not stopped sucessfully");
+       yWarning("reactCtrlThread::stopControlAndSwitchToPositionMode(): Controllers not stopped successfully");
    }
    return stoppedOk;
 }
@@ -944,7 +948,7 @@ bool reactCtrlThread::holdPosition()
 //************** protected methods *******************************/
 
 
-Vector reactCtrlThread::solveIK(int &_exit_code)
+int reactCtrlThread::solveIK()
 {
 
    printMessage(3,"calling ipopt with the following joint velocity limits (deg): \n %s \n",vLimAdapted.toString(3,3).c_str());
@@ -960,27 +964,28 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
    xr2.setSubvector(3,o2_home);
 
    int count = 0;
-   Vector res(chainActiveDOF, 0.0);
-   Vector res2(chainActiveDOF2, 0.0);
+   int exit_code = 0;
+   Vector res(chainActiveDOF+chainActiveDOF2-NR_TORSO_JOINTS, 0.0);
    solver->init(xr, xr2, q_dot, q2_dot, vLimAdapted, vLimAdapted2, comingHome? 10:restPosWeight);
    std::array<double,3> vals = {0, 0.05, std::numeric_limits<double>::max()};
    while(count < vals.size()) {
-       _exit_code = solver->optimize(vals[count]);
-       if (_exit_code == OSQP_SOLVED) {
+       exit_code = solver->optimize(vals[count]);
+       if (exit_code == OSQP_SOLVED) {
            yInfo("Problem solved in %d run(s)\n", count+1);
            res = solver->get_resultInDegPerSecond();
-           res2 = solver->get_result2InDegPerSecond();
            break;
        }
        count++;
    }
-   q2_dot = res2;
+   q_dot = res.subVector(0, chainActiveDOF);
+   q2_dot.setSubvector(0,res.subVector(0,2));
+   q2_dot.setSubvector(NR_TORSO_JOINTS,res.subVector(chainActiveDOF,res.size()-1));
 
-   if (_exit_code == OSQP_TIME_LIMIT_REACHED)
+   if (exit_code == OSQP_TIME_LIMIT_REACHED)
    {
        yWarning("[reactCtrlThread] OSQP cpu time was higher than the rate of the thread!");
    }
-   else if (_exit_code != OSQP_SOLVED)
+   else if (exit_code != OSQP_SOLVED)
    {
        yWarning("[reactCtrlThread] OSQP solve did not succeed!");
    }
@@ -1003,7 +1008,7 @@ Vector reactCtrlThread::solveIK(int &_exit_code)
        printf("Result (solved velocities (deg/s)): %s\n",q2_dot.toString(3,3).c_str());
    }
 
-   return res;
+   return exit_code;
 }
 
 
@@ -1108,7 +1113,7 @@ bool reactCtrlThread::areJointsHealthyAndSet(vector<int> &jointsToSet, const str
        }
    }
    if(verbosity >= 10){
-       printf("[reactCtrlThread::areJointsHealthyAndSet] %s: ctrl Modes retreived: ",_p.c_str());
+       printf("[reactCtrlThread::areJointsHealthyAndSet] %s: ctrl Modes retrieved: ",_p.c_str());
        for (int mode : modes){
            printf("%s ",Vocab32::decode(mode).c_str());
        }
@@ -1424,21 +1429,21 @@ bool reactCtrlThread::readMotionPlan(std::vector<Vector> &x_desired)
        {
            if (Bottle* inListTraj = inPlan->get(i).asList())
            {
-               string ctrlPtName = inListTraj->find("control-point").asString();
                if (inListTraj->find("number-waypoints").asInt32()>0)
                {
                    int nDim = inListTraj->find("number-dimension").asInt32();
                    if (nDim>=3)
                    {
-                       Vector xCtrlPt(nDim, 0.0);
                        if (Bottle* coordinate = inListTraj->find("waypoint_0").asList())
                        {
                            if (coordinate->size()==nDim)
                            {
+                               Vector xCtrlPt(nDim, 0.0);
                                for (size_t k=0; k<nDim; k++)
                                {
                                    xCtrlPt[k]=coordinate->get(k).asFloat64();
                                }
+                               string ctrlPtName = inListTraj->find("control-point").asString();
                                yInfo("\tControl point of %s\t: %s\n",ctrlPtName.c_str(),xCtrlPt.toString(3,3).c_str());
                                x_desired.push_back(xCtrlPt);
                                hasPlan = true;

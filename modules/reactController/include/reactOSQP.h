@@ -68,31 +68,16 @@ public:
     Vector get_resultInDegPerSecond()
     {
         Eigen::VectorXd sol = solver.getSolution();
-        Vector v(chain_dof,0.0);
+        Vector v(chain_dof+secondchain_dof,0.0);
         for (int i = 0; i < chain_dof; ++i)
         {
             v[i] = max(min(sol[i], upperBound[i]), lowerBound[i]);
         }
-        return CTRL_RAD2DEG*v;
-    }
-
-    Vector get_result2InDegPerSecond()
-    {
-        if (secondchain_dof == 0)
-        {
-            return Vector(10, 0.0);
-        }
-        Eigen::VectorXd sol = solver.getSolution();
-        Vector res(secondchain_dof+3);
-        for (int i = 0; i < 3; ++i)
-        {
-            res[i] = max(min(sol[i], upperBound[i]), lowerBound[i]);
-        }
         for (int i = 0; i < secondchain_dof; ++i)
         {
-            res[i+3] = max(min(sol[i+vars_offset], upperBound[i+constr_offset]), lowerBound[i+constr_offset]);
+            v[i+chain_dof] = max(min(sol[i+vars_offset], upperBound[i+constr_offset]), lowerBound[i+constr_offset]);
         }
-        return CTRL_RAD2DEG*res;
+        return CTRL_RAD2DEG*v;
     }
 
     int optimize(double pos_error)
@@ -115,7 +100,6 @@ public:
         solver.solve();
         return static_cast<int>(solver.workspace()->info->status_val);
     }
-
 };
 
 

@@ -300,7 +300,7 @@ protected:
     /**
     * Solves the Inverse Kinematic task
     */
-    yarp::sig::Vector solveIK(int &);
+    int solveIK();
 
     yarp::sig::Vector updateNextTarget();
 
@@ -360,7 +360,9 @@ protected:
 
     bool insertTestingCollisions();
 
-    bool processCollisions();
+    bool getCollisionsFromPorts();
+
+    bool preprocCollisions();
    /************************** communication through ports in/out ***********************************/
 
     bool getCollisionPointsFromPort(yarp::os::BufferedPort<yarp::os::Bottle> &inPort, double gain,
