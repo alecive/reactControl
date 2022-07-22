@@ -104,7 +104,6 @@ private:
     
     bool hittingConstraints; //inequality constraints for safety of shoudler assembly and to prevent self-collisions torso-upper arm, upper-arm - forearm  
     bool orientationControl; //if orientation should be controlled as well
-    bool additionalControlPoints; //if there are additional control points - Cartesian targets for others parts of the robot body - e.g. elbow
     bool selfColPoints; // add robot body parts as the collision points to the avoidance handler
     
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
@@ -143,7 +142,6 @@ public:
         referenceGen = "minJerk";
         hittingConstraints = true;
         orientationControl = true;
-        additionalControlPoints = false;
         selfColPoints = true;
         
         tactileCollisionPointsOn = true;
@@ -598,25 +596,6 @@ public:
             else
             {
                 yInfo("[reactController] Could not find orientationControl flag (on/off) in the config file; using %d as default",orientationControl);
-            }  
-            
-            //*********** additional control points *************************************************/
-            if (rf.check("additionalControlPoints"))
-            {
-                if(rf.find("additionalControlPoints").asString()=="on")
-                {
-                    additionalControlPoints = true;
-                    yInfo("[reactController] additionalControlPoints flag set to on.");
-                }
-                else
-                {
-                    additionalControlPoints = false;
-                    yInfo("[reactController] additionalControlPoints flag set to off.");
-                }
-            }
-            else
-            {
-                yInfo("[reactController] Could not find additionalControlPoints flag (on/off) in the config file; using %d as default",additionalControlPoints);
             }
 
             //****************** restPosWeight ******************
@@ -732,7 +711,7 @@ public:
                                           globalTol, vMax, tol, timeLimit, referenceGen,
                                           tactileCollisionPointsOn,visualCollisionPointsOn, proximityCollisionPointsOn,
                                           gazeControl,stiffInteraction,
-                                          hittingConstraints, orientationControl, additionalControlPoints,
+                                          hittingConstraints, orientationControl,
                                           visualizeTargetInSim, visualizeParticleInSim,
                                           visualizeCollisionPointsInSim, prtclThrd, restPosWeight, selfColPoints);
         if (!rctCtrlThrd->start())

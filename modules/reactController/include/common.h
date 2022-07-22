@@ -45,33 +45,4 @@ struct collisionPoint_t{
 
 };
 
-
-class ControlPoint
-{
-public:
-    std::string type; //e.g. "elbow"
-    yarp::sig::Vector x_desired; //desired Cartesian position (x,y,z) in Root FoR
-    yarp::sig::Vector p0; //position of the control point depending on current state of chain
-    yarp::sig::Matrix J0_xyz; //Jacobian for position depending on current state of chain
-
-    ControlPoint()
-    {
-        x_desired.resize(3); x_desired.zero();
-        x_desired(0)=-0.2; //just to have it iCub Root FoR friendly
-        p0.resize(3); p0.zero();
-        p0(0) = -0.1;
-        //for J0_xyz we don't know the size yet - depending on the control point
-    }
-
-    std::string toString() const
-    {
-        std::stringstream sstm;
-        sstm<< "ControlPoint, type: "<<type<<", x_desired: ("<<x_desired.toString(3,3)<<"), p0: ("<<p0.toString(3,3)<<"), J0_xyz: "<<std::endl<<
-            J0_xyz.toString(3,3)<<std::endl;
-
-        return sstm.str();
-    }
-};
-
-
 #endif //COMMON_H

@@ -118,7 +118,7 @@ void VisualisationHandler::closePorts()
     }
 }
 
-void VisualisationHandler::visualizeObjects(const Vector& x_d, const Vector& x_n, const std::vector<ControlPoint>& additionalControlPoints)
+void VisualisationHandler::visualizeObjects(const Vector& x_d, const Vector& x_n)
 {
     if(visualizeTargetInSim)
     {
@@ -127,19 +127,10 @@ void VisualisationHandler::visualizeObjects(const Vector& x_d, const Vector& x_n
         moveSphere(1,x_d_sim);
     }
 
-    if (visualizeTargetIniCubGui)
-    {
-        sendiCubGuiObject("target", x_d);
-        if(!additionalControlPoints.empty())
-        {
-            sendiCubGuiObject(additionalControlPoints);
-        }
-    }
+    if (visualizeTargetIniCubGui) sendiCubGuiObject("target", x_d);
 
-    if(visualizeParticleIniCubGui)
-    {
-        sendiCubGuiObject("particle", x_n);
-    }
+
+    if(visualizeParticleIniCubGui) sendiCubGuiObject("particle", x_n);
 
     if (visualizeParticleInSim)
     {
@@ -218,42 +209,6 @@ void VisualisationHandler::sendiCubGuiObject(const std::string& object_type, Vec
     }
 }
 
-void VisualisationHandler::sendiCubGuiObject(const std::vector<ControlPoint>& additionalControlPointsVector)
-{
-    if (outPortiCubGui.getOutputCount()>0)
-    {
-        Bottle obj;
-        for (const auto &controlPoint : additionalControlPointsVector)
-        {
-            obj.addString("object");
-            obj.addString("extra-target");
-
-            // size
-            obj.addFloat64(30.0);
-            obj.addFloat64(30.0);
-            obj.addFloat64(30.0);
-
-            // positions - iCubGui works in mm
-            obj.addFloat64(M2MM * controlPoint.x_desired(0));
-            obj.addFloat64(M2MM * controlPoint.x_desired(1));
-            obj.addFloat64(M2MM * controlPoint.x_desired(2));
-
-            // orientation
-            obj.addFloat64(0.0);
-            obj.addFloat64(0.0);
-            obj.addFloat64(0.0);
-
-            // color
-            obj.addInt32(0);
-            obj.addInt32(255);
-            obj.addInt32(0);
-
-            // transparency
-            obj.addFloat64(0.7);
-        }
-        outPortiCubGui.write(obj);
-    }
-}
 
 void VisualisationHandler::deleteiCubGuiObject(const string& object_type)
 {
