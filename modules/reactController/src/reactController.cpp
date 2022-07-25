@@ -710,7 +710,7 @@ public:
         }
         else prtclThrd = nullptr;
             
-        rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, main_part, verbosity,
+        rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, main_part, second_part, verbosity,
                                           disableTorso, trajSpeed,
                                           globalTol, vMax, tol, timeLimit, referenceGen,
                                           tactileCollisionPointsOn,visualCollisionPointsOn, proximityCollisionPointsOn,
