@@ -110,7 +110,16 @@ struct ArmInterface
     void updateCollPoints(double dT);
     bool prepareDrivers(const std::string& robot, const std::string& name, bool stiffInteraction);
     void release();
+    void updateArm(const Vector& qT);
+    /**
+    * Aligns joint bounds according to the actual limits of the robot
+     */
+    bool alignJointsBound(IControlLimits* ilimT);
 
+    /**
+    * Prints the joints bounds from the iCubArm
+     */
+    void printJointsBounds() const;
 };
 
 
@@ -306,11 +315,6 @@ protected:
     * Aligns joint bounds according to the actual limits of the robot
      */
     bool alignJointsBounds();
-
-    /**
-    * Prints the joints bounds from the iCubArm
-     */
-    void printJointsBounds();
 
     /**
     * Updates the arm's kinematic chain with the encoders from the robot

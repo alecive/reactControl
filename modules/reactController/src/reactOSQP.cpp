@@ -66,7 +66,7 @@ void ArmHelper::init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim)
     computeBounds();
 }
 
-void ArmHelper::computeGuard() // TODO pozor u druhy ruky musim resit ze chain dof je 10 ale zajimaji me jenom 3-10 klouby
+void ArmHelper::computeGuard()
 {
     double guardRatio=0.1;
     qGuardMinExt.resize(chain_dof);

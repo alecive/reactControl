@@ -221,7 +221,43 @@ void ArmInterface::release()
     }
 }
 
+void ArmInterface::updateArm(const Vector& qT)
+{
+    iencsA->getEncoders(encsA->data());
+    qA = encsA->subVector(0,NR_ARM_JOINTS-1);
+    q.setSubvector(0,qT);
+    q.setSubvector(NR_TORSO_JOINTS,qA);
+    arm->setAng(q*CTRL_DEG2RAD);
+    x_t = arm->EndEffPosition();
+    o_t = arm->EndEffPose().subVector(3,5)*arm->EndEffPose()[6];
+}
 
+bool ArmInterface::alignJointsBound(IControlLimits* ilimT)
+{
+    yDebug("[reactCtrlThread][alignJointsBounds] pre alignment:");
+    printJointsBounds();
+
+    deque<IControlLimits*> limits;
+    limits.push_back(ilimT);
+    limits.push_back(ilimA);
+    if (!arm->alignJointsBounds(limits)) return false;
+
+    yDebug("[reactCtrlThread][alignJointsBounds] post alignment:");
+    printJointsBounds();
+
+    return true;
+}
+
+void ArmInterface::printJointsBounds() const
+{
+    iCub::iKin::iKinChain &chain=*arm->asChain();
+    for (size_t i = 0; i < chainActiveDOF; i++)
+    {
+        double min=chain(i).getMin()*CTRL_RAD2DEG;
+        double max=chain(i).getMax()*CTRL_RAD2DEG;
+        yDebug("[jointsBounds (deg)] i: %lu\tmin: %g\tmax %g",i,min,max);
+    }
+}
 /*********** public methods ****************************************************************************/
 
 reactCtrlThread::reactCtrlThread(int _rate, string _name, string _robot,  string _part, string second_part,
@@ -472,7 +508,7 @@ bool reactCtrlThread::preprocCollisions()
 {
     main_arm->updateCollPoints(dT);
     if (second_arm) second_arm->updateCollPoints(dT);
-    //   bool tactileCollision = insertTestingCollisions();
+//       bool tactileCollision = insertTestingCollisions();
     bool tactileCollision = getCollisionsFromPorts();
     return tactileCollision;
 }
@@ -524,10 +560,9 @@ yarp::sig::Vector reactCtrlThread::updateNextTarget()
         minJerkTarget->computeNextValues(main_arm->x_d);
         next_x = minJerkTarget->getPos();
     }
-    // TODO improve it for proximity (i.e., hysteresis) - add to last_trajectory only when the position is far enough from the last one in vector
     if (!tactileColAvoidance && !last_trajectory.empty())
     {
-        if (norm(main_arm->x_d-main_arm->x_t) < 0.08) // TODO: find appropriate value
+        if (norm(next_x-main_arm->x_t) < 0.04) // TODO: find appropriate value - test x_d or next_x?
         {
             last_trajectory.clear();
             std::cout << "Close to target position, recovery path aborted.\n";
@@ -542,7 +577,7 @@ yarp::sig::Vector reactCtrlThread::updateNextTarget()
             last_trajectory.pop_back();
             main_arm->vLimAdapted *= 0.75;
 
-            yWarning() << last_trajectory.size() <<  "; Recovery path " << main_arm->x_n.toString(3,3) << "\n";
+            yWarning() << last_trajectory.size() <<  "; Recovery path " << next_x.toString(3,3) << "\n";
         }
     }
     return next_x;
@@ -575,7 +610,7 @@ void reactCtrlThread::run()
     }
     case STATE_REACH:
     {
-        if (tactileColAvoidance)
+        if (tactileColAvoidance && (last_trajectory.empty() || norm(last_trajectory.back()-main_arm->x_t) > 0.01))
         {
             last_trajectory.push_back(main_arm->x_t);
             tactileColAvoidance = false;
@@ -957,73 +992,17 @@ int reactCtrlThread::solveIK()
 
 void reactCtrlThread::updateArmChain()
 {
-    main_arm->iencsA->getEncoders(main_arm->encsA->data());
-    main_arm->qA=main_arm->encsA->subVector(0,NR_ARM_JOINTS-1);
     iencsT->getEncoders(encsT->data());
     qT[0]=(*encsT)[2];
     qT[1]=(*encsT)[1];
     qT[2]=(*encsT)[0];
-    main_arm->q.setSubvector(0,qT);
-    main_arm->q.setSubvector(NR_TORSO_JOINTS,main_arm->qA);
-    main_arm->arm->setAng(main_arm->q*CTRL_DEG2RAD);
-    main_arm->x_t = main_arm->arm->EndEffPosition();
-    main_arm->o_t = main_arm->arm->EndEffPose().subVector(3,5)*main_arm->arm->EndEffPose()[6];
-    if (second_arm)
-    {
-        second_arm->iencsA->getEncoders(second_arm->encsA->data());
-        second_arm->qA = second_arm->encsA->subVector(0,NR_ARM_JOINTS-1);
-        second_arm->q.setSubvector(0,qT);
-        second_arm->q.setSubvector(NR_TORSO_JOINTS,second_arm->qA);
-        second_arm->arm->setAng(second_arm->q*CTRL_DEG2RAD);
-        second_arm->x_t = second_arm->arm->EndEffPosition();
-        second_arm->o_t = second_arm->arm->EndEffPose().subVector(3,5)*second_arm->arm->EndEffPose()[6];
-    }
+    main_arm->updateArm(qT);
+    if (second_arm) second_arm->updateArm(qT);
 }
 
 bool reactCtrlThread::alignJointsBounds()
 {
-    yDebug("[reactCtrlThread][alignJointsBounds] pre alignment:");
-    printJointsBounds();
-
-    deque<IControlLimits*> limits;
-    limits.push_back(ilimT);
-    limits.push_back(main_arm->ilimA);
-    if (!main_arm->arm->alignJointsBounds(limits)) return false;
-
-    if (second_arm)
-    {
-        deque<IControlLimits*> limits2;
-        limits2.push_back(ilimT);
-        limits2.push_back(second_arm->ilimA);
-        if (!second_arm->arm->alignJointsBounds(limits2)) return false;
-    }
-
-    yDebug("[reactCtrlThread][alignJointsBounds] post alignment:");
-    printJointsBounds();
-
-    return true;
-}
-
-void reactCtrlThread::printJointsBounds()
-{
-    iCub::iKin::iKinChain &chain=*main_arm->arm->asChain();
-    for (size_t i = 0; i < main_arm->chainActiveDOF; i++)
-    {
-        double min=chain(i).getMin()*CTRL_RAD2DEG;
-        double max=chain(i).getMax()*CTRL_RAD2DEG;
-        yDebug("[jointsBounds (deg)] i: %lu\tmin: %g\tmax %g",i,min,max);
-    }
-
-    if (second_arm)
-    {
-        iCub::iKin::iKinChain &chain2 = *second_arm->arm->asChain();
-        for (size_t i = 0; i < second_arm->chainActiveDOF; i++)
-        {
-            double min = chain2(i).getMin() * CTRL_RAD2DEG;
-            double max = chain2(i).getMax() * CTRL_RAD2DEG;
-            yDebug("[jointsBounds (deg)] i: %lu\tmin: %g\tmax %g", i, min, max);
-        }
-    }
+    return main_arm->alignJointsBound(ilimT) && (second_arm == nullptr || second_arm->alignJointsBound(ilimT));
 }
 
 bool reactCtrlThread::areJointsHealthyAndSet(vector<int> &jointsToSet, const string &_p, const string &_s)
