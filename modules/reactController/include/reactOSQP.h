@@ -17,90 +17,62 @@ using namespace yarp::math;
 using namespace iCub::ctrl;
 using namespace iCub::iKin;
 
+class QPSolver;
+
+struct ArmHelper
+{
+    iCubArm *arm;
+    Vector q0,v0, p0, rest_jnt_pos, rest_w; //, normal;
+    Matrix v_lim, H0, J0, bounds;
+    Vector pr, v_des, manip;
+    double adapt_w5, dt, vmax, manip_thr;
+    Vector qGuardMinExt, qGuardMinInt, qGuardMaxExt, qGuardMaxInt;
+    int chain_dof, offset, vars_offset, constr_offset;
+    bool hitting_constraints;
+    // self-avoidance constraints
+    constexpr static double shou_m = (23.-28.)/(80.+37.)*CTRL_DEG2RAD;
+    constexpr static double shou_n = (28.-(23.-28.)/(80.+37.)*(-37.))*CTRL_DEG2RAD;
+    constexpr static double elb_m = (40.-90.)/(105.-85.)*CTRL_DEG2RAD;
+    constexpr static double elb_n = (90.-(40.-90.)/(105.-85.)*85.)*CTRL_DEG2RAD;
+
+
+    ArmHelper(iCubArm *chain_, double dt_, int offset_, double vmax_, double manip_thr_, const Vector& restPos,
+              bool hitting_constr_, int vars_offset_=0, int constr_offset_=0);
+
+    void init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim);
+    void computeGuard();
+    void computeBounds();
+    void updateBounds(Eigen::VectorXd& lowerBound, Eigen::VectorXd& upperBound, double pos_error);
+    void addConstraints(Eigen::SparseMatrix<double>& linearMatrix) const;
+};
 
 /****************************************************************/
 class QPSolver
 {
-    iCubArm &arm, *second_arm;
-
+    unique_ptr<ArmHelper> main_arm, second_arm;
     bool hitting_constraints;
+    double dt, w1, w2, w3, w4, w5, min_type, orig_w2;
+    int vars_offset, constr_offset;
 
-    Matrix v_lim, v2_lim;
-    Vector q0,v0, q02, v02, p02, p0, rest_jnt_pos, rest_w; //, normal;
-    Matrix H0, J0, H02, J02;
-    Vector pr, v_des, manip, pr2, v2_des, manip2;
-    Matrix bounds;
-    double dt, w1, w2, w3, w4, w5, min_type, vmax, adapt_w5, manip_thr, orig_w2, adapt_w52;
-
-    int chain_dof, secondchain_dof, vars_offset, constr_offset;
-
-    double shou_m,shou_n;
-    double elb_m,elb_n;
-
-    Vector qGuardMinExt;
-    Vector qGuardMinInt;
-    Vector qGuardMaxExt;
-    Vector qGuardMaxInt;
-
-    Eigen::SparseMatrix<double> hessian;
-    Eigen::VectorXd gradient;
-    Eigen::SparseMatrix<double> linearMatrix;
-    Eigen::VectorXd lowerBound;
-    Eigen::VectorXd upperBound;
-
+    Eigen::SparseMatrix<double> hessian, linearMatrix;
+    Eigen::VectorXd gradient, lowerBound, upperBound;
     OsqpEigen::Solver solver;
 
     /****************************************************************/
-    void computeSelfAvoidanceConstraints();
-    void computeGuard();
-    void computeBounds();
-    void update_bounds(double ori_error);
+    void update_bounds(double pos_error);
     void set_hessian();
     void update_gradient();
     void update_constraints();
 
 public:
-    QPSolver(iCubArm &chain_, bool hittingConstraints_, iCubArm* second_chain_, double vmax_, bool orientationControl_, double dT_, const Vector& restPos,
-                  double restPosWeight=0.0);
+    QPSolver(iCubArm *chain_, bool hittingConstraints_, iCubArm* second_chain_, double vmax_,
+             bool orientationControl_, double dT_, const Vector& restPos, double restPosWeight=0.0);
     ~QPSolver();
-    void init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, double rest_pos_w);
-    void init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, const Vector &_xr2, const Vector &_v02, const Matrix &_v2_lim, double rest_pos_w);
 
-    Vector get_resultInDegPerSecond()
-    {
-        Eigen::VectorXd sol = solver.getSolution();
-        Vector v(chain_dof+secondchain_dof,0.0);
-        for (int i = 0; i < chain_dof; ++i)
-        {
-            v[i] = max(min(sol[i], upperBound[i]), lowerBound[i]);
-        }
-        for (int i = 0; i < secondchain_dof; ++i)
-        {
-            v[i+chain_dof] = max(min(sol[i+vars_offset], upperBound[i+constr_offset]), lowerBound[i+constr_offset]);
-        }
-        return CTRL_RAD2DEG*v;
-    }
-
-    int optimize(double pos_error)
-    {
-        update_bounds(pos_error);
-        Eigen::VectorXd primalVar(hessian.rows());
-        primalVar.setZero();
-        for (int i = 0; i < chain_dof; i++)
-        {
-            primalVar[i] = std::min(std::max(bounds(i, 0), v0[i]), bounds(i, 1));
-        }
-        if (secondchain_dof > 0)
-        {
-            for (int i = 0; i < secondchain_dof; i++)
-            {
-                primalVar[i+vars_offset] = std::min(std::max(bounds(i+chain_dof, 0), v02[i]), bounds(i+chain_dof, 1));
-            }
-        }
-        solver.setPrimalVariable(primalVar);
-        solver.solve();
-        return static_cast<int>(solver.workspace()->info->status_val);
-    }
+    void init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, double rest_pos_w,
+              const Vector &_xr2 = {}, const Vector &_v02 = {}, const Matrix &_v2_lim = {});
+    Vector get_resultInDegPerSecond();
+    int optimize(double pos_error);
 };
 
 
