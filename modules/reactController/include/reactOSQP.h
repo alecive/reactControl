@@ -17,8 +17,6 @@ using namespace yarp::math;
 using namespace iCub::ctrl;
 using namespace iCub::iKin;
 
-class QPSolver;
-
 struct ArmHelper
 {
     iCubArm *arm;

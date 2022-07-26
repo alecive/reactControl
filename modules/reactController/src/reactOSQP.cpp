@@ -4,16 +4,16 @@
 
 #include "reactOSQP.h"
 
-ArmHelper::ArmHelper(iCubArm *chain_, double dt_, int offset_,  double vmax_, double manip_thr_, const Vector& restPos, bool hitting_constr_,
-          int vars_offset_, int constr_offset_): arm(chain_), offset(offset_), dt(dt_), vmax(vmax_), manip_thr(manip_thr_),
-        adapt_w5(1), hitting_constraints(hitting_constr_), vars_offset(vars_offset_), constr_offset(constr_offset_)
+ArmHelper::ArmHelper(iCubArm *chain_, double dt_, int offset_,  double vmax_, double manip_thr_, const Vector& restPos,
+                     bool hitting_constr_, int vars_offset_, int constr_offset_):
+        arm(chain_), offset(offset_), dt(dt_), vmax(vmax_), manip_thr(manip_thr_), adapt_w5(1), rest_jnt_pos(restPos),
+        hitting_constraints(hitting_constr_), vars_offset(vars_offset_), constr_offset(constr_offset_)
 {
     chain_dof = static_cast<int>(arm->getDOF())-offset;
     pr.resize(3, 0.0);
     v0.resize(chain_dof, 0.0); // v=v0;
     v_lim.resize(chain_dof, 2);
     manip.resize(chain_dof);
-    rest_jnt_pos = restPos;
     rest_w = {1, 1, 1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
     computeGuard();
 }
@@ -202,18 +202,20 @@ QPSolver::QPSolver(iCubArm *chain_, bool hitConstr, iCubArm* second_chain_, doub
         orig_w2(restPosWeight_), w3(10), w4(1), w5(0),  min_type(1)
 {
     double manip_thr = 0.03;
-    main_arm = make_unique<ArmHelper>(chain_, dt, 0, vmax_, manip_thr, restPos, hitConstr);
+    main_arm = make_unique<ArmHelper>(chain_, dt, 0, vmax_*CTRL_DEG2RAD, manip_thr, restPos, hitConstr);
+
     vars_offset = main_arm->chain_dof + 6;
     constr_offset = main_arm->chain_dof + 12 + 3 + hitting_constraints * 3;
-
-    second_arm = second_chain_ ? make_unique<ArmHelper>(second_chain_, dt, 3, vmax_, manip_thr,restPos,
+    second_arm = second_chain_ ? make_unique<ArmHelper>(second_chain_, dt, 3, vmax_*CTRL_DEG2RAD, manip_thr,restPos,
                                                         hitConstr,vars_offset, constr_offset) : nullptr;
-    // normal.resize(3,0.0);
     if (!orientationControl_) w4 = 0;
-
-    //if (second_chain_ != nullptr) secondchain_dof = 7; // static_cast<int>(second_arm->getDOF());
-    int vars = vars_offset + (second_arm != nullptr) * (second_arm->chain_dof + 6);
-    int constr = constr_offset + (second_arm != nullptr) * (6 + second_arm->chain_dof + 6 + 3 + hitting_constraints * 3);
+    int vars = vars_offset;
+    int constr = constr_offset;
+    if (second_arm)
+    {
+        vars += second_arm->chain_dof + 6;
+        constr += 6 + second_arm->chain_dof + 6 + 3 + hitting_constraints * 3;
+    }
     hessian.resize(vars, vars);
     set_hessian();
     gradient.resize(vars);
@@ -389,14 +391,19 @@ void QPSolver::update_constraints()
 Vector QPSolver::get_resultInDegPerSecond()
 {
     Eigen::VectorXd sol = solver.getSolution();
-    Vector v(main_arm->chain_dof+second_arm->chain_dof,0.0);
+    int dim = main_arm->chain_dof;
+    if (second_arm) dim += second_arm->chain_dof;
+    Vector v(dim,0.0);
     for (int i = 0; i < main_arm->chain_dof; ++i)
     {
         v[i] = max(min(sol[i], upperBound[i]), lowerBound[i]);
     }
-    for (int i = 0; i < second_arm->chain_dof; ++i)
+    if (second_arm)
     {
-        v[i+main_arm->chain_dof] = max(min(sol[i+vars_offset], upperBound[i+constr_offset]), lowerBound[i+constr_offset]);
+        for (int i = 0; i < second_arm->chain_dof; ++i)
+        {
+            v[i + main_arm->chain_dof] = max(min(sol[i + vars_offset], upperBound[i + constr_offset]), lowerBound[i + constr_offset]);
+        }
     }
     return CTRL_RAD2DEG*v;
 }
