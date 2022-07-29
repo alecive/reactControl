@@ -338,7 +338,6 @@ bool reactCtrlThread::threadInit()
     setVMax(vMax);
 
     if (!prepareDrivers()) return false;
-    /************ variables related to target and the optimization problem for ipopt *******/
     if(referenceGen == "minJerk")
     {
         minJerkTarget = new minJerkTrajGen(3,dT,1.0); //dim 3, dT, trajTime 1s - will be overwritten later
@@ -357,45 +356,44 @@ bool reactCtrlThread::threadInit()
                                         vMax, orientationControl,dT,
                                         main_arm->homePos*CTRL_DEG2RAD, restPosWeight);
 
-    /***************** ports and files*************************************************************************************/
-
     aggregPPSeventsInPort.open("/"+name+"/pps_events_aggreg:i");
     aggregSkinEventsInPort.open("/"+name+"/skin_events_aggreg:i");
     proximityEventsInPort.open("/"+name+"/proximity_events:i");
-    proximityEventsVisuPort.open("/"+name+"/proximity:o");
     streamedTargets.open("/"+name+"/streamedWholeBodyTargets:i");
 
     outPort.open("/"+name +"/data:o"); //for dumping
     movementFinishedPort.open("/" + name + "/finished:o");
+    proximityEventsVisuPort.open("/"+name+"/proximity:o");
 
+    writeConfigData();
+    printMessage(5,"[reactCtrlThread] threadInit() finished.\n");
+    yarp::os::Time::delay(0.2);
+    t_1=Time::now();
+    return true;
+}
+
+void reactCtrlThread::writeConfigData()
+{
     fout_param.open("param.log");
 
-    /***** writing to param file ******************************************************/
-    fout_param<<main_arm->chainActiveDOF<<" ";
+    fout_param<<main_arm->part_short<<" "<<second_arm->part_short<<" "<<main_arm->chainActiveDOF<<" ";
+    fout_param<<second_arm->chainActiveDOF<<" "<<main_arm->useSelfColPoints<<" "<<second_arm->useSelfColPoints<<" ";
     for (size_t i=0; i<main_arm->chainActiveDOF; i++)
     {
-        fout_param<<main_arm->lim(i,0)<<" " << main_arm->lim(i,1)<<" ";
+        fout_param<<main_arm->lim(i,0)<<" "<<main_arm->lim(i,1)<<" ";
     }
-    for (size_t j=0; j<main_arm->chainActiveDOF; j++)
+    for (size_t j=0; j<second_arm->chainActiveDOF; j++)
     {
-        fout_param<<main_arm->vLimNominal(j,0)<< " " <<main_arm->vLimNominal(j,1)<<" ";
+        fout_param<<second_arm->lim(j,0)<<" "<< second_arm->lim(j,1)<<" ";
     }
-    fout_param<<-1<<" "<<trajSpeed<<" "<<tol<<" "<<globalTol<<" "<<dT<<" "<<0<<" "<<0<<" ";
-    // the -1 used to be trajTime, keep it for compatibility with matlab scripts
-    //the 0s used to be boundSmoothnessFlag and boundSmoothnessValue
-    fout_param<<"2 "; // positionDirect
-    fout_param<<"0 0 0 "; //used to be ipOptMemoryOn, ipOptFilterOn, filterTc
-    if(stiffInteraction) fout_param<<"1 "; else fout_param<<"0 ";
-    fout_param<<"0 "; // used to be additionalControlPoints
+    fout_param<<vMax<<" "<<trajSpeed<<" "<<tol<<" "<<globalTol<<" "<<dT<<" "<<timeLimit<<" "<<stiffInteraction<<" ";
+    fout_param<<tactileCollPointsOn<< " "<<visualCollPointsOn<<" "<<proximityCollPointsOn<<" ";
+    fout_param<<hittingConstraints<<" "<<restPosWeight<<" "<<orientationControl<<" "<<gazeControl;
     fout_param<<std::endl;
 
     yInfo("Written to param file and closing..");
     fout_param.close();
 
-    printMessage(5,"[reactCtrlThread] threadInit() finished.\n");
-    yarp::os::Time::delay(0.2);
-    t_1=Time::now();
-    return true;
 }
 
 bool reactCtrlThread::prepareDrivers()
@@ -671,24 +669,7 @@ void reactCtrlThread::run()
         if (norm(main_arm->x_t-main_arm->x_d) >= globalTol || movingTargetCircle ||
             (second_arm != nullptr && norm(second_arm->x_t-second_arm->x_d) >= globalTol) || vel_limited)
         {
-            main_arm->x_n = updateNextTarget(vel_limited);
-            visuhdl.visualizeObjects(main_arm->x_d, main_arm->x_n);
-            double t_3 = yarp::os::Time::now();
-            //this is the key function call where the reaching opt problem is solved
-            solverExitCode = solveIK();
-            timeToSolveProblem_s = yarp::os::Time::now() - t_3;
-
-            main_arm->qIntegrated = main_arm->I->integrate(main_arm->q_dot);
-            main_arm->virtualArm->setAng(main_arm->qIntegrated * CTRL_DEG2RAD);
-            if (second_arm)
-            {
-                second_arm->qIntegrated = second_arm->I->integrate(second_arm->q_dot);
-                second_arm->virtualArm->setAng(second_arm->qIntegrated * CTRL_DEG2RAD);
-            }
-            if (!controlArm("positionDirect"))
-            {
-                yError("I am not able to properly control the arm in positionDirect!");
-            }
+            nextMove(vel_limited);
         }
         updateArmChain(); //N.B. This is the second call within run(); may give more precise data for the logging; may also cost time
         sendData();
@@ -731,6 +712,28 @@ void reactCtrlThread::run()
     //        if (t3-t2 > 0.01) { std::cout << " Alert!"; }
     //     //   std::cout << "\n";
     //    }
+}
+
+void reactCtrlThread::nextMove(bool& vel_limited)
+{
+    main_arm->x_n = updateNextTarget(vel_limited);
+    visuhdl.visualizeObjects(main_arm->x_d, main_arm->x_n);
+    double t_3 = yarp::os::Time::now();
+    //this is the key function call where the reaching opt problem is solved
+    solverExitCode = solveIK();
+    timeToSolveProblem_s = yarp::os::Time::now() - t_3;
+
+    main_arm->qIntegrated = main_arm->I->integrate(main_arm->q_dot);
+    main_arm->virtualArm->setAng(main_arm->qIntegrated * CTRL_DEG2RAD);
+    if (second_arm)
+    {
+        second_arm->qIntegrated = second_arm->I->integrate(second_arm->q_dot);
+        second_arm->virtualArm->setAng(second_arm->qIntegrated * CTRL_DEG2RAD);
+    }
+    if (!controlArm("positionDirect"))
+    {
+        yError("I am not able to properly control the arm in positionDirect!");
+    }
 }
 
 void reactCtrlThread::threadRelease()

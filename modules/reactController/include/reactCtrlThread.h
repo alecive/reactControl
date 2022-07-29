@@ -304,6 +304,8 @@ protected:
 
     yarp::sig::Vector updateNextTarget(bool&);
 
+    void nextMove(bool&);
+
     /**** kinematic chain, control, ..... *****************************/
 
     /**
@@ -361,6 +363,11 @@ protected:
     void getCollPointFromPort(Bottle* bot, double gain);
 
     void getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, double gain);
+
+    /**
+     * writing to param file
+     */
+    void writeConfigData();
 
     /**
     * Sends useful data to a port in order to track it on matlab
