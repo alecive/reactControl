@@ -65,7 +65,6 @@ using namespace yarp;
 using namespace yarp::os;
 using namespace yarp::math;
 
-using namespace std;
 
 /**
 * \ingroup reactController
@@ -79,10 +78,10 @@ private:
     particleThread    *prtclThrd;
     RpcServer            rpcSrvr;
 
-    string robot;       // Name of the robot
-    string  name;       // Name of the module
-    string  main_part;       // Part to use
-    string  second_part;       // Part to use
+    std::string robot;       // Name of the robot
+    std::string  name;       // Name of the module
+    std::string  main_part;       // Part to use
+    std::string  second_part;       // Second part to use (can be None)
 
     int     verbosity;  // Verbosity level
     int   rctCtrlRate;  // rate of the reactCtrlThread
@@ -100,7 +99,7 @@ private:
     double restPosWeight; // Weight of the reaching joint rest position task (disabled if 0.0)
     double timeLimit;  // time limit to reach target
     
-    string referenceGen; // either "uniformParticle" (constant velocity with particleThread) or "minJerk" 
+    std::string referenceGen; // either "uniformParticle" (constant velocity with particleThread) or "minJerk"
     //or "none" (will directly apply the target - used especially in the mode when targets are streamed)  
     
     bool hittingConstraints; //inequality constraints for safety of shoudler assembly and to prevent self-collisions torso-upper arm, upper-arm - forearm  
@@ -606,7 +605,7 @@ public:
             if (rf.check("restPosWeight"))
             {
                 restPosWeight = rf.find("restPosWeight").asFloat64();
-                yInfo("[reactController] restPosWeight set to %g m.",restPosWeight);
+                yInfo("[reactController] restPosWeight set to %g.",restPosWeight);
             }
             else yInfo("[reactController] Could not find restPosWeight in the config file; using %g as default",restPosWeight);
             //****************** self-collision points ******************

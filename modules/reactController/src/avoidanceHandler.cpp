@@ -20,8 +20,7 @@
 
 #include "avoidanceHandler.h"
 
-using namespace std;
-
+#define LIMIT 0.05
 using namespace yarp::sig;
 using namespace yarp::math;
 using namespace yarp::os;
@@ -30,7 +29,7 @@ using namespace iCub::skinDynLib;
 
 AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
                                                    iCub::iKin::iKinChain* _secondChain, bool _useSelfColPoints, const std::string& _part,
-                                                   const unsigned int _verbosity):
+                                                   yarp::sig::Vector* data, const unsigned int _verbosity):
         chain(_chain), collisionPoints(_colPoints), secondChain(_secondChain), part(_part), verbosity(_verbosity), type("none")
 {
     selfColPoints.resize(4);
@@ -64,6 +63,17 @@ AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(iCub::iKin::iKinChain &_chain
         // hand coordinates are same for both arms
         selfControlPoints[0] = {{-0.0049, 0.0012,  0.0}, {-0.0059, 0.0162,  0.0}, {-0.0199, 0.0122,  0.0}, {-0.0049, -0.0143,  0.0}, {-0.0304, 0.0122,  0.0}};
         selfColPoints[0] = {{-0.0049, 0.0012,  0.0}, {-0.0059, 0.0162,  0.0}, {-0.0199, 0.0122,  0.0}, {-0.0049, -0.0143,  0.0}, {-0.0304, 0.0122,  0.0}};
+        std::vector<std::string> fingers{"thumb", "index", "middle", "ring", "little"};
+        for (int i = 0; i < 5; i++)
+        {
+            iCubFinger finger(part+"_"+fingers[i]);
+            Vector vec;
+            finger.getChainJoints(*data, vec);
+            finger.setAng((M_PI/180.0)*vec);
+            printf("%s pos is \t %s\n", fingers[i].c_str(), finger.getH().subcol(0,3,3).toString().c_str());
+            selfColPoints[0].push_back(finger.getH().subcol(0,3,3));
+            selfControlPoints[0].push_back(finger.getH().subcol(0,3,3));
+        }
         if (part == "left")
         {
             // selfcol with right forearm
@@ -112,9 +122,9 @@ AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(iCub::iKin::iKinChain &_chain
 
 
 /****************************************************************/
-deque<Vector> AvoidanceHandlerAbstract::getCtrlPointsPosition()
+std::deque<Vector> AvoidanceHandlerAbstract::getCtrlPointsPosition()
 {
-    deque<Vector> ctrlPoints;
+    std::deque<Vector> ctrlPoints;
     for (auto & ctrlPointChain : ctrlPointChains)
     {
         ctrlPoints.push_back(ctrlPointChain.EndEffPosition());
@@ -210,11 +220,10 @@ void AvoidanceHandlerAbstract::checkSelfCollisions()
                         neardist = n;
                     }
                 }
-                // if (neardist < 0.0025)  // distance lower than 0.05 m
-                if (neardist < 0.001) // distance lower than 0.03 m
+                neardist = sqrt(neardist);
+                if (neardist < LIMIT) // distance lower than 0.04 m
                 {
-                    neardist = sqrt(neardist);
-                    collisionPoint_t cp {(k == 0) ? SKIN_LEFT_HAND : SKIN_LEFT_FOREARM, 1 - M2CM * neardist / 3.5};
+                    collisionPoint_t cp {(k == 0) ? SKIN_LEFT_HAND : SKIN_LEFT_FOREARM, (1.1 - neardist/LIMIT)*2};
                     cp.x = selfControlPoints[k][nearest];
                     Vector n = pos.subVector(0, 2) - selfControlPoints[k][nearest];
                     cp.n = n / yarp::math::norm(n);
@@ -231,9 +240,9 @@ void AvoidanceHandlerAbstract::checkSelfCollisions()
 /****************************************************************/
 AvoidanceHandlerTactile::AvoidanceHandlerTactile(iCub::iKin::iKinChain &_chain,const std::vector<collisionPoint_t> &_colPoints,
                                                  iCub::iKin::iKinChain* _secondChain, bool _useSelfColPoints, const std::string& _part,
-                                                 const unsigned int _verbosity):
+                                                 yarp::sig::Vector* data, const unsigned int _verbosity):
         AvoidanceHandlerAbstract(_chain,_colPoints, _secondChain,
-                                 _useSelfColPoints, _part, _verbosity)
+                                 _useSelfColPoints, _part, data, _verbosity)
 {
     type="tactile";
     avoidingSpeed = 0.5;  // produce collisionPoint.magnitude * avoidingSpeed rad/s repulsive speed
@@ -254,7 +263,7 @@ void AvoidanceHandlerTactile::setParameters(const Property &parameters)
 }
 
 /****************************************************************/
-Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, Vector& weighted_normal)
+Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, bool& velLimited)
 {
     printMessage(2,"AvoidanceHandlerTactile::getVLIM\n");
     Matrix VLIM=v_lim;
@@ -310,20 +319,17 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, Vector& weighted_no
         printMessage(2,"Chain with control point - index %d (last index %d), nDOF: %d.\n",i,collisionPoints.size()-1,customChain.getDOF());
         Matrix J=customChain.GeoJacobian().submatrix(0,2,0,customChain.getDOF()-1); //first 3 rows ~ dPosition/dJoints
         Vector normal = customChain.getH().getCol(2).subVector(0,2); //get the end-effector frame of the standard or custom chain (control point derived from skin), takes the z-axis (3rd column in transform matrix) ~ normal, only its first three elements of the 4 in the homogenous transf. format
-        weighted_normal += (-colPoint.magnitude*normal);
         Vector s=(J.transposed()*normal) * avoidingSpeed * colPoint.magnitude; //project movement along the normal into joint velocity space and scale by default avoidingSpeed and magnitude of skin (or PPS) activation
-        if (verbosity>=2)
-        {
-            printf("J for positions at control point:\n %s \nJ.transposed:\n %s \nNormal at control point: (%s), norm: %f \n",J.toString(3,3).c_str(),J.transposed().toString(3,3).c_str(), normal.toString(3,3).c_str(),norm(normal));
-            printf("s = (J.transposed()*normal) * avoidingSpeed * collisionPoints[i].magnitude \n (%s)T = (%s)T * %f * %f\n",s.toString(3,3).c_str(),(J.transposed()*normal).toString(3,3).c_str(),avoidingSpeed,colPoint.magnitude);
-        }
+        printMessage(2, "J for positions at control point:\n %s \nJ.transposed:\n %s \nNormal at control point: (%s), norm: %f \n",J.toString(3,3).c_str(),J.transposed().toString(3,3).c_str(), normal.toString(3,3).c_str(),norm(normal));
+        printMessage(2, "s = (J.transposed()*normal) * avoidingSpeed * collisionPoints[i].magnitude \n (%s)T = (%s)T * %f * %f\n",s.toString(3,3).c_str(),(J.transposed()*normal).toString(3,3).c_str(),avoidingSpeed,colPoint.magnitude);
         s = s * -1.0; //we reverse the direction to obtain joint velocities that bring about avoidance
         printMessage(2,"s * (-1) -> joint contributions toward avoidance: \n (%s) \n",s.toString(3,3).c_str());
 
         for (size_t j=0; j<s.length(); j++)
         {
+            velLimited = true;
             printMessage(2,"        Joint: %d, s[j]: %f, limits before: Min: %f, Max: %f\n",j,s[j],VLIM(j,0),VLIM(j,1));
-            if (s[j]>=0.0) //joint contributes to avoidance, we will set the min velocity accordingly
+            if (s[j]>0.001) //joint contributes to avoidance, we will set the min velocity accordingly
             {
                 if (colPoint.magnitude < 0.3) s[j] = 0.0;
                 s[j]=std::min(v_lim(j,1),s[j]); //make sure new min vel is <= max vel
@@ -331,7 +337,7 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, Vector& weighted_no
                 VLIM(j,1)=std::max(VLIM(j,0),VLIM(j,1)); //make sure current max is at least equal to current min
                 printMessage(2,"            s>=0 clause, joint contributes to avoidance, adjusting Min; limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
             }
-            else //joint acts to bring control point toward obstacle - we will shape the max vel
+            else if (s[j] < -0.001) //joint acts to bring control point toward obstacle - we will shape the max vel
             {
                 if (colPoint.magnitude < 0.3) s[j] = 0.0;
                 s[j]=std::max(v_lim(j,0),s[j]);

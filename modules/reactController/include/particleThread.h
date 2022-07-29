@@ -35,7 +35,6 @@
 #include <cstdarg>
 #include <utility>
 
-using namespace std;
 
 class particleThread: public yarp::os::PeriodicThread
 {
@@ -45,7 +44,7 @@ protected:
     // Flag that manages verbosity (v=1 -> more text printed out; v=2 -> even more text):
     int verbosity;
     // Name of the module (to change port names accordingly):
-    string name;
+    std::string name;
 
     /***************************************************************************/
     // INTERNAL VARIABLES:
@@ -69,7 +68,7 @@ protected:
 
 public:
     // CONSTRUCTOR
-    particleThread(int , string , int );
+    particleThread(int , std::string , int );
     // RUN
     void run() override;
     // RELEASE

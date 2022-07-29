@@ -10,7 +10,6 @@
 #include "OsqpEigen/OsqpEigen.h"
 
 
-using namespace std;
 using namespace yarp::os;
 using namespace yarp::sig;
 using namespace yarp::math;
@@ -47,7 +46,7 @@ struct ArmHelper
 /****************************************************************/
 class QPSolver
 {
-    unique_ptr<ArmHelper> main_arm, second_arm;
+    std::unique_ptr<ArmHelper> main_arm, second_arm;
     bool hitting_constraints;
     double dt, w1, w2, w3, w4, w5, min_type, orig_w2;
     int vars_offset, constr_offset;

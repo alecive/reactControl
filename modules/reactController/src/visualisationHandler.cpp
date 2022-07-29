@@ -6,7 +6,7 @@
 
 /***************** auxiliary computations  *******************************/
 
-VisualisationHandler::VisualisationHandler(int _verbosity, bool _use_sim, const string& port_name,
+VisualisationHandler::VisualisationHandler(int _verbosity, bool _use_sim, const std::string& port_name,
                                            bool visualizeTarget, bool visualizeParticle):
                                            verbosity(_verbosity), use_sim(_use_sim), name("VisuHandler"){
     T_world_root = zeros(4,4);
@@ -24,7 +24,7 @@ VisualisationHandler::VisualisationHandler(int _verbosity, bool _use_sim, const 
 
     if(use_sim)
     {
-        string port2icubsim = "/" + port_name + "/sim:o";
+        std::string port2icubsim = "/" + port_name + "/sim:o";
         if (!portToSimWorld.open(port2icubsim))
         {
             yError("[reactCtrlThread] Unable to open port << port2icubsim << endl");
@@ -210,7 +210,7 @@ void VisualisationHandler::sendiCubGuiObject(const std::string& object_type, Vec
 }
 
 
-void VisualisationHandler::deleteiCubGuiObject(const string& object_type)
+void VisualisationHandler::deleteiCubGuiObject(const std::string& object_type)
 {
     if (outPortiCubGui.getOutputCount()>0)
     {

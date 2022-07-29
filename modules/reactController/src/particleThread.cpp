@@ -23,7 +23,7 @@ using namespace yarp::sig;
 using namespace yarp::os;
 using namespace iCub::ctrl;
 
-particleThread::particleThread(int _rate, string _name, int _verbosity) :
+particleThread::particleThread(int _rate, std::string _name, int _verbosity) :
                                PeriodicThread(static_cast<double>(_rate)/1000.0), name(std::move(_name)),
                                verbosity(_verbosity)
 {

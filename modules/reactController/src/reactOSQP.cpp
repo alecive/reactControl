@@ -110,8 +110,8 @@ void ArmHelper::computeBounds()
             dmin=1.0;
             dmax=(qi>=qGuardMaxExt[i] ? 0.0 : (qi- qGuardMaxExt[i])/(qGuardMaxInt[i]-qGuardMaxExt[i]));
         }
-        bounds(i, 0) = max(dmin*-vmax, v_lim(i+offset, 0));  // apply joint limit bounds only when it is stricter than the avoidance limits
-        bounds(i, 1) = min(dmax*vmax, v_lim(i+offset, 1));
+        bounds(i, 0) = std::max(dmin*-vmax, v_lim(i+offset, 0));  // apply joint limit bounds only when it is stricter than the avoidance limits
+        bounds(i, 1) = std::min(dmax*vmax, v_lim(i+offset, 1));
     }
 }
 
@@ -171,10 +171,12 @@ void ArmHelper::updateBounds(Eigen::VectorXd& lowerBound, Eigen::VectorXd& upper
 
 void ArmHelper::addConstraints(Eigen::SparseMatrix<double>& linearMatrix) const
 {
-    for (int i = 0; i < chain_dof + 6; ++i) {
+    for (int i = 0; i < chain_dof + 6; ++i)
+    {
         linearMatrix.insert(i + constr_offset, i + vars_offset) = 1;
     }
-    for (int i = 0; i < 6; ++i) {
+    for (int i = 0; i < 6; ++i)
+    {
         linearMatrix.insert(i + constr_offset + chain_dof + 6, vars_offset + chain_dof + i) = -1;
     }
     linearMatrix.insert(chain_dof + 12 + constr_offset, 0 + vars_offset) = 1.71 * dt;
@@ -184,7 +186,8 @@ void ArmHelper::addConstraints(Eigen::SparseMatrix<double>& linearMatrix) const
     linearMatrix.insert(chain_dof + 12 + 1 + constr_offset, 2 + vars_offset) = -1.71 * dt;
     linearMatrix.insert(chain_dof + 12 + 2 + constr_offset, 1 + vars_offset) = dt;
     linearMatrix.insert(chain_dof + 12 + 2 + constr_offset, 2 + vars_offset) = dt;
-    if (hitting_constraints) {
+    if (hitting_constraints)
+    {
         linearMatrix.insert(chain_dof + 12 + 3 + constr_offset, 1 + vars_offset) = dt;
         linearMatrix.insert(chain_dof + 12 + 3 + constr_offset, 2 + vars_offset) = shou_m * dt;
         linearMatrix.insert(chain_dof + 12 + 4 + constr_offset, 3 + vars_offset) = -elb_m * dt;
@@ -199,14 +202,14 @@ void ArmHelper::addConstraints(Eigen::SparseMatrix<double>& linearMatrix) const
 QPSolver::QPSolver(iCubArm *chain_, bool hitConstr, iCubArm* second_chain_, double vmax_, bool orientationControl_,
                              double dT_, const Vector& restPos, double restPosWeight_) :
         second_arm(nullptr), hitting_constraints(hitConstr), dt(dT_), w1(1), w2(restPosWeight_),
-        orig_w2(restPosWeight_), w3(10), w4(1), w5(0),  min_type(1)
+        orig_w2(restPosWeight_), w3(10), w4(1), w5(0),  min_type(0)
 {
     double manip_thr = 0.03;
-    main_arm = make_unique<ArmHelper>(chain_, dt, 0, vmax_*CTRL_DEG2RAD, manip_thr, restPos, hitConstr);
+    main_arm = std::make_unique<ArmHelper>(chain_, dt, 0, vmax_*CTRL_DEG2RAD, manip_thr, restPos, hitConstr);
 
     vars_offset = main_arm->chain_dof + 6;
     constr_offset = main_arm->chain_dof + 12 + 3 + hitting_constraints * 3;
-    second_arm = second_chain_ ? make_unique<ArmHelper>(second_chain_, dt, 3, vmax_*CTRL_DEG2RAD, manip_thr,restPos,
+    second_arm = second_chain_ ? std::make_unique<ArmHelper>(second_chain_, dt, 3, vmax_*CTRL_DEG2RAD, manip_thr,restPos,
                                                         hitConstr,vars_offset, constr_offset) : nullptr;
     if (!orientationControl_) w4 = 0;
     int vars = vars_offset;
@@ -304,7 +307,7 @@ void QPSolver::update_gradient()
 
     for (int i=0; i < main_arm->chain_dof; i++)
     {
-        gradient[i] = -2 * w1 * main_arm->v0[i] * min_type + w2 * main_arm->rest_w[i] * dt * 2 * (main_arm->q0[i] - main_arm->rest_jnt_pos[i]) - w5 * main_arm->adapt_w5 * dt * main_arm->manip[i];
+        gradient[i] = -2 * w1 *main_arm->rest_w[i] * main_arm->v0[i] * min_type + w2 * main_arm->rest_w[i] * dt * 2 * (main_arm->q0[i] - main_arm->rest_jnt_pos[i]) - w5 * main_arm->adapt_w5 * dt * main_arm->manip[i];
     }
     if (main_arm->chain_dof == 10)
     {
@@ -327,7 +330,7 @@ void QPSolver::set_hessian()
     {
         if (main_arm->chain_dof != 10 || i != 1)
         {
-            hessian.insert(i, i) = 2 * w1 + 2 * w2 * dt * dt * main_arm->rest_w[i];
+            hessian.insert(i, i) = 2 * w1*main_arm->rest_w[i] + 2 * w2 * dt * dt * main_arm->rest_w[i];
         }
     }
 
@@ -344,17 +347,17 @@ void QPSolver::set_hessian()
     {
         for (int i = 0; i < second_arm->chain_dof; ++i)
         {
-            hessian.insert(i+vars_offset, i+vars_offset) =0;// 2 * w1 + 2 * w2 * dt * dt * second_arm->rest_w[i+3]*10;
+            hessian.insert(i+vars_offset, i+vars_offset) = 2 * w1 + 2 * w2 * dt * dt * second_arm->rest_w[i+3];
         }
 
         for (int i = 0; i < 3; ++i)
         {
-            hessian.insert(second_arm->chain_dof+i+vars_offset,second_arm->chain_dof+i+vars_offset) = 10*2*w3;
+            hessian.insert(second_arm->chain_dof+i+vars_offset,second_arm->chain_dof+i+vars_offset) = 2*w3;
         }
 
         for (int i = 3; i < 6; ++i)
         {
-            hessian.insert(second_arm->chain_dof+i+vars_offset,second_arm->chain_dof+i+vars_offset) = 5*2*w4;
+            hessian.insert(second_arm->chain_dof+i+vars_offset,second_arm->chain_dof+i+vars_offset) = 2*w4;
         }
     }
 }
@@ -396,13 +399,13 @@ Vector QPSolver::get_resultInDegPerSecond()
     Vector v(dim,0.0);
     for (int i = 0; i < main_arm->chain_dof; ++i)
     {
-        v[i] = max(min(sol[i], upperBound[i]), lowerBound[i]);
+        v[i] = std::max(std::min(sol[i], upperBound[i]), lowerBound[i]);
     }
     if (second_arm)
     {
         for (int i = 0; i < second_arm->chain_dof; ++i)
         {
-            v[i + main_arm->chain_dof] = max(min(sol[i + vars_offset], upperBound[i + constr_offset]), lowerBound[i + constr_offset]);
+            v[i + main_arm->chain_dof] = std::max(std::min(sol[i + vars_offset], upperBound[i + constr_offset]), lowerBound[i + constr_offset]);
         }
     }
     return CTRL_RAD2DEG*v;

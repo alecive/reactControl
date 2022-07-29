@@ -28,7 +28,6 @@
 #include <iCub/ctrl/minJerkCtrl.h>
 #include <fstream>
 
-
 #include "reactOSQP.h"
 #include "particleThread.h"
 #include "avoidanceHandler.h"
@@ -41,7 +40,6 @@ using namespace yarp::os;
 using namespace yarp::math;
 using namespace iCub::ctrl;
 using namespace iCub::skinDynLib;
-using namespace std;
 
 #define NR_ARM_JOINTS 7
 #define NR_ARM_JOINTS_FOR_INTERACTION_MODE 5
@@ -51,8 +49,8 @@ struct ArmInterface
 {
     iCub::ctrl::Integrator *I; //if controlMode == positionDirect, we need to integrate the velocity control commands
 
-    string part_name;  // Which arm to use: either left_arm or right_arm
-    string part_short; // Which arm to use (short version): either left or right
+    std::string part_name;  // Which arm to use: either left_arm or right_arm
+    std::string part_short; // Which arm to use (short version): either left or right
 
     // Driver for "classical" interfaces
     PolyDriver       ddA;
@@ -68,9 +66,9 @@ struct ArmInterface
     iCub::iKin::iCubArm   *arm;
     int jntsA;
 
-    vector<InteractionModeEnum> interactionModesOrig;
-    vector<InteractionModeEnum> interactionModesNew;
-    vector<int> jointsToSetInteractionA;
+    std::vector<InteractionModeEnum> interactionModesOrig;
+    std::vector<InteractionModeEnum> interactionModesNew;
+    std::vector<int> jointsToSetInteractionA;
 
     size_t chainActiveDOF;
     //parallel virtual arm and chain on which ipopt will be working in the positionDirect mode case
@@ -103,14 +101,19 @@ struct ArmInterface
 
     std::vector<double> fingerPos;
     yarp::sig::Vector   homePos;
+    std::vector<yarp::sig::Vector> last_trajectory;
+    bool avoidance;
+    bool useSelfColPoints;
 
-    explicit ArmInterface(std::string _part);
-    void updateJointLimMatrix();
+    explicit ArmInterface(std::string _part, bool _selfColPoints);
     void setVMax(bool useTorso, double vMax);
     void updateCollPoints(double dT);
     bool prepareDrivers(const std::string& robot, const std::string& name, bool stiffInteraction);
     void release();
     void updateArm(const Vector& qT);
+    void initialization(double dT, iKinChain* chain, int verbosity);
+    bool checkRecoveryPath(Vector& next_x);
+    void updateRecoveryPath();
     /**
     * Aligns joint bounds according to the actual limits of the robot
      */
@@ -128,8 +131,8 @@ class reactCtrlThread: public yarp::os::PeriodicThread
 
 public:
     // CONSTRUCTOR
-    reactCtrlThread(int , string   , string   , string  _ , string ,
-                    int , bool , double , double , double , double , double , string  ,
+    reactCtrlThread(int , std::string   , std::string   , const std::string&  _ , const std::string& ,
+                    int , bool , double , double , double , double , double , std::string  ,
                     bool , bool , bool, bool , bool , bool, bool , bool , bool , bool ,
                     particleThread *, double, bool);
     // INIT
@@ -204,13 +207,9 @@ protected:
     // Flag that manages verbosity (v=1 -> more text printed out; v=2 -> even more text):
     int verbosity;
     // Name of the module (to change port names accordingly):
-    string name;
+    std::string name;
     // Name of the robot (to address the module toward icub or icubSim):
-    string robot;
-    // Which arm to use: either left_arm or right_arm
-    string part;
-    // Which arm to use as second: left_arm or right_arm or None
-    string second_part;
+    std::string robot;
     // Flag to know if the torso shall be used or not
     bool useTorso;
     // Trajectory speed (default 0.1 m/s)
@@ -224,11 +223,10 @@ protected:
     // Weight of the reaching joint rest position task (disabled if 0.0)
     double restPosWeight;
     double timeLimit;  // time limit to reach target
-    string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk"
+    std::string referenceGen; // either "uniformParticle" - constant velocity with particleThread - or "minJerk"
     bool tactileCollPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
     bool proximityCollPointsOn; //if on will be reading predicted collision points from proximity sensor
-    bool selfColPoints; // add robot body parts as the collision points to the avoidance handler
     bool gazeControl; //will follow target with gaze
     bool stiffInteraction; //stiff vs. compliant interaction mode
 
@@ -243,16 +241,16 @@ protected:
 
     particleThread  *prtclThrd;     // Pointer to the particleThread in order to access its data - if referenceGen is "uniformParticle"
     iCub::ctrl::minJerkTrajGen *minJerkTarget; //if referenceGen is "minJerk"
-    unique_ptr<ArmInterface> main_arm;
-    unique_ptr<ArmInterface> second_arm;
+    std::unique_ptr<ArmInterface> main_arm;
+    std::unique_ptr<ArmInterface> second_arm;
     int        state;        // Flag to know in which state the thread is in
 
     // Driver for "classical" interfaces
     PolyDriver       ddT;
     PolyDriver       ddG; // gaze  controller  driver
 
-    vector<int> jointsToSetPosT{0,1,2};
-    vector<int> jointsToSetPosA{0,1,2,3,4,5,6};
+    std::vector<int> jointsToSetPosT{0,1,2};
+    std::vector<int> jointsToSetPosA{0,1,2,3,4,5,6};
 
     // "Classical" interfaces for the torso
     IEncoders         *iencsT;
@@ -261,6 +259,7 @@ protected:
     IControlLimits    *ilimT;
     yarp::sig::Vector *encsT;
     int jntsT;
+    yarp::sig::Vector qT; //current values of torso joints (3, in the order expected for iKin: yaw, roll, pitch)
 
     // Gaze interface
     IGazeControl    *igaze;
@@ -276,19 +275,16 @@ protected:
 
     bool holding_position;
     bool comingHome;
-    bool tactileColAvoidance;
-
-    yarp::sig::Vector qT; //current values of torso joints (3, in the order expected for iKin: yaw, roll, pitch)
-    yarp::sig::Vector weighted_normal; // weighted collision normal
 
     // ports and files
     yarp::os::BufferedPort<yarp::os::Bottle> proximityEventsInPort; //coming from proximity sensor
+    yarp::os::BufferedPort<yarp::os::Bottle> proximityEventsVisuPort; //sending out proximity data
     yarp::os::BufferedPort<yarp::os::Bottle> aggregSkinEventsInPort; //coming from /skinEventsAggregator/skin_events_aggreg:o
     yarp::os::BufferedPort<yarp::os::Bottle> aggregPPSeventsInPort; //coming from visuoTactileRF/pps_activations_aggreg:o
     //expected format for both: (skinPart_s x y z o1 o2 o3 magnitude), with position x,y,z and normal o1 o2 o3 in link FoR
     yarp::os::Port outPort;
     yarp::os::Port movementFinishedPort;
-    ofstream fout_param; //log parameters that stay constant during the simulation, but are important for analysis - e.g. joint limits
+    std::ofstream fout_param; //log parameters that stay constant during the simulation, but are important for analysis - e.g. joint limits
     // Stamp for the setEnvelope for the ports
     yarp::os::Stamp ts;
     double t_0, t_1;
@@ -300,14 +296,13 @@ protected:
     std::unique_ptr<QPSolver> solver;
 
     VisualisationHandler visuhdl;
-    std::vector<yarp::sig::Vector> last_trajectory;
 
     /**
     * Solves the Inverse Kinematic task
      */
     int solveIK();
 
-    yarp::sig::Vector updateNextTarget();
+    yarp::sig::Vector updateNextTarget(bool&);
 
     /**** kinematic chain, control, ..... *****************************/
 
@@ -324,7 +319,7 @@ protected:
     /**
     * Sends the computed velocities or positions to the robot, depending on controlMode
     */
-    bool controlArm(const string& controlMode);
+    bool controlArm(const std::string& controlMode);
 
     /**
      * Check the state of each joint to be controlled
@@ -334,7 +329,7 @@ protected:
      * @return             true/false if success/failure
      */
     bool areJointsHealthyAndSet(std::vector<int> &jointsToSet,
-                                const string &_p, const string &_s);
+                                const std::string &_p, const std::string &_s);
 
     /**
      * Changes the control modes of the torso to either position or velocity
@@ -343,10 +338,8 @@ protected:
      * @return    true/false if success/failure
      */
     bool setCtrlModes(const std::vector<int> &jointsToSet,
-                      const string &_p, const string &_s);
+                      const std::string &_p, const std::string &_s);
 
-
-    bool stopControlAndSwitchToPositionModeHelper();
 
     bool prepareDrivers();
 
@@ -358,16 +351,16 @@ protected:
     **/
     yarp::sig::Vector  getPosMovingTargetOnCircle();
 
-    bool insertTestingCollisions();
+    void insertTestingCollisions();
 
-    bool getCollisionsFromPorts();
+    void getCollisionsFromPorts();
 
     bool preprocCollisions();
     /************************** communication through ports in/out ***********************************/
 
     void getCollPointFromPort(Bottle* bot, double gain);
 
-    bool getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, double gain);
+    void getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, double gain);
 
     /**
     * Sends useful data to a port in order to track it on matlab

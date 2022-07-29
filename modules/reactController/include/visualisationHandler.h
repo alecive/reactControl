@@ -15,14 +15,13 @@ using namespace yarp::math;
 using namespace yarp::os;
 using namespace iCub::ctrl;
 using namespace iCub::skinDynLib;
-using std::string;
 
 
 class VisualisationHandler
 {
 public:
 
-    VisualisationHandler(int _verbosity, bool _use_sim, const string& port_name, bool visuTarget, bool visuParticle);
+    VisualisationHandler(int _verbosity, bool _use_sim, const std::string& port_name, bool visuTarget, bool visuParticle);
 
     /***************** auxiliary computations  *******************************/
 
@@ -83,7 +82,7 @@ private:
     // Flag that manages verbosity (v=1 -> more text printed out; v=2 -> even more text):
     int verbosity;
     // Name of the module (to change port names accordingly):
-    string name;
+    std::string name;
 
     /**
     * Prints a message according to the verbosity level:

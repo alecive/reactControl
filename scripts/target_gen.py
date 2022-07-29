@@ -2,6 +2,7 @@
 import time
 import yarp
 import numpy as np
+import re
     
 def sampleTargetOnCircle(center, radius, res=10):
     points = []
@@ -75,9 +76,41 @@ def randomMovements(rpc_client, inport, use_cart=False, seed=0):
     print(np.array(feasible_poses))
 
 
+def streamedTargets(rpc_client, inport, use_cart=False, use_right=False, seed=0):
+    np.random.seed(seed)
+    return_to_home = False
+    x = np.round(np.arange(-0.3, -0.05, 0.1),2)
+    y = np.round(np.arange(-0.2, 0.05, 0.1),2)
+    z = np.round(np.arange(-0.05, 0.35, 0.1),2)
+    poses = np.array(np.meshgrid(x, y, z)).T.reshape(-1, 3)
+    print("Size is ", poses.shape)
+    indexes = np.random.permutation(poses.shape[0])
+    count = 0
+    for idx in indexes:
+        pos = poses[idx]
+        result = yarp.Bottle()
+        result.clear()
+        if use_cart:
+            result.addFloat64(pos[0])
+            result.addFloat64(-pos[1] if use_right else pos[1])
+            result.addFloat64(pos[2])
+            rpc_client.write(result)
+        
+        else:
+            result.addString("set_xd")
+            l = result.addList()
+            l.addFloat64(pos[0])
+            l.addFloat64(-pos[1] if use_right else pos[1])
+            l.addFloat64(pos[2])
+            send_command(rpc_client,result)
+        print(pos)
+        start = time.time()
+        while time.time()-start < 2:
+            pass
+        
+
 def classicScenario(rpc_client, inport, use_right=False):
-    poses = [[-0.299, -0.174, 0.05], [-0.299, -0.174, 0.15], [-0.299, -0.174, 0.00], [-0.299, -0.174, 0.1]]
-    #circ_poses = sampleTargetOnCircle(poses[-1], 0.08,1)
+    poses = [[-0.299, -0.174, 0.05], [-0.299, -0.174, 0.15], [-0.299, -0.174, 0.00], [-0.299, -0.174, 0.12]]
     for pos in poses:
         result = yarp.Bottle()
         result.clear()
@@ -91,6 +124,7 @@ def classicScenario(rpc_client, inport, use_right=False):
         
         while not poseStr:
             poseStr = read_once(inport)
+    
     result = yarp.Bottle()
     result.clear()
     result.addString("set_relative_circular_xd")
@@ -98,11 +132,23 @@ def classicScenario(rpc_client, inport, use_right=False):
     result.addFloat64(0.2)
         
     send_command(rpc_client,result)
-    
+    '''
+    if use_right:
+        poses[-1][1] *= -1
+    circ_poses = sampleTargetOnCircle(poses[-1], 0.08,1)
+    index = 0
+    radius = 0.08
+    frequency = 0.2
+    '''
     start = time.time()
-    #index = 0
+    pos = [0,0,0]
+    
     while time.time()-start < 60:
+        pass
         '''
+        # pos[0]=poses[-1][0]
+        # pos[1]=poses[-1][1] + radius*np.cos(2.0*np.pi*frequency*(time.time()-start));
+        # pos[2]=poses[-1][2] + radius*np.sin(2.0*np.pi*frequency*(time.time()-start));
         pos = circ_poses[index]
         index += 1
         if index == len(circ_poses):
@@ -112,16 +158,11 @@ def classicScenario(rpc_client, inport, use_right=False):
         result.addString("set_xd")
         l = result.addList()
         l.addFloat64(pos[0])
-        l.addFloat64(-pos[1] if use_right else pos[1])
+        l.addFloat64(pos[1]) # if use_right else pos[1])
         l.addFloat64(pos[2])
         send_command(rpc_client,result)
-        poseStr = None
-        
-        while not poseStr:
-            poseStr = read_once(inport)
+        yarp.delay(0.1)
         '''
-        pass
-        
     result = yarp.Bottle()
     result.clear()
     result.addString("stop")
@@ -182,9 +223,15 @@ def read_once(inport):
 
 if __name__=="__main__": 
     yarp.Network.init() # Initialise YARP
-     
+    conf = open('../app/conf/reactController.ini')
+    for line in conf.readlines(): 
+        if (line.startswith('part')):
+            part = re.findall(r"(?<=\()\w+", line)[0]
+            break
+
+    conf.close()
     use_cart = False
-    use_right = False
+    use_right = (part == "right")
     port_name = "/testCart/target:i" if use_cart else "/reactController/rpc:i"
     port_name2 = "/testCart/finished:o" if use_cart else "/reactController/finished:o" 
     
@@ -200,6 +247,7 @@ if __name__=="__main__":
     
 
    # randomMovements(outPort, inport, use_cart, 0)
+   # streamedTargets(outPort, inport, use_cart, use_right, 10)
     classicScenario(outPort, inport, use_right)
    # visualScenario(outPort, inport, use_right)
 

@@ -35,7 +35,7 @@ class AvoidanceHandlerAbstract
 public:
     AvoidanceHandlerAbstract(iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
                              iCub::iKin::iKinChain* _secondChain, bool _useSelfColPoints, const std::string& _part,
-                             unsigned int _verbosity=0);
+                             yarp::sig::Vector* data, unsigned int _verbosity=0);
     
     std::string getType() const { return type; }
 
@@ -45,7 +45,7 @@ public:
     
     std::deque<yarp::sig::Vector> getCtrlPointsPosition();
     
-    virtual yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim, yarp::sig::Vector &normal) { return v_lim; }
+    virtual yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim, bool&  /*velLimited*/) { return v_lim; }
     
     virtual ~AvoidanceHandlerAbstract() { ctrlPointChains.clear(); }
 
@@ -86,9 +86,9 @@ class AvoidanceHandlerTactile : public virtual AvoidanceHandlerAbstract
 public:
     AvoidanceHandlerTactile(iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
                             iCub::iKin::iKinChain* _secondChain, bool _useSelfColPoints, const std::string& _part,
-                            unsigned int _verbosity=0);
+                            yarp::sig::Vector* data, unsigned int _verbosity=0);
     void setParameters(const yarp::os::Property &params) override;
-    yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim, yarp::sig::Vector &normal) override;
+    yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim, bool& velLimited) override;
 
 protected:
     double avoidingSpeed;
