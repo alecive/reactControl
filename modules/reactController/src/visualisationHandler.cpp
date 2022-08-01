@@ -286,11 +286,11 @@ void VisualisationHandler::moveBox(int index, const Vector &pos)
     portToSimWorld.write(cmd);
 }
 
-void VisualisationHandler::showCollisionPointsInSim(iCub::iKin::iCubArm& arm,
-                                                    const std::vector<collisionPoint_t>& collisionPoints,
+void VisualisationHandler::showCollisionPointsInSim(iCub::iKin::iCubArm& arm, const std::vector<collisionPoint_t>& colPoints,
+                                                    iCub::iKin::iCubArm* second_arm, const std::vector<collisionPoint_t>& colPoints2,
                                                     const std::vector<Vector>& selfColPoints)
 {
-    size_t nrCollisionPoints = collisionPoints.size()+selfColPoints.size();
+    size_t nrCollisionPoints = colPoints.size() + colPoints2.size() +selfColPoints.size();
     Vector pos(3,0.0);
     if (nrCollisionPoints > collisionPointsVisualizedCount)
     {
@@ -308,15 +308,28 @@ void VisualisationHandler::showCollisionPointsInSim(iCub::iKin::iCubArm& arm,
     int j=1;
     Vector posRoot(3,0.0);
     Vector posSim(3,0.0);
-    for(const auto & collisionPoint : collisionPoints)
+    for(const auto & collisionPoint : colPoints)
     {
         convertPosFromLinkToRootFoR(arm, collisionPoint.x,collisionPoint.skin_part,posRoot);
+        sendiCubGuiObject("particle", posRoot);
         convertPosFromRootToSimFoR(posRoot,posSim);
         moveBox(j,posSim); //just move a box from the sim world
         j++;
         posRoot.zero(); posSim.zero();
     }
 
+    if (second_arm)
+    {
+        for(const auto & collisionPoint : colPoints2)
+        {
+            convertPosFromLinkToRootFoR(*second_arm, collisionPoint.x,collisionPoint.skin_part,posRoot);
+            sendiCubGuiObject("particle", posRoot);
+            convertPosFromRootToSimFoR(posRoot,posSim);
+            moveBox(j,posSim); //just move a box from the sim world
+            j++;
+            posRoot.zero(); posSim.zero();
+        }
+    }
 
     for(const auto & collisionPoint : selfColPoints)
     {

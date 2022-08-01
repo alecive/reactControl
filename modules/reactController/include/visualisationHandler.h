@@ -52,7 +52,8 @@ public:
 
     void moveBox(int index, const yarp::sig::Vector &pos);
 
-    void showCollisionPointsInSim(iCub::iKin::iCubArm& arm, const std::vector<collisionPoint_t>& collisionPoints,
+    void showCollisionPointsInSim(iCub::iKin::iCubArm& arm, const std::vector<collisionPoint_t>& colPoints,
+                                  iCub::iKin::iCubArm* second_arm, const std::vector<collisionPoint_t>& colPoints2,
                                   const std::vector<Vector>& selfColPoints);
 
     void visualizeObjects(const Vector& x_d, const Vector& x_n);

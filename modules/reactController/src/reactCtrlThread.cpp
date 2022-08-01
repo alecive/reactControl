@@ -580,7 +580,9 @@ void reactCtrlThread::getCollisionsFromPorts()
     if (visualizeCollisionPointsInSim)
     {
         printMessage(5,"[reactCtrlThread::run()] will visualize collision points in simulator.\n");
-        visuhdl.showCollisionPointsInSim(*main_arm->arm, main_arm->collisionPoints, main_arm->avhdl->getSelfColPointsTorso());
+        visuhdl.showCollisionPointsInSim(*main_arm->arm, main_arm->collisionPoints, second_arm? second_arm->arm:nullptr,
+                                         second_arm? second_arm->collisionPoints : std::vector<collisionPoint_t>{},
+                                         main_arm->avhdl->getSelfColPointsTorso());
     }
 }
 
@@ -628,6 +630,16 @@ void reactCtrlThread::run()
         }
     }
 
+//    getCollisionsFromPorts();
+//    bool v = false;
+//    main_arm->vLimAdapted=main_arm->avhdl->getVLIM(CTRL_DEG2RAD * main_arm->vLimNominal, v) * CTRL_RAD2DEG;
+//    second_arm->vLimAdapted=second_arm->avhdl->getVLIM(CTRL_DEG2RAD * second_arm->vLimNominal, v) * CTRL_RAD2DEG;
+//    if (v)
+//    {
+//        yDebug("main_arm->vLimAdapted = \n%s\n\n",main_arm->vLimAdapted.transposed().toString(3,3).c_str());
+//        yDebug("second_arm->vLimAdapted = \n%s\n",second_arm->vLimAdapted.transposed().toString(3,3).c_str());
+//    }
+ //   preprocCollisions();
     switch (state)
     {
     case STATE_WAIT:
@@ -1227,10 +1239,6 @@ void reactCtrlThread::getCollPointFromPort(Bottle* bot, double gain)
         collPoint.skin_part = sp;
         collPoint.x = {bot->get(1).asFloat64(), bot->get(2).asFloat64(), bot->get(3).asFloat64()};
         collPoint.n = {bot->get(4).asFloat64(), bot->get(5).asFloat64(), bot->get(6).asFloat64()};
-        if (sp == SKIN_FRONT_TORSO) // normal direction from torso skin is wrong
-        {
-            collPoint.n(0) *= -1;
-        }
         collPoint.magnitude = bot->get(13).asFloat64() * gain;
         ArmInterface* arm_ptr;
         if ((main_arm->part_short == "left" && SkinPart_2_BodyPart[sp].body == RIGHT_ARM) ||
@@ -1267,42 +1275,66 @@ void reactCtrlThread::sendData()
         yarp::os::Bottle b;
         b.clear();
 
-        //col 1
+        //col 1-4
         b.addInt32(static_cast<int>(main_arm->chainActiveDOF));
-        //position
-        //cols 2-4: the desired final target (for end-effector)
-        vectorIntoBottle(main_arm->x_d,b);
-        // 5:7 the end effector position in which the robot currently is
-        vectorIntoBottle(main_arm->x_t,b);
-        // 8:10 the current desired target given by the reference generation (particle / minJerk) (for end-effector)
-        vectorIntoBottle(main_arm->x_n,b);
-
-        //orientation
-        //cols 11-13: the desired final orientation (for end-effector)
-        vectorIntoBottle(main_arm->o_d,b);
-        // 14:16 the end effector orientation in which the robot currently is
-        vectorIntoBottle(main_arm->o_t,b);
-        // 17:19 the current desired orientation given by referenceGen (currently not supported - equal to o_d)
-        vectorIntoBottle(main_arm->o_n,b);
-
-        //variable - if torso on: 20:29: joint velocities as solution to control and sent to robot
-        vectorIntoBottle(main_arm->q_dot,b);
-        //variable - if torso on: 30:39: actual joint positions
-        vectorIntoBottle(main_arm->q,b);
-        //variable - if torso on: 40:59; joint vel limits as input to ipopt, after avoidanceHandler,
-        matrixIntoBottle(main_arm->vLimAdapted,b); // assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
         b.addInt32(solverExitCode);
         b.addFloat64(timeToSolveProblem_s);
-        //joint pos from virtual chain IPopt is operating onl variable - if torso on: 60:69
+        b.addInt32(main_arm->avoidance);
+
+        //position
+        //cols 5-7: the desired final target (for end-effector)
+        vectorIntoBottle(main_arm->x_d,b);
+        // 8:10 the end effector position in which the robot currently is
+        vectorIntoBottle(main_arm->x_t,b);
+        // 11:13 the current desired target given by the reference generation (particle / minJerk) (for end-effector)
+        vectorIntoBottle(main_arm->x_n,b);
+        //orientation
+        //cols 14-16: the desired final orientation (for end-effector)
+        vectorIntoBottle(main_arm->o_d,b);
+        // 17:19 the end effector orientation in which the robot currently is
+        vectorIntoBottle(main_arm->o_t,b);
+        // 20:22 the current desired orientation given by referenceGen (currently not supported - equal to o_d)
+        vectorIntoBottle(main_arm->o_n,b);
+
+        //variable - if torso on: 23:32: joint velocities as solution to control and sent to robot
+        vectorIntoBottle(main_arm->q_dot,b);
+        //variable - if torso on: 33:42: actual joint positions
+        vectorIntoBottle(main_arm->q,b);
+        //joint pos from virtual chain IPopt is operating onl variable - if torso on: 43:52
         vectorIntoBottle(main_arm->qIntegrated,b);
+        //variable - if torso on: 53:72; joint vel limits as input to QP, after avoidanceHandler,
+        matrixIntoBottle(main_arm->vLimAdapted,b); // assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
+        
+        if (second_arm)
+        {
+            // col 73-74
+            b.addInt32(static_cast<int>(second_arm->chainActiveDOF));
+            b.addInt32(second_arm->avoidance);
 
-        //TODO - remove and update indexes - desired elbow position; variable - if torso on and positionDirect: 70:72 ;
-        Vector elbow_d(3,0.0);
-        vectorIntoBottle( elbow_d , b);
+            //position
+            //cols 75-77: the desired final target (for end-effector)
+            vectorIntoBottle(second_arm->x_d,b);
+            // 78:80 the end effector position in which the robot currently is
+            vectorIntoBottle(second_arm->x_t,b);
+            // 81:83 the current desired target given by the reference generation (particle / minJerk) (for end-effector)
+            vectorIntoBottle(second_arm->x_n,b);
+            //orientation
+            //cols 84-86: the desired final orientation (for end-effector)
+            vectorIntoBottle(second_arm->o_d,b);
+            // 87:89 the end effector orientation in which the robot currently is
+            vectorIntoBottle(second_arm->o_t,b);
+            // 90:92 the current desired orientation given by referenceGen (currently not supported - equal to o_d)
+            vectorIntoBottle(second_arm->o_n,b);
 
-        //actual elbow position on real chain; variable - if torso on and positionDirect: 73:75 ;
-        vectorIntoBottle( (*(main_arm->arm->asChain())).getH((*(main_arm->arm->asChain())).getDOF()-4-1).getCol(3).subVector(0,2) , b);
-
+            //variable - if torso on: 93:102 joint velocities as solution to control and sent to robot
+            vectorIntoBottle(second_arm->q_dot,b);
+            //variable - if torso on: 103:112 actual joint positions
+            vectorIntoBottle(second_arm->q,b);
+            //joint pos from virtual chain IPopt is operating onl variable - if torso on: 113:122
+            vectorIntoBottle(second_arm->qIntegrated,b);
+            //variable - if torso on: 123:142; joint vel limits as input to QP, after avoidanceHandler,
+            matrixIntoBottle(second_arm->vLimAdapted,b); // assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
+        }
         outPort.setEnvelope(ts);
         outPort.write(b);
     }

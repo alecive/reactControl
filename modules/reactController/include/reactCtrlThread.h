@@ -71,7 +71,7 @@ struct ArmInterface
     std::vector<int> jointsToSetInteractionA;
 
     size_t chainActiveDOF;
-    //parallel virtual arm and chain on which ipopt will be working in the positionDirect mode case
+    //parallel virtual arm and chain on which QP will be working in the positionDirect mode case
     iCub::iKin::iCubArm    *virtualArm;
 
     yarp::sig::Vector x_0;  // Initial end-effector position
@@ -214,7 +214,7 @@ protected:
     bool useTorso;
     // Trajectory speed (default 0.1 m/s)
     double trajSpeed;
-    // Tolerance of the ipopt task. The solver exits if norm2(x_d-x)<tol.
+    // Tolerance of the QP task. The solver exits if norm2(x_d-x)<tol.
     double tol;
     // Global tolerance of the task. The controller exits if norm(x_d-x)<globalTol
     double globalTol;
@@ -292,7 +292,7 @@ protected:
 
     // QPSolver STUFF
     int solverExitCode;
-    double timeToSolveProblem_s; //time taken by q_dot = solveIK(solverExitCode) ~ ipopt + avoidance handler
+    double timeToSolveProblem_s; //time taken by q_dot = solveIK(solverExitCode)
     std::unique_ptr<QPSolver> solver;
 
     VisualisationHandler visuhdl;
