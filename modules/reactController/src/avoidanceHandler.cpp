@@ -228,7 +228,7 @@ void AvoidanceHandlerAbstract::checkSelfCollisions()
                     Vector n = pos.subVector(0, 2) - selfControlPoints[k][nearest];
                     cp.n = n / yarp::math::norm(n);
                     totalColPoints.push_back(cp);
-                    yDebug("colPoint %d with pos = %s and dist = %.3f\n", index, cp.x.toString().c_str(), neardist);
+                    yDebug("colPoint %d with pos = %s and dist = %.3f for k = %d and j = %d\n", index, cp.x.toString().c_str(), neardist, k,j);
                 }
                 index++;
             }
@@ -245,7 +245,7 @@ AvoidanceHandlerTactile::AvoidanceHandlerTactile(iCub::iKin::iKinChain &_chain,c
                                  _useSelfColPoints, _part, data, _verbosity)
 {
     type="tactile";
-    avoidingSpeed = 0.5;  // produce collisionPoint.magnitude * avoidingSpeed rad/s repulsive speed
+    avoidingSpeed = 1;  // produce collisionPoint.magnitude * avoidingSpeed rad/s repulsive speed
 
     parameters.unput("avoidingSpeed");
     parameters.put("avoidingSpeed",avoidingSpeed);

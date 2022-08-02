@@ -19,9 +19,9 @@ using namespace iCub::iKin;
 struct ArmHelper
 {
     iCubArm *arm;
-    Vector q0,v0, p0, rest_jnt_pos, rest_w; //, normal;
-    Matrix v_lim, H0, J0, bounds;
-    Vector pr, v_des, manip;
+    Vector q0, v0, rest_jnt_pos, rest_w; //, normal;
+    Matrix v_lim, J0, bounds;
+    Vector v_des, manip;
     double adapt_w5, dt, vmax, manip_thr;
     Vector qGuardMinExt, qGuardMinInt, qGuardMaxExt, qGuardMaxInt;
     int chain_dof, offset, vars_offset, constr_offset;
@@ -47,7 +47,6 @@ struct ArmHelper
 class QPSolver
 {
     std::unique_ptr<ArmHelper> main_arm, second_arm;
-    bool hitting_constraints;
     double dt, w1, w2, w3, w4, w5, min_type, orig_w2;
     int vars_offset, constr_offset;
 

@@ -19,7 +19,6 @@
 
 #include "reactCtrlThread.h"
 
-
 #define TACTILE_INPUT_GAIN 1.5
 #define VISUAL_INPUT_GAIN 1
 #define PROXIMITY_INPUT_GAIN 1
@@ -74,13 +73,15 @@ ArmInterface::ArmInterface(std::string _part, bool _selfColPoints): I(nullptr), 
     // x_home = pose.subVector(0,2);
     // o_home = pose.subVector(3,5)*pose(6);
     x_home = (part_short == "left")? Vector{-0.304, -0.202, 0.023}:Vector{-0.304, 0.202, 0.023};
-    o_home = (part_short == "left")? Vector{-0.071, 1.710, -2.264}:Vector{-0.470, -2.440, 1.843};
+    o_home = (part_short == "left")? Vector{-0.025, 0.603, -0.798, 2.838}:Vector{-0.152, -0.789, 0.596, 3.094};
 
     //palm facing inwards
-    o_0.resize(3,0.0);  o_0(1)=-0.707*M_PI;     o_0(2)=+0.707*M_PI;
-    o_t.resize(3,0.0);  o_t(1)=-0.707*M_PI;     o_t(2)=+0.707*M_PI;
-    o_n.resize(3,0.0);  o_n(1)=-0.707*M_PI;     o_n(2)=+0.707*M_PI;
-    o_d.resize(3,0.0);  o_d(1)=-0.707*M_PI;     o_d(2)=+0.707*M_PI;
+    o_0.resize(4,0.0); o_0(1)=-0.707; o_0(2)=+0.707; o_0(3) = M_PI;
+    //palm facing down
+    o_0 = (part_short == "right")? Vector{0.0, 1.0, 0.0, -0.95*M_PI} : Vector{0.0, 0.0, 1.0, M_PI};
+    o_t = o_0;
+    o_n = o_0;
+    o_d = o_0;
 
     virtualArm = new iCubArm(*arm);  //Creates a new Limb from an already existing Limb object - but they will be too independent limbs from now on
 }
@@ -211,7 +212,7 @@ void ArmInterface::updateArm(const Vector& qT)
     q.setSubvector(NR_TORSO_JOINTS,qA);
     arm->setAng(q*CTRL_DEG2RAD);
     x_t = arm->EndEffPosition();
-    o_t = arm->EndEffPose().subVector(3,5)*arm->EndEffPose()[6];
+    o_t = arm->EndEffPose().subVector(3,6);
 }
 
 bool ArmInterface::alignJointsBound(IControlLimits* ilimT)
@@ -369,6 +370,8 @@ bool reactCtrlThread::threadInit()
     printMessage(5,"[reactCtrlThread] threadInit() finished.\n");
     yarp::os::Time::delay(0.2);
     t_1=Time::now();
+    filter = new LPFilterSO3(main_arm->o_home, dT, 1.);
+
     return true;
 }
 
@@ -376,24 +379,25 @@ void reactCtrlThread::writeConfigData()
 {
     fout_param.open("param.log");
 
-    fout_param<<main_arm->part_short<<" "<<second_arm->part_short<<" "<<main_arm->chainActiveDOF<<" ";
-    fout_param<<second_arm->chainActiveDOF<<" "<<main_arm->useSelfColPoints<<" "<<second_arm->useSelfColPoints<<" ";
+    fout_param<<main_arm->part_short<<" "<<main_arm->chainActiveDOF<<" "<<main_arm->useSelfColPoints<<" ";
     for (size_t i=0; i<main_arm->chainActiveDOF; i++)
     {
         fout_param<<main_arm->lim(i,0)<<" "<<main_arm->lim(i,1)<<" ";
     }
-    for (size_t j=0; j<second_arm->chainActiveDOF; j++)
-    {
-        fout_param<<second_arm->lim(j,0)<<" "<< second_arm->lim(j,1)<<" ";
-    }
     fout_param<<vMax<<" "<<trajSpeed<<" "<<tol<<" "<<globalTol<<" "<<dT<<" "<<timeLimit<<" "<<stiffInteraction<<" ";
     fout_param<<tactileCollPointsOn<< " "<<visualCollPointsOn<<" "<<proximityCollPointsOn<<" ";
-    fout_param<<hittingConstraints<<" "<<restPosWeight<<" "<<orientationControl<<" "<<gazeControl;
+    fout_param<<hittingConstraints<<" "<<restPosWeight<<" "<<orientationControl<<" "<<gazeControl<<" ";
+    if (second_arm)
+    {
+        fout_param<<second_arm->part_short<<" "<<second_arm->chainActiveDOF<<" "<<second_arm->useSelfColPoints<<" ";
+        for (size_t j = 0; j < second_arm->chainActiveDOF; j++)
+        {
+            fout_param << second_arm->lim(j, 0) << " " << second_arm->lim(j, 1) << " ";
+        }
+    }
     fout_param<<std::endl;
-
     yInfo("Written to param file and closing..");
     fout_param.close();
-
 }
 
 bool reactCtrlThread::prepareDrivers()
@@ -601,7 +605,7 @@ yarp::sig::Vector reactCtrlThread::updateNextTarget(bool& vel_limited)
         minJerkTarget->computeNextValues(main_arm->x_d);
         next_x = minJerkTarget->getPos();
     }
-
+    main_arm->o_n = filter->next_value(main_arm->o_d);
     vel_limited = vel_limited | main_arm->checkRecoveryPath(next_x);
 
     if (second_arm)
@@ -630,16 +634,6 @@ void reactCtrlThread::run()
         }
     }
 
-//    getCollisionsFromPorts();
-//    bool v = false;
-//    main_arm->vLimAdapted=main_arm->avhdl->getVLIM(CTRL_DEG2RAD * main_arm->vLimNominal, v) * CTRL_RAD2DEG;
-//    second_arm->vLimAdapted=second_arm->avhdl->getVLIM(CTRL_DEG2RAD * second_arm->vLimNominal, v) * CTRL_RAD2DEG;
-//    if (v)
-//    {
-//        yDebug("main_arm->vLimAdapted = \n%s\n\n",main_arm->vLimAdapted.transposed().toString(3,3).c_str());
-//        yDebug("second_arm->vLimAdapted = \n%s\n",second_arm->vLimAdapted.transposed().toString(3,3).c_str());
-//    }
- //   preprocCollisions();
     switch (state)
     {
     case STATE_WAIT:
@@ -777,6 +771,7 @@ void reactCtrlThread::threadRelease()
         delete minJerkTarget;
         minJerkTarget = nullptr;
     }
+    delete filter; filter = nullptr;
 
     yInfo("Closing ports..");
     aggregPPSeventsInPort.interrupt();
@@ -885,6 +880,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
             double T = norm(main_arm->x_d - main_arm->x_0)  / trajSpeed;
             minJerkTarget->setT(std::ceil(T * 10.0) / 10.0);
         }
+        filter->reset(main_arm->o_t,1.);
 
         yInfo("[reactCtrlThread] got new target: x_0: %s",main_arm->x_0.toString(3,3).c_str());
         yInfo("[reactCtrlThread]                 x_d: %s",main_arm->x_d.toString(3,3).c_str());
@@ -951,7 +947,7 @@ int reactCtrlThread::solveIK()
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.
 
-    Vector xr(6,0.0);
+    Vector xr(7,0.0);
     xr.setSubvector(0,main_arm->x_n);
     xr.setSubvector(3,main_arm->o_n);
     int count = 0;
@@ -960,7 +956,7 @@ int reactCtrlThread::solveIK()
     if (second_arm)
     {
         dim += second_arm->chainActiveDOF-NR_TORSO_JOINTS;
-        Vector xr2(6,0.0);
+        Vector xr2(7,0.0);
         xr2.setSubvector(0, second_arm->x_n);
         xr2.setSubvector(3, second_arm->o_d);
         solver->init(xr, main_arm->q_dot, main_arm->vLimAdapted, comingHome? 10:restPosWeight, xr2, second_arm->q_dot, second_arm->vLimAdapted);
@@ -1289,50 +1285,50 @@ void reactCtrlThread::sendData()
         // 11:13 the current desired target given by the reference generation (particle / minJerk) (for end-effector)
         vectorIntoBottle(main_arm->x_n,b);
         //orientation
-        //cols 14-16: the desired final orientation (for end-effector)
+        //cols 14-17: the desired final orientation (for end-effector)
         vectorIntoBottle(main_arm->o_d,b);
-        // 17:19 the end effector orientation in which the robot currently is
+        // 18:21 the end effector orientation in which the robot currently is
         vectorIntoBottle(main_arm->o_t,b);
-        // 20:22 the current desired orientation given by referenceGen (currently not supported - equal to o_d)
+        // 22:25 the current desired orientation given by referenceGen (currently not supported - equal to o_d)
         vectorIntoBottle(main_arm->o_n,b);
 
-        //variable - if torso on: 23:32: joint velocities as solution to control and sent to robot
+        //variable - if torso on: 26:35: joint velocities as solution to control and sent to robot
         vectorIntoBottle(main_arm->q_dot,b);
-        //variable - if torso on: 33:42: actual joint positions
+        //variable - if torso on: 36:45: actual joint positions
         vectorIntoBottle(main_arm->q,b);
-        //joint pos from virtual chain IPopt is operating onl variable - if torso on: 43:52
+        //joint pos from virtual chain IPopt is operating onl variable - if torso on: 46:55
         vectorIntoBottle(main_arm->qIntegrated,b);
-        //variable - if torso on: 53:72; joint vel limits as input to QP, after avoidanceHandler,
+        //variable - if torso on: 56:75; joint vel limits as input to QP, after avoidanceHandler,
         matrixIntoBottle(main_arm->vLimAdapted,b); // assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
-        
+
         if (second_arm)
         {
-            // col 73-74
+            // col 76-77
             b.addInt32(static_cast<int>(second_arm->chainActiveDOF));
             b.addInt32(second_arm->avoidance);
 
             //position
-            //cols 75-77: the desired final target (for end-effector)
+            //cols 78-80: the desired final target (for end-effector)
             vectorIntoBottle(second_arm->x_d,b);
-            // 78:80 the end effector position in which the robot currently is
+            // 81:83 the end effector position in which the robot currently is
             vectorIntoBottle(second_arm->x_t,b);
-            // 81:83 the current desired target given by the reference generation (particle / minJerk) (for end-effector)
+            // 84:86 the current desired target given by the reference generation (particle / minJerk) (for end-effector)
             vectorIntoBottle(second_arm->x_n,b);
             //orientation
-            //cols 84-86: the desired final orientation (for end-effector)
+            //cols 87-90: the desired final orientation (for end-effector)
             vectorIntoBottle(second_arm->o_d,b);
-            // 87:89 the end effector orientation in which the robot currently is
+            // 91:94 the end effector orientation in which the robot currently is
             vectorIntoBottle(second_arm->o_t,b);
-            // 90:92 the current desired orientation given by referenceGen (currently not supported - equal to o_d)
+            // 95:98 the current desired orientation given by referenceGen (currently not supported - equal to o_d)
             vectorIntoBottle(second_arm->o_n,b);
 
-            //variable - if torso on: 93:102 joint velocities as solution to control and sent to robot
+            //variable - if torso on: 99:108 joint velocities as solution to control and sent to robot
             vectorIntoBottle(second_arm->q_dot,b);
-            //variable - if torso on: 103:112 actual joint positions
+            //variable - if torso on: 109:118 actual joint positions
             vectorIntoBottle(second_arm->q,b);
-            //joint pos from virtual chain IPopt is operating onl variable - if torso on: 113:122
+            //joint pos from virtual chain IPopt is operating onl variable - if torso on: 119:128
             vectorIntoBottle(second_arm->qIntegrated,b);
-            //variable - if torso on: 123:142; joint vel limits as input to QP, after avoidanceHandler,
+            //variable - if torso on: 129:148; joint vel limits as input to QP, after avoidanceHandler,
             matrixIntoBottle(second_arm->vLimAdapted,b); // assuming it is row by row, so min_1, max_1, min_2, max_2 etc.
         }
         outPort.setEnvelope(ts);

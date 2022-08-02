@@ -27,6 +27,10 @@
 
 #include <iCub/ctrl/minJerkCtrl.h>
 #include <fstream>
+#include <Eigen/Dense>
+#include <unsupported/Eigen/MatrixFunctions>
+#include <utility>
+
 
 #include "reactOSQP.h"
 #include "particleThread.h"
@@ -44,6 +48,60 @@ using namespace iCub::skinDynLib;
 #define NR_ARM_JOINTS 7
 #define NR_ARM_JOINTS_FOR_INTERACTION_MODE 5
 #define NR_TORSO_JOINTS 3
+
+class LPFilterSO3
+{
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    LPFilterSO3(const Vector& _start, double _ts, double T=1.) : ts_(_ts), T_(T), alpha_(0)
+    {
+        state_ = axisAngleToMatrix(_start);
+    }
+
+    Vector next_value(const Vector& final_state)
+    {
+        alpha_ += ts_/T_;
+        if (alpha_ >= 1) return final_state;
+        auto final = axisAngleToMatrix(final_state);
+        Eigen::AngleAxisd error(final * state_.transpose());
+        if (error.angle() < 0.1) return final_state;
+        auto res = Eigen::AngleAxisd(step(((error.axis() * error.angle()).array() * alpha_).matrix()));
+        return Vector{res.axis().x(), res.axis().y(), res.axis().z(), res.angle()};
+    }
+
+    void reset(const Vector& _start, double T=1.)
+    {
+        state_ = axisAngleToMatrix(_start);
+        alpha_ = 0;
+        T_ = T;
+    }
+
+private:
+    Eigen::Matrix3d step(const Eigen::Vector3d& twist)
+    {
+        Eigen::Matrix3d skew;
+        skew << 0, -twist[2], twist[1],
+            twist[2], 0, -twist[0],
+            -twist[1], twist[0], 0;
+        return skew.exp() * state_;
+    }
+
+    Eigen::Matrix3d axisAngleToMatrix(const Vector& state)
+    {
+        auto mat = axis2dcm(state);
+        Eigen::Matrix3d final;
+        final << mat(0,0), mat(0,1), mat(0,2),
+            mat(1,0), mat(1,1), mat(1,2),
+            mat(2,0), mat(2,1), mat(2,2);
+        return final;
+    }
+
+    double alpha_;
+    Eigen::Matrix3d state_;
+    double ts_, T_;
+};
+
 
 struct ArmInterface
 {
@@ -241,6 +299,7 @@ protected:
 
     particleThread  *prtclThrd;     // Pointer to the particleThread in order to access its data - if referenceGen is "uniformParticle"
     iCub::ctrl::minJerkTrajGen *minJerkTarget; //if referenceGen is "minJerk"
+    LPFilterSO3 *filter;
     std::unique_ptr<ArmInterface> main_arm;
     std::unique_ptr<ArmInterface> second_arm;
     int        state;        // Flag to know in which state the thread is in

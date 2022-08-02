@@ -10,17 +10,17 @@ ArmHelper::ArmHelper(iCubArm *chain_, double dt_, int offset_,  double vmax_, do
         hitting_constraints(hitting_constr_), vars_offset(vars_offset_), constr_offset(constr_offset_)
 {
     chain_dof = static_cast<int>(arm->getDOF())-offset;
-    pr.resize(3, 0.0);
-    v0.resize(chain_dof, 0.0); // v=v0;
+    v0.resize(chain_dof, 0.0);
     v_lim.resize(chain_dof, 2);
     manip.resize(chain_dof);
     rest_w = {1, 1, 1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
+    J0 = arm->GeoJacobian();
     computeGuard();
 }
 
 void ArmHelper::init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim)
 {
-    yAssert(6 <= _xr.length());
+    yAssert(7 <= _xr.length());
     yAssert(v0.length() == _v0.length());
     yAssert((v_lim.rows() == _v_lim.rows()) && (v_lim.cols() == _v_lim.cols()));
     for (int r=0; r < _v_lim.rows(); r++)
@@ -30,15 +30,10 @@ void ArmHelper::init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim)
     v_lim= CTRL_DEG2RAD * _v_lim;
     v0= CTRL_DEG2RAD * _v0;
     q0=arm->getAng();
-    H0=arm->getH();
-    p0=H0.getCol(3).subVector(0,2);
-    pr=_xr.subVector(0, 2);
-    Vector ang=_xr.subVector(3,5);
-    double ang_mag=norm(ang);
-    if (ang_mag>0.0)  ang/=ang_mag;
-
-    ang.push_back(ang_mag);
-
+    Matrix H0=arm->getH();
+    Vector p0=H0.getCol(3).subVector(0,2);
+    Vector pr=_xr.subVector(0, 2);
+    Vector ang=_xr.subVector(3,6);
     Matrix R = axis2dcm(ang).submatrix(0,2,0,2)*H0.submatrix(0,2,0,2).transposed();
     v_des.resize(6,0);
     v_des.setSubvector(0, (pr-p0) / dt);
@@ -195,20 +190,30 @@ void ArmHelper::addConstraints(Eigen::SparseMatrix<double>& linearMatrix) const
         linearMatrix.insert(chain_dof + 12 + 5 + constr_offset, 3 + vars_offset) = elb_m * dt;
         linearMatrix.insert(chain_dof + 12 + 5 + constr_offset, 4 + vars_offset) = dt;
     }
+
+    for (int i = 0; i < 6; ++i)
+    {
+        linearMatrix.insert(i + constr_offset + chain_dof + 6, 0) = J0(i, 0);
+        linearMatrix.insert(i + constr_offset + chain_dof + 6, 2) = J0(i, 2);
+        for (int j = 3; j < chain_dof+offset; ++j)
+        {
+            linearMatrix.insert(i + constr_offset + chain_dof + 6, j - offset + vars_offset) = J0(i, j);
+        }
+    }
 }
 
 //public:
 /****************************************************************/
 QPSolver::QPSolver(iCubArm *chain_, bool hitConstr, iCubArm* second_chain_, double vmax_, bool orientationControl_,
                              double dT_, const Vector& restPos, double restPosWeight_) :
-        second_arm(nullptr), hitting_constraints(hitConstr), dt(dT_), w1(1), w2(restPosWeight_),
+        second_arm(nullptr), dt(dT_), w1(1), w2(restPosWeight_),
         orig_w2(restPosWeight_), w3(10), w4(1), w5(0),  min_type(0)
 {
     double manip_thr = 0.03;
     main_arm = std::make_unique<ArmHelper>(chain_, dt, 0, vmax_*CTRL_DEG2RAD, manip_thr, restPos, hitConstr);
 
     vars_offset = main_arm->chain_dof + 6;
-    constr_offset = main_arm->chain_dof + 12 + 3 + hitting_constraints * 3;
+    constr_offset = main_arm->chain_dof + 12 + 3 + hitConstr * 3;
     second_arm = second_chain_ ? std::make_unique<ArmHelper>(second_chain_, dt, 3, vmax_*CTRL_DEG2RAD, manip_thr,restPos,
                                                         hitConstr,vars_offset, constr_offset) : nullptr;
     if (!orientationControl_) w4 = 0;
@@ -217,7 +222,7 @@ QPSolver::QPSolver(iCubArm *chain_, bool hitConstr, iCubArm* second_chain_, doub
     if (second_arm)
     {
         vars += second_arm->chain_dof + 6;
-        constr += 6 + second_arm->chain_dof + 6 + 3 + hitting_constraints * 3;
+        constr += 6 + second_arm->chain_dof + 6 + 3 + hitConstr * 3;
     }
     hessian.resize(vars, vars);
     set_hessian();
@@ -228,34 +233,9 @@ QPSolver::QPSolver(iCubArm *chain_, bool hitConstr, iCubArm* second_chain_, doub
     upperBound.resize(constr);
     upperBound.setZero();
     linearMatrix.resize(constr, vars);
+
     main_arm->addConstraints(linearMatrix);
-
-    main_arm->J0 = main_arm->arm->GeoJacobian();
-    for (int i = 0; i < 6; ++i)
-    {
-        for (int j = 0; j < main_arm->chain_dof; ++j)
-        {
-            if (main_arm->chain_dof != 10 || j != 1)
-            {
-                linearMatrix.insert(i + main_arm->chain_dof + 6, j) = main_arm->J0(i, j);
-            }
-        }
-    }
-
-    if (second_arm != nullptr)
-    {
-        second_arm->addConstraints(linearMatrix);
-        second_arm->J0 = second_arm->arm->GeoJacobian();
-        for (int i = 0; i < 6; ++i)
-        {
-            linearMatrix.insert(i + constr_offset + second_arm->chain_dof + 6, 0) = second_arm->J0(i, 0);
-            linearMatrix.insert(i + constr_offset + second_arm->chain_dof + 6, 2) = second_arm->J0(i, 2);
-            for (int j = 0; j < second_arm->chain_dof; ++j)
-            {
-                linearMatrix.insert(i + constr_offset + second_arm->chain_dof + 6, j + vars_offset) = second_arm->J0(i, j + 3);
-            }
-        }
-    }
+    if (second_arm != nullptr) second_arm->addConstraints(linearMatrix);
 
     solver.data()->setNumberOfVariables(vars);
     solver.data()->setNumberOfConstraints(constr); // hiting_constraints*6
