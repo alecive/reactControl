@@ -162,6 +162,7 @@ struct ArmInterface
     std::vector<yarp::sig::Vector> last_trajectory;
     bool avoidance;
     bool useSelfColPoints;
+    int notMovingCounter;
 
     explicit ArmInterface(std::string _part, bool _selfColPoints);
     void setVMax(bool useTorso, double vMax);

@@ -32,7 +32,7 @@ ArmInterface::ArmInterface(std::string _part, bool _selfColPoints): I(nullptr), 
         useSelfColPoints(_selfColPoints), iencsA(nullptr), iposDirA(nullptr), imodA(nullptr), iintmodeA(nullptr),
         iimpA(nullptr), ilimA(nullptr), encsA(nullptr), arm(nullptr), jntsA(0), chainActiveDOF(0), virtualArm(nullptr),
         avhdl(nullptr), fingerPos({80.,6.,57.,13.,0.,13.,0.,103.}), homePos({0., 0., 0., -34., 30., 0., 50., 0.,  0., 0.}),
-        avoidance(false)
+        avoidance(false), notMovingCounter(0)
 {
     if (part_name=="left_arm")
     {
@@ -78,7 +78,7 @@ ArmInterface::ArmInterface(std::string _part, bool _selfColPoints): I(nullptr), 
     //palm facing inwards
     o_0.resize(4,0.0); o_0(1)=-0.707; o_0(2)=+0.707; o_0(3) = M_PI;
     //palm facing down
-    o_0 = (part_short == "right")? Vector{0.0, 1.0, 0.0, -0.95*M_PI} : Vector{0.0, 0.0, 1.0, M_PI};
+//    o_0 = (part_short == "right")? Vector{0.0, 1.0, 0.0, -0.95*M_PI} : Vector{0.0, 0.0, 1.0, M_PI};
     o_t = o_0;
     o_n = o_0;
     o_d = o_0;
@@ -541,7 +541,7 @@ bool reactCtrlThread::preprocCollisions()
     {
         second_arm->updateRecoveryPath();
         second_arm->vLimAdapted=second_arm->avhdl->getVLIM(CTRL_DEG2RAD * second_arm->vLimNominal, vel_limited) * CTRL_RAD2DEG;
-        if (vel_limited)
+        if (vel_limited && verbosity > 0)
         {
             yDebug("main_arm->vLimAdapted = \n%s\n\n",main_arm->vLimAdapted.transposed().toString(3,3).c_str());
             yDebug("second_arm->vLimAdapted = \n%s\n",second_arm->vLimAdapted.transposed().toString(3,3).c_str());
@@ -654,8 +654,9 @@ void reactCtrlThread::run()
             break;
         }
 
-        if (!movingTargetCircle && !holding_position && yarp::os::Time::now()-t_0 > timeLimit)
+        if (!movingTargetCircle && !holding_position && (yarp::os::Time::now()-t_0 > timeLimit || main_arm->notMovingCounter > 1./dT))
         {
+            main_arm->notMovingCounter = 0;
             yDebug("[reactCtrlThread] Target not reachable -  norm(x_t-x_d) %g\tglobalTol %g",norm(main_arm->x_t-main_arm->x_d),globalTol);
             state=STATE_IDLE;
             break;
@@ -728,13 +729,20 @@ void reactCtrlThread::nextMove(bool& vel_limited)
     //this is the key function call where the reaching opt problem is solved
     solverExitCode = solveIK();
     timeToSolveProblem_s = yarp::os::Time::now() - t_3;
-
     main_arm->qIntegrated = main_arm->I->integrate(main_arm->q_dot);
     main_arm->virtualArm->setAng(main_arm->qIntegrated * CTRL_DEG2RAD);
     if (second_arm)
     {
         second_arm->qIntegrated = second_arm->I->integrate(second_arm->q_dot);
         second_arm->virtualArm->setAng(second_arm->qIntegrated * CTRL_DEG2RAD);
+    }
+    if (norm(main_arm->q_dot) < 1.5)
+    {
+        main_arm->notMovingCounter++;
+    }
+    else
+    {
+        main_arm->notMovingCounter = 0;
     }
     if (!controlArm("positionDirect"))
     {
