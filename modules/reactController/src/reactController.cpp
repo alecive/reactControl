@@ -202,6 +202,18 @@ public:
         return rctCtrlThrd->setStreamingTarget();   
     }
 
+    bool set_6d(const yarp::sig::Vector& _xd, const yarp::sig::Vector& _od) override
+    {
+        if (_xd.size()>=3 && _od.size() >=4)
+        {
+            yInfo(" ");
+            yInfo("[reactController] received new x_d: %s\t o_d: %s", _xd.toString(3).c_str(), _od.toString(3).c_str());
+            return rctCtrlThrd->setNewTarget(_xd, _od, false);
+        }
+        yInfo("[reactController] return false\n");
+        return false;
+    }
+
     bool go_home() override
     {
         yInfo(" ");

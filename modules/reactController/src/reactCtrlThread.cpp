@@ -162,7 +162,7 @@ bool ArmInterface::prepareDrivers(const std::string& robot, const std::string& n
         interactionModesNew.resize(NR_ARM_JOINTS_FOR_INTERACTION_MODE,VOCAB_IM_STIFF);
         iintmodeA->setInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.data(),interactionModesNew.data());
     }
-    else // not working -> joints in HW fault
+    else // not working
     {
         interactionModesNew.resize(NR_ARM_JOINTS_FOR_INTERACTION_MODE,VOCAB_IM_COMPLIANT);
         iintmodeA->setInteractionModes(NR_ARM_JOINTS_FOR_INTERACTION_MODE,jointsToSetInteractionA.data(),interactionModesNew.data());
@@ -215,7 +215,7 @@ void ArmInterface::updateArm(const Vector& qT)
     o_t = arm->EndEffPose().subVector(3,6);
 }
 
-bool ArmInterface::alignJointsBound(IControlLimits* ilimT)
+bool ArmInterface::alignJointsBound(IControlLimits* ilimT) const
 {
     yDebug("[reactCtrlThread][alignJointsBounds] pre alignment:");
     printJointsBounds();
@@ -317,7 +317,7 @@ reactCtrlThread::reactCtrlThread(int _rate, std::string _name, std::string _robo
         visualizeCollisionPointsInSim(_visCollisionPointsInSim), counter(0), restPosWeight(_restPosWeight),
         state(STATE_WAIT), minJerkTarget(nullptr), iencsT(nullptr), iposDirT(nullptr),
         imodT(nullptr), ilimT(nullptr), encsT(nullptr), jntsT(0), igaze(nullptr), contextGaze(0),
-        movingTargetCircle(false), radius(0), frequency(0), streamingTarget(true),
+        movingTargetCircle(false), radius(0), frequency(0), streamingTarget(false),
         t_0(0), solverExitCode(0), timeToSolveProblem_s(0), comingHome(false), holding_position(false),
         visuhdl(verbosity, (robot == "icubSim"), name, _visTargetInSim,
                 referenceGen != "none" && _visParticleInSim)
@@ -360,7 +360,8 @@ bool reactCtrlThread::threadInit()
     aggregPPSeventsInPort.open("/"+name+"/pps_events_aggreg:i");
     aggregSkinEventsInPort.open("/"+name+"/skin_events_aggreg:i");
     proximityEventsInPort.open("/"+name+"/proximity_events:i");
-    streamedTargets.open("/"+name+"/streamedWholeBodyTargets:i");
+//    streamedTargets.open("/"+name+"/streamedWholeBodyTargets:i");
+    streamedTargets.open("/"+name+"/streamedTargets:i");
 
     outPort.open("/"+name +"/data:o"); //for dumping
     movementFinishedPort.open("/" + name + "/finished:o");
@@ -627,11 +628,18 @@ void reactCtrlThread::run()
     updateArmChain();
     if (streamingTarget)    //read "trajectory" - in this special case, it is only set of next target positions for possibly multiple control points
     {
-        std::vector<Vector> x_planned;
-        if (readMotionPlan(x_planned))
+        if (Bottle *xdNew=streamedTargets.read(false))
         {
-            setNewTarget(x_planned[0],false);
+           main_arm->x_d = {xdNew->get(0).asFloat64(), xdNew->get(1).asFloat64(), xdNew->get(2).asFloat64()};
+           main_arm->x_0 = main_arm->x_t;
+           if (xdNew->size() >= 7) main_arm->o_d = {xdNew->get(3).asFloat64(), xdNew->get(4).asFloat64(), xdNew->get(5).asFloat64(), xdNew->get(6).asFloat64()};
+           state = STATE_REACH;
         }
+//        std::vector<Vector> x_planned;
+//        if (readMotionPlan(x_planned))
+//        {
+//            setNewTarget(x_planned[0],false);
+//        }
     }
 
     switch (state)
@@ -646,20 +654,22 @@ void reactCtrlThread::run()
         if (second_arm) printf("\tnorm(x2_t-x2_d) = %g", norm(second_arm->x_t-second_arm->x_d));
         printf("\n");
         //we keep solving until we reach the desired target
-        if ((norm(main_arm->x_t-main_arm->x_d) < globalTol)  && (second_arm == nullptr || norm(second_arm->x_t-second_arm->x_d) < globalTol) && !movingTargetCircle  &&!holding_position)
+        if (!movingTargetCircle && !holding_position && !streamingTarget)
         {
-            comingHome = false;
-            yDebug("[reactCtrlThread] norm(x_t-x_d) %g\tglobalTol %g",norm(main_arm->x_t-main_arm->x_d),globalTol);
-            state=STATE_IDLE;
-            break;
-        }
+            if ((norm(main_arm->x_t - main_arm->x_d) < globalTol) &&
+                (second_arm == nullptr || norm(second_arm->x_t - second_arm->x_d) < globalTol)) {
+                comingHome = false;
+                yDebug("[reactCtrlThread] norm(x_t-x_d) %g\tglobalTol %g", norm(main_arm->x_t - main_arm->x_d), globalTol);
+                state = STATE_IDLE;
+                break;
+            }
 
-        if (!movingTargetCircle && !holding_position && (yarp::os::Time::now()-t_0 > timeLimit || main_arm->notMovingCounter > 1./dT))
-        {
-            main_arm->notMovingCounter = 0;
-            yDebug("[reactCtrlThread] Target not reachable -  norm(x_t-x_d) %g\tglobalTol %g",norm(main_arm->x_t-main_arm->x_d),globalTol);
-            state=STATE_IDLE;
-            break;
+            if ((yarp::os::Time::now() - t_0 > timeLimit || main_arm->notMovingCounter > 5. / dT)) {
+                main_arm->notMovingCounter = 0;
+                yDebug("[reactCtrlThread] Target not reachable -  norm(x_t-x_d) %g", norm(main_arm->x_t - main_arm->x_d));
+                state = STATE_IDLE;
+                break;
+            }
         }
 
         if (movingTargetCircle)
@@ -673,7 +683,7 @@ void reactCtrlThread::run()
         }
         bool vel_limited = preprocCollisions();
 
-        if (norm(main_arm->x_t-main_arm->x_d) >= globalTol || movingTargetCircle ||
+        if (norm(main_arm->x_t-main_arm->x_d) >= globalTol || movingTargetCircle || streamingTarget ||
             (second_arm != nullptr && norm(second_arm->x_t-second_arm->x_d) >= globalTol) || vel_limited)
         {
             nextMove(vel_limited);
@@ -690,7 +700,7 @@ void reactCtrlThread::run()
     }
     case STATE_IDLE:
     {
-        yarp::os::Bottle b;
+        yarp::os::Bottle& b = movementFinishedPort.prepare();
         b.clear();
         Vector p;
         p = main_arm->arm->EndEffPose();
@@ -698,7 +708,7 @@ void reactCtrlThread::run()
         {
             b.addInt32(static_cast<int>(round(p(i) * M2MM)));
         }
-        movementFinishedPort.write(b);
+        movementFinishedPort.write();
         yInfo("[reactCtrlThread] finished.");
         state=STATE_WAIT;
         break;
@@ -850,17 +860,25 @@ bool reactCtrlThread::setVMax(const double _vMax)
 
 bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
 {
-    if (_x_d.size()==3)
+    return setNewTarget(_x_d, main_arm->o_d, _movingCircle);
+}
+
+bool reactCtrlThread::setNewTarget(const Vector& _x_d, const Vector& _o_d, bool _movingCircle)
+{
+    if (_x_d.size()==3 && _o_d.size()==4)
     {
+        streamingTarget = false;
         t_0=Time::now();
         t_1=Time::now();
         holding_position = _x_d == main_arm->x_t;
         movingTargetCircle = _movingCircle;
         main_arm->q_dot.zero();
-        updateArmChain(); //updates chain, q and x_t
+        updateArmChain(); //updates ==chain, q and x_t
         main_arm->virtualArm->setAng(main_arm->q*CTRL_DEG2RAD); //with new target, we make the two chains identical at the start
         main_arm->I->reset(main_arm->q);
-        main_arm->o_n = comingHome? main_arm->o_home : main_arm->o_d;
+        main_arm->o_0=main_arm->o_t;
+        main_arm->o_d = comingHome? main_arm->o_home : _o_d;
+        main_arm->o_n = main_arm->o_0;
         main_arm->x_0=main_arm->x_t;
         main_arm->x_n=main_arm->x_0;
         main_arm->x_d=_x_d;
@@ -873,6 +891,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
            second_arm->x_n = second_arm->x_home;
            second_arm->o_d = second_arm->o_home;
        }
+       double T = norm(main_arm->x_d - main_arm->x_0)  / trajSpeed;
         if (referenceGen == "uniformParticle"){
             yarp::sig::Vector vel(3,0.0);
             vel=trajSpeed * (main_arm->x_d-main_arm->x_0) / norm(main_arm->x_d-main_arm->x_0);
@@ -885,17 +904,15 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
             minJerkTarget->init(main_arm->x_0); //initial pos
             minJerkTarget->setTs(dT); //time step
             // calculate the time to reach from the distance to target and desired velocity
-            double T = norm(main_arm->x_d - main_arm->x_0)  / trajSpeed;
             minJerkTarget->setT(std::ceil(T * 10.0) / 10.0);
         }
-        filter->reset(main_arm->o_t,1.);
+        filter->reset(main_arm->o_t,T);
 
         yInfo("[reactCtrlThread] got new target: x_0: %s",main_arm->x_0.toString(3,3).c_str());
         yInfo("[reactCtrlThread]                 x_d: %s",main_arm->x_d.toString(3,3).c_str());
         //yInfo("[reactCtrlThread]                 vel: %s",vel.toString(3,3).c_str());
 
         visuhdl.visualizeObjects(main_arm->x_d, main_arm->x_0);
-
         state=STATE_REACH;
 
         return true;
@@ -949,7 +966,6 @@ bool reactCtrlThread::holdPosition()
 
 int reactCtrlThread::solveIK()
 {
-
     printMessage(3,"calling ipopt with the following joint velocity limits (deg): \n %s \n",main_arm->vLimAdapted.toString(3,3).c_str());
     //printf("calling ipopt with the following joint velocity limits (rad): \n %s \n",(main_arm->vLimAdapted*CTRL_DEG2RAD).toString(3,3).c_str());
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.

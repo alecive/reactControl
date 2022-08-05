@@ -53,6 +53,13 @@ service reactController_IDL
   **/
   bool set_streaming_xd();
 
+  /**
+  * Sets a new 6D Cartesian target
+  * @param _xd Vector that specifies the new target
+  * @param _od Vector that specifies the new orientation
+  * @return true/false on success/failure.
+  */
+  bool set_6d(1:Vector _xd, 2: Vector _od)
 
   /**
   * Moves robot to home configuration.

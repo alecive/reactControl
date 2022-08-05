@@ -176,7 +176,7 @@ struct ArmInterface
     /**
     * Aligns joint bounds according to the actual limits of the robot
      */
-    bool alignJointsBound(IControlLimits* ilimT);
+    bool alignJointsBound(IControlLimits* ilimT) const;
 
     /**
     * Prints the joints bounds from the iCubArm
@@ -209,6 +209,8 @@ public:
 
     // Sets the new target
     bool setNewTarget(const yarp::sig::Vector& _x_d, bool _movingCircle);
+
+    bool setNewTarget(const yarp::sig::Vector& _x_d, const yarp::sig::Vector& _o_d, bool _movingCircle);
 
     // Sets the new target relative to the current position
     bool setNewRelativeTarget(const yarp::sig::Vector&);
@@ -343,7 +345,7 @@ protected:
     yarp::os::BufferedPort<yarp::os::Bottle> aggregPPSeventsInPort; //coming from visuoTactileRF/pps_activations_aggreg:o
     //expected format for both: (skinPart_s x y z o1 o2 o3 magnitude), with position x,y,z and normal o1 o2 o3 in link FoR
     yarp::os::Port outPort;
-    yarp::os::Port movementFinishedPort;
+    yarp::os::BufferedPort<yarp::os::Bottle> movementFinishedPort;
     std::ofstream fout_param; //log parameters that stay constant during the simulation, but are important for analysis - e.g. joint limits
     // Stamp for the setEnvelope for the ports
     yarp::os::Stamp ts;
