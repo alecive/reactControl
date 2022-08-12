@@ -148,6 +148,7 @@ struct ArmInterface
     //N.B. All angles in this thread are in degrees
     yarp::sig::Vector qA; //current values of arm joints (should be 7)
     yarp::sig::Vector q; //current joint angle values (10 if torso is on, 7 if off)
+    yarp::sig::Vector q_last; //current joint angle values (10 if torso is on, 7 if off)
     yarp::sig::Vector qIntegrated; //joint angle values integrated from velocity commands by Integrator - controlMode positionDirect only
     yarp::sig::Vector q_dot;  // Computed joint velocities to reach the target
 
@@ -219,7 +220,7 @@ public:
     bool setNewCircularTarget(double _radius, double _frequency);
 
     //Will be reading reaching targets from a port
-    bool setStreamingTarget() { streamingTarget = true; return true; }
+    bool setStreamingTarget() { t_1=Time::now(); streamingTarget = true; return streamingTarget; }
 
     // Sets the tolerance
     bool setTol(const double _tol)

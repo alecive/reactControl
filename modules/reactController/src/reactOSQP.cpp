@@ -40,7 +40,7 @@ void ArmHelper::init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim)
     v_des.setSubvector(3, dcm2rpy(R) / dt);
     J0=arm->GeoJacobian();
 
-    adapt_w5 = 1 - sqrt(det(J0*J0.transposed()))/manip_thr;
+    adapt_w5 = (manip_thr > 0)? 1 - sqrt(det(J0*J0.transposed()))/manip_thr : 0;  // not used anymore
     if (adapt_w5 <= 0)
     {
         adapt_w5 = 0;
@@ -206,10 +206,9 @@ void ArmHelper::addConstraints(Eigen::SparseMatrix<double>& linearMatrix) const
 /****************************************************************/
 QPSolver::QPSolver(iCubArm *chain_, bool hitConstr, iCubArm* second_chain_, double vmax_, bool orientationControl_,
                              double dT_, const Vector& restPos, double restPosWeight_) :
-        second_arm(nullptr), dt(dT_), w1(1), w2(restPosWeight_),
-        orig_w2(restPosWeight_), w3(10), w4(1), w5(0),  min_type(0)
+        second_arm(nullptr), dt(dT_), w1(1), w2(restPosWeight_), orig_w2(restPosWeight_), w3(10), w4(1)
 {
-    double manip_thr = 0.03;
+    double manip_thr = 0.0;  // not used anymore
     main_arm = std::make_unique<ArmHelper>(chain_, dt, 0, vmax_*CTRL_DEG2RAD, manip_thr, restPos, hitConstr);
 
     vars_offset = main_arm->chain_dof + 6;
@@ -287,7 +286,7 @@ void QPSolver::update_gradient()
 
     for (int i=0; i < main_arm->chain_dof; i++)
     {
-        gradient[i] = -2 * w1 *main_arm->rest_w[i] * main_arm->v0[i] * min_type + w2 * main_arm->rest_w[i] * dt * 2 * (main_arm->q0[i] - main_arm->rest_jnt_pos[i]) - w5 * main_arm->adapt_w5 * dt * main_arm->manip[i];
+        gradient[i] = w2 * main_arm->rest_w[i] * dt * 2 * (main_arm->q0[i] - main_arm->rest_jnt_pos[i]); // - w5 * main_arm->adapt_w5 * dt * main_arm->manip[i];
     }
     if (main_arm->chain_dof == 10)
     {

@@ -208,8 +208,18 @@ void ArmInterface::updateArm(const Vector& qT)
 {
     iencsA->getEncoders(encsA->data());
     qA = encsA->subVector(0,NR_ARM_JOINTS-1);
+    q_last = q;
     q.setSubvector(0,qT);
     q.setSubvector(NR_TORSO_JOINTS,qA);
+    //yDebug() << norm(q-q_last)  << "\n";
+    if (norm(q-q_last) < 0.002)
+    {
+        notMovingCounter++;
+    }
+    else
+    {
+        notMovingCounter = 0;
+    }
     arm->setAng(q*CTRL_DEG2RAD);
     x_t = arm->EndEffPosition();
     o_t = arm->EndEffPose().subVector(3,6);
@@ -488,7 +498,14 @@ void reactCtrlThread::insertTestingCollisions()
     {
         bool active = false;
         collisionPoint_t collisionPointStruct{SKIN_LEFT_FOREARM};
-        if (yarp::os::Time::now() - t_1 > 16. && counter < 200)
+        if (yarp::os::Time::now() - t_1 > 5. && counter < 100)
+        {
+            collisionPointStruct.x = {-0.027228, -0.054786, -0.0191051}; // {0.018, 0.095, 0.024};
+            collisionPointStruct.n = {-0.886, 0.14, -0.431 }; // {0.568, -0.18, 0.406};
+            counter++;
+            active = true;
+        }
+        if (yarp::os::Time::now() - t_1 > 20. && counter < 250)
         {
             //            collisionPointStruct.x = {-0.0002, -0.0131,-0.0258434};//  {-0.02, 0.0, -0.005}; //  // {-0.031, -0.079, 0.005};
             //            collisionPointStruct.n = {-0.005, 0.238, -0.971}; //{0,0,-1}; // // {-0.739, 0.078, 0.105};
@@ -498,14 +515,14 @@ void reactCtrlThread::insertTestingCollisions()
             counter++;
             active = true;
         }
-        else if (yarp::os::Time::now() - t_1 > 25. && counter < 300)
-        {
-            collisionPointStruct.x = {0.026828, -0.054786, -0.0191051}; // {0.014, 0.081, 0.029};
-            collisionPointStruct.n = {0.883, 0.15, -0.385}; // {0.612, 0.066, 0.630};
-            counter++;
-            active = true;
-        }
-        else if (yarp::os::Time::now() - t_1 > 35. && counter < 800)
+//        else if (yarp::os::Time::now() - t_1 > 25. && counter < 250)
+//        {
+//            collisionPointStruct.x = {0.026828, -0.054786, -0.0191051}; // {0.014, 0.081, 0.029};
+//            collisionPointStruct.n = {0.883, 0.15, -0.385}; // {0.612, 0.066, 0.630};
+//            counter++;
+//            active = true;
+//        }
+        else if (yarp::os::Time::now() - t_1 > 35. && counter < 400)
         {
             collisionPointStruct.x = {-0.027228, -0.054786, -0.0191051}; // {0.018, 0.095, 0.024};
             collisionPointStruct.n = {-0.886, 0.14, -0.431 }; // {0.568, -0.18, 0.406};
@@ -594,7 +611,8 @@ void reactCtrlThread::getCollisionsFromPorts()
 yarp::sig::Vector reactCtrlThread::updateNextTarget(bool& vel_limited)
 {
     Vector next_x = main_arm->x_d;
-    if (referenceGen == "uniformParticle") {
+    if (referenceGen == "uniformParticle")
+    {
         if ((norm(main_arm->x_n - main_arm->x_0) > norm(main_arm->x_d - main_arm->x_0)) || movingTargetCircle) //if the particle is farther than the final target, we reset the particle - it will stay with the target; or if target is moving
         {
             prtclThrd->resetParticle(main_arm->x_d);
@@ -664,7 +682,7 @@ void reactCtrlThread::run()
                 break;
             }
 
-            if ((yarp::os::Time::now() - t_0 > timeLimit || main_arm->notMovingCounter > 5. / dT)) {
+            if ((yarp::os::Time::now() - t_0 > timeLimit || main_arm->notMovingCounter > 1. / dT)) {
                 main_arm->notMovingCounter = 0;
                 yDebug("[reactCtrlThread] Target not reachable -  norm(x_t-x_d) %g", norm(main_arm->x_t - main_arm->x_d));
                 state = STATE_IDLE;
@@ -746,14 +764,7 @@ void reactCtrlThread::nextMove(bool& vel_limited)
         second_arm->qIntegrated = second_arm->I->integrate(second_arm->q_dot);
         second_arm->virtualArm->setAng(second_arm->qIntegrated * CTRL_DEG2RAD);
     }
-    if (norm(main_arm->q_dot) < 1.5)
-    {
-        main_arm->notMovingCounter++;
-    }
-    else
-    {
-        main_arm->notMovingCounter = 0;
-    }
+
     if (!controlArm("positionDirect"))
     {
         yError("I am not able to properly control the arm in positionDirect!");
@@ -942,7 +953,7 @@ bool reactCtrlThread::setNewCircularTarget(const double _radius,const double _fr
 
 bool reactCtrlThread::stopControlAndSwitchToPositionMode()
 {
-    state=STATE_IDLE;
+    state=STATE_WAIT;
     return  setCtrlModes(jointsToSetPosA,"arm","position")  &&
            (second_arm == nullptr || setCtrlModes(jointsToSetPosA,"second_arm","position")) &&
            setCtrlModes(jointsToSetPosT,"torso","position");
@@ -966,7 +977,7 @@ bool reactCtrlThread::holdPosition()
 
 int reactCtrlThread::solveIK()
 {
-    printMessage(3,"calling ipopt with the following joint velocity limits (deg): \n %s \n",main_arm->vLimAdapted.toString(3,3).c_str());
+    printMessage(3,"calling osqp with the following joint velocity limits (deg): \n %s \n",main_arm->vLimAdapted.toString(3,3).c_str());
     //printf("calling ipopt with the following joint velocity limits (rad): \n %s \n",(main_arm->vLimAdapted*CTRL_DEG2RAD).toString(3,3).c_str());
     // Remember: at this stage everything is kept in degrees because the robot is controlled in degrees.
     // At the ipopt level it comes handy to translate everything in radians because iKin works in radians.

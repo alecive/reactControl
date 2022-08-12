@@ -47,7 +47,7 @@ struct ArmHelper
 class QPSolver
 {
     std::unique_ptr<ArmHelper> main_arm, second_arm;
-    double dt, w1, w2, w3, w4, w5, min_type, orig_w2;
+    double dt, w1, w2, w3, w4, orig_w2;
     int vars_offset, constr_offset;
 
     Eigen::SparseMatrix<double> hessian, linearMatrix;

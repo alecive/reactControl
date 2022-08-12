@@ -3,6 +3,7 @@ import time
 import yarp
 import numpy as np
 import re
+import sys
     
 
 def randomMovements(rpc_client, inport, use_cart=False, seed=0):
@@ -53,12 +54,12 @@ def randomMovements(rpc_client, inport, use_cart=False, seed=0):
     print(np.array(feasible_poses))
 
 
-def streamedTargets(rpc_client, inport, use_cart=False, use_right=False, seed=0):
+def streamedTargets(rpc_client, inport, timeout=4, use_cart=False, use_right=False, seed=0):
     np.random.seed(seed)
     return_to_home = False
-    x = np.round(np.arange(-0.3, -0.05, 0.05),2)
-    y = np.round(np.arange(-0.2, 0.05, 0.05),2)
-    z = np.round(np.arange(-0.05, 0.35, 0.05),2)
+    x = np.round(np.arange(-0.3, -0.15, 0.05),2) #x = np.round(np.arange(-0.3, -0.05, 0.05),2)
+    y = np.round(np.arange(-0.2, 0.0, 0.05),2) #y = np.round(np.arange(-0.2, 0.05, 0.05),2)
+    z = np.round(np.arange(0.05, 0.25, 0.05),2) #z = np.round(np.arange(-0.05, 0.35, 0.05),2)
     poses = np.array(np.meshgrid(x, y, z)).T.reshape(-1, 3)
     print("Size is ", poses.shape)
     indexes = np.random.permutation(poses.shape[0])
@@ -75,38 +76,60 @@ def streamedTargets(rpc_client, inport, use_cart=False, use_right=False, seed=0)
         
         print(pos)
         start = time.time()
-        while time.time()-start < 2:
+        while time.time()-start < timeout:
             pass
 
 
-def p2pMovement(rpc_client, t=180, use_right=False): # TODO: test with left arm
-    points = np.genfromtxt('P2P.txt', delimiter='\t')
-    result.clear()
+def p2pMovement(rpc_client, reps=10, period=9, use_right=False):
+    points_right = [[-0.232, 0.258, 0.021, -0.1477, -0.7912, 0.5933, 3.0637], 
+                [-0.264, 0.032, 0.034, -0.112, 0.9935, 0.01514, 3.1355]]
+    points_left = [[-0.232, -0.258, 0.021, -0.1477, 0.5933, -0.7912, 3.0637], 
+                [-0.264, -0.032, 0.034, -0.112, 0.01514, 0.9935, 3.1355]]
+    points = points_right if use_right else points_left
+    ite = 0
     start = time.time()
-    for point in points:
-        while (time.time() - start) < t * point[0]:
-            pass
-        print(point, (time.time() - start)/180)
-        result.clear()
-        result.addString("set_6d")
-        l = result.addList()
-        l.addFloat64(point[1])
-        l.addFloat64(point[2])
-        l.addFloat64(point[3])
-        k = result.addList()
-        k.addFloat64(point[4])
-        k.addFloat64(point[5])
-        k.addFloat64(point[6])
-        k.addFloat64(point[7])
-        send_command(rpc_client,result)
-        poseStr = None
-        
-        while not poseStr:
-            poseStr = read_once(inport)
+    for i in range(reps):
+        for point in points:
+            while (time.time() - start) < period * ite:
+                pass
+            ite += 1
+            result = yarp.Bottle()
+            result.clear()
+            result.addString("set_6d")
+            l = result.addList()
+            l.addFloat64(point[0])
+            l.addFloat64(point[1])
+            l.addFloat64(point[2])
+            k = result.addList()
+            k.addFloat64(point[3])
+            k.addFloat64(point[4])
+            k.addFloat64(point[5])
+            k.addFloat64(point[6])
+            send_command(rpc_client,result)
+            #poseStr = None
+            
+            #while not poseStr:
+            #    poseStr = read_once(inport)
 
 
-def lemniscateMovement(rpc_client, client, inport, center, t=150, use_right=False): # TODO test with left arm
-    points = np.genfromtxt('lemniscate.txt', delimiter='\t')
+def lemniscateMovement(rpc_client, client, inport, center, step=0.15, reps=10, use_right=False):
+    points = [[0.0,  0.000, -0.000], [0.0,  0.037, -0.037], [0.0,  0.075, -0.074], [0.0,  0.113, -0.110], [0.0,  0.152, -0.145], [0.0,  0.192, -0.179], 
+            [0.0,  0.233, -0.211], [0.0,  0.276, -0.241], [0.0,  0.321, -0.269], [0.0,  0.367, -0.293], [0.0,  0.415, -0.314], [0.0,  0.464, -0.331], 
+            [0.0,  0.515, -0.344], [0.0,  0.567, -0.351], [0.0,  0.620, -0.353], [0.0,  0.672, -0.350], [0.0,  0.723, -0.340], [0.0,  0.773, -0.323], 
+            [0.0,  0.820, -0.301], [0.0,  0.864, -0.272], [0.0,  0.903, -0.237], [0.0,  0.937, -0.196], [0.0,  0.964, -0.152], [0.0,  0.984, -0.103], 
+            [0.0,  0.996, -0.052], [0.0,  0.996,  0.052], [0.0,  0.984,  0.103], [0.0,  0.964,  0.152], [0.0,  0.937,  0.196], [0.0,  0.903,  0.237], 
+            [0.0,  0.864,  0.272], [0.0,  0.820,  0.301], [0.0,  0.773,  0.323], [0.0,  0.723,  0.340], [0.0,  0.672,  0.350], [0.0,  0.620,  0.353], 
+            [0.0,  0.567,  0.351], [0.0,  0.515,  0.344], [0.0,  0.464,  0.331], [0.0,  0.415,  0.314], [0.0,  0.367,  0.293], [0.0,  0.321,  0.269], 
+            [0.0,  0.276,  0.241], [0.0,  0.233,  0.211], [0.0,  0.192,  0.179], [0.0,  0.152,  0.145], [0.0,  0.113,  0.110], [0.0,  0.075,  0.074], 
+            [0.0,  0.037,  0.037], [0.0,  0.000,  0.000], [0.0, -0.037, -0.037], [0.0, -0.075, -0.074], [0.0, -0.113, -0.110], [0.0, -0.152, -0.145], 
+            [0.0, -0.192, -0.179], [0.0, -0.233, -0.211], [0.0, -0.276, -0.241], [0.0, -0.321, -0.269], [0.0, -0.367, -0.293], [0.0, -0.415, -0.314], 
+            [0.0, -0.464, -0.331], [0.0, -0.515, -0.344], [0.0, -0.567, -0.351], [0.0, -0.620, -0.353], [0.0, -0.672, -0.350], [0.0, -0.723, -0.340], 
+            [0.0, -0.773, -0.323], [0.0, -0.820, -0.301], [0.0, -0.864, -0.272], [0.0, -0.903, -0.237], [0.0, -0.937, -0.196], [0.0, -0.964, -0.152], 
+            [0.0, -0.984, -0.103], [0.0, -0.996, -0.052], [0.0, -0.996,  0.052], [0.0, -0.984,  0.103], [0.0, -0.964,  0.152], [0.0, -0.937,  0.196], 
+            [0.0, -0.903,  0.237], [0.0, -0.864,  0.272], [0.0, -0.820,  0.301], [0.0, -0.773,  0.323], [0.0, -0.723,  0.340], [0.0, -0.672,  0.350], 
+            [0.0, -0.620,  0.353], [0.0, -0.567,  0.351], [0.0, -0.515,  0.344], [0.0, -0.464,  0.331], [0.0, -0.415,  0.314], [0.0, -0.367,  0.293], 
+            [0.0, -0.321,  0.269], [0.0, -0.276,  0.241], [0.0, -0.233,  0.211], [0.0, -0.192,  0.179], [0.0, -0.152,  0.145], [0.0, -0.113,  0.110], 
+            [0.0, -0.075,  0.074], [0.0, -0.037,  0.037]]
     if (use_right):
         center[1] *= -1
     result = setXD(center[0], center[1], center[2], False)
@@ -119,15 +142,18 @@ def lemniscateMovement(rpc_client, client, inport, center, t=150, use_right=Fals
     send_command(rpc_client,result)
     gain = 0.13
     start = time.time()
-    for point in points:
-        while(time.time() - start) < t * point[0]:
-            pass
-        x = center[0] + gain * point[1]
-        y = center[1] + gain * point[2]
-        z = center[2] + gain * point[3]
-        print(x, y, z)
-        result = setXD(x, y, z, True)
-        client.write(result)
+    i = 0
+    for rep in range(reps):
+        for point in points:
+            while(time.time() - start) < i * step:
+                pass
+            i += 1
+            x = center[0] + gain * point[0]
+            y = center[1] + gain * point[1]
+            z = center[2] + gain * point[2]
+            print(x, y, z)
+            result = setXD(x, y, z, True)
+            client.write(result)
     
 
 def setXD(x, y, z, streaming=False):
@@ -186,7 +212,7 @@ def circularMovement(rpc_client, client, inport, center, radius, frequency, t=60
             pass
 
 
-def classicScenario(rpc_client, inport, use_right=False):
+def classicScenario(rpc_client, inport, timeout=30, use_right=False):
     poses = [[-0.299, -0.174, 0.05], [-0.299, -0.174, 0.15], [-0.299, -0.174, 0.00], [-0.299, -0.174, 0.12]]
     for pos in poses:
         result = setXD(pos[0], -pos[1] if use_right else pos[1], pos[2], False)
@@ -206,12 +232,13 @@ def classicScenario(rpc_client, inport, use_right=False):
     start = time.time()
     pos = [0,0,0]
     
-    while time.time()-start < 60:
+    while time.time()-start < timeout:
         pass
 
 
 def visualScenario(rpc_client, inport, use_right=False):
     poses = [[-0.299, -0.174, 0.05], [-0.299, -0.174, 0.15], [-0.299, -0.174, 0.00], [-0.299, -0.174, 0.1], [-0.299, -0.074, 0.1]]
+    poses = [[0.1,0.0,0.0], [0.05,0.0,0.0], [0.1,0.0,0.0]]
     for pos in poses:
         result = setXD(pos[0], -pos[1] if use_right else pos[1], pos[2], False)
         send_command(rpc_client, result)
@@ -219,6 +246,7 @@ def visualScenario(rpc_client, inport, use_right=False):
         
         while not poseStr:
             poseStr = read_once(inport)
+        print(poseStr)
         print(pos)
 
 
@@ -241,7 +269,7 @@ def read_once(inport):
 
 if __name__=="__main__": 
     yarp.Network.init() # Initialise YARP
-    conf = open('../app/conf/reactController.ini')
+    conf = open('app/conf/reactController.ini')
     for line in conf.readlines(): 
         if (line.startswith('part')):
             part = re.findall(r"(?<=\()\w+", line)[0]
@@ -268,7 +296,7 @@ if __name__=="__main__":
     
     stopMovement(outPortRpc)    
 
-    move_type = 5
+    move_type = int(sys.argv[1])
     start = time.time()
     while time.time()-start < 1:
         pass
@@ -276,15 +304,15 @@ if __name__=="__main__":
         visualScenario(outPortRpc, inport, use_right)
         holdPosition(outPortRpc)
     elif move_type == 1:
-        classicScenario(outPortRpc, inport, use_right)
+        classicScenario(outPortRpc, inport, 30, use_right)
     elif move_type == 2:
-        streamedTargets(outPortRpc, inport, use_cart, use_right, 10)
+        streamedTargets(outPortRpc, inport, 3, use_cart, use_right, 10)
     elif move_type == 3:
-        p2pMovement(outPortRpc, 180, use_right)
+        p2pMovement(outPortRpc, reps=5, period=6, use_right=use_right)
     elif move_type == 4:
-        circularMovement(outPortRpc, outPort, inport, [-0.299, -0.074, 0.1], 0.08, 0.2, 60, use_right)
+        circularMovement(outPortRpc, outPort, inport, [-0.299, -0.074, 0.1], 0.08, 0.2, t=30, use_right=use_right)
     elif move_type == 5:
-        lemniscateMovement(outPortRpc, outPort, inport, [-0.28, -0.17,0.09], 15, use_right)
+        lemniscateMovement(outPortRpc, outPort, inport, [-0.28, -0.17,0.09], step=0.1, reps=5, use_right=use_right)
     # else:
     #     randomMovements(outPortRpc, inport, use_cart, 0)
 
