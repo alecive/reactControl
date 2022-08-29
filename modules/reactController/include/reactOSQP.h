@@ -67,7 +67,7 @@ public:
 
     void init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, double rest_pos_w,
               const Vector &_xr2 = {}, const Vector &_v02 = {}, const Matrix &_v2_lim = {});
-    Vector get_resultInDegPerSecond();
+    Vector get_resultInDegPerSecond(Matrix& bounds);
     int optimize(double pos_error);
 };
 

@@ -13,7 +13,7 @@ ArmHelper::ArmHelper(iCubArm *chain_, double dt_, int offset_,  double vmax_, do
     v0.resize(chain_dof, 0.0);
     v_lim.resize(chain_dof, 2);
     manip.resize(chain_dof);
-    rest_w = {1, 1, 1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
+    rest_w = {1, 10, 1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
     J0 = arm->GeoJacobian();
     computeGuard();
 }
@@ -105,8 +105,12 @@ void ArmHelper::computeBounds()
             dmin=1.0;
             dmax=(qi>=qGuardMaxExt[i] ? 0.0 : (qi- qGuardMaxExt[i])/(qGuardMaxInt[i]-qGuardMaxExt[i]));
         }
-        bounds(i, 0) = std::max(dmin*-vmax, v_lim(i+offset, 0));  // apply joint limit bounds only when it is stricter than the avoidance limits
-        bounds(i, 1) = std::min(dmax*vmax, v_lim(i+offset, 1));
+        bounds(i, 0) =  std::max(dmin*-vmax, v_lim(i+offset, 0));  // apply joint limit bounds only when it is stricter than the avoidance limits
+        bounds(i, 1) =  std::min(dmax*vmax, v_lim(i+offset, 1));
+        if (bounds(i,0) > bounds(i,1))
+        {
+            bounds(i,0) = bounds(i,1) = 0;
+        }
     }
 }
 
@@ -114,15 +118,8 @@ void ArmHelper::updateBounds(Eigen::VectorXd& lowerBound, Eigen::VectorXd& upper
 {
     for (int i = 0; i < chain_dof; i++)
     {
-        if (bounds(i,0) <= bounds(i,1))
-        {
-            lowerBound[i+constr_offset] = bounds(i, 0);
-            upperBound[i+constr_offset] = bounds(i, 1);
-        }
-        else
-        {
-            lowerBound[i+constr_offset] = upperBound[i+constr_offset] = 0;
-        }
+        lowerBound[i+constr_offset] = bounds(i, 0);
+        upperBound[i+constr_offset] = bounds(i, 1);
     }
 
     for (int i = 0; i < 3; ++i)
@@ -288,10 +285,6 @@ void QPSolver::update_gradient()
     {
         gradient[i] = w2 * main_arm->rest_w[i] * dt * 2 * (main_arm->q0[i] - main_arm->rest_jnt_pos[i]); // - w5 * main_arm->adapt_w5 * dt * main_arm->manip[i];
     }
-    if (main_arm->chain_dof == 10)
-    {
-        gradient[1] = 0.0;
-    }
     if (second_arm != nullptr) {
         for (int i=0; i < second_arm->chain_dof; i++)
         {
@@ -307,10 +300,7 @@ void QPSolver::set_hessian()
 {
     for (int i = 0; i < main_arm->chain_dof; ++i)
     {
-        if (main_arm->chain_dof != 10 || i != 1)
-        {
-            hessian.insert(i, i) = 2 * w1*main_arm->rest_w[i] + 2 * w2 * dt * dt * main_arm->rest_w[i];
-        }
+        hessian.insert(i, i) = 2 * w1*main_arm->rest_w[i] + 2 * w2 * dt * dt * main_arm->rest_w[i];
     }
 
     for (int i = 0; i < 3; ++i)
@@ -349,10 +339,7 @@ void QPSolver::update_constraints()
     {
         for (int j = 0; j < main_arm->chain_dof; ++j)
         {
-            if (main_arm->chain_dof != 10 || j != 1)
-            {
-                linearMatrix.coeffRef(i + main_arm->chain_dof + 6, j) = main_arm->J0(i, j);
-            }
+            linearMatrix.coeffRef(i + main_arm->chain_dof + 6, j) = main_arm->J0(i, j);
         }
     }
     if (second_arm != nullptr)
@@ -370,12 +357,14 @@ void QPSolver::update_constraints()
     solver.updateLinearConstraintsMatrix(linearMatrix);
 }
 
-Vector QPSolver::get_resultInDegPerSecond()
+Vector QPSolver::get_resultInDegPerSecond(Matrix& bounds)
 {
     Eigen::VectorXd sol = solver.getSolution();
     int dim = main_arm->chain_dof;
     if (second_arm) dim += second_arm->chain_dof;
     Vector v(dim,0.0);
+    bounds.resize(dim,2);
+    bounds.setSubmatrix(main_arm->bounds, 0,0);
     for (int i = 0; i < main_arm->chain_dof; ++i)
     {
         v[i] = std::max(std::min(sol[i], upperBound[i]), lowerBound[i]);
@@ -386,6 +375,7 @@ Vector QPSolver::get_resultInDegPerSecond()
         {
             v[i + main_arm->chain_dof] = std::max(std::min(sol[i + vars_offset], upperBound[i + constr_offset]), lowerBound[i + constr_offset]);
         }
+        bounds.setSubmatrix(second_arm->bounds, main_arm->chain_dof, 0);
     }
     return CTRL_RAD2DEG*v;
 }

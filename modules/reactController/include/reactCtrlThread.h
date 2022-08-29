@@ -177,7 +177,7 @@ struct ArmInterface
     /**
     * Aligns joint bounds according to the actual limits of the robot
      */
-    bool alignJointsBound(IControlLimits* ilimT) const;
+    bool alignJointsBound(IControlLimits* ilimT);
 
     /**
     * Prints the joints bounds from the iCubArm

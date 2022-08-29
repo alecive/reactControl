@@ -20,7 +20,7 @@
 #include "reactCtrlThread.h"
 
 #define TACTILE_INPUT_GAIN 1.5
-#define VISUAL_INPUT_GAIN 1
+#define VISUAL_INPUT_GAIN 0.2
 #define PROXIMITY_INPUT_GAIN 1
 
 #define STATE_WAIT              0
@@ -82,8 +82,6 @@ ArmInterface::ArmInterface(std::string _part, bool _selfColPoints): I(nullptr), 
     o_t = o_0;
     o_n = o_0;
     o_d = o_0;
-
-    virtualArm = new iCubArm(*arm);  //Creates a new Limb from an already existing Limb object - but they will be too independent limbs from now on
 }
 
 void ArmInterface::setVMax(bool useTorso, double vMax)
@@ -95,11 +93,7 @@ void ArmInterface::setVMax(bool useTorso, double vMax)
         vLimNominal(r,1)=vMax;
         vLimAdapted(r,1)=vMax;
     }
-    if (useTorso){
-        vLimNominal(1,0)=vLimNominal(1,1)=0.0;
-        vLimAdapted(1,0)=vLimAdapted(1,1)=0.0;
-    }
-    else // TODO chainActiveDOF is still 10
+    if (!useTorso) // TODO chainActiveDOF is still 10
     {
         vLimAdapted.setSubcol({0.0,0.0,0.0}, 0,0);
         vLimNominal.setSubcol({0.0,0.0,0.0}, 0,0);
@@ -225,19 +219,23 @@ void ArmInterface::updateArm(const Vector& qT)
     o_t = arm->EndEffPose().subVector(3,6);
 }
 
-bool ArmInterface::alignJointsBound(IControlLimits* ilimT) const
+bool ArmInterface::alignJointsBound(IControlLimits* ilimT)
 {
-    yDebug("[reactCtrlThread][alignJointsBounds] pre alignment:");
+    yDebug("[reactCtrlThread][alignJointsBound] pre alignment:");
     printJointsBounds();
 
     std::deque<IControlLimits*> limits;
     limits.push_back(ilimT);
     limits.push_back(ilimA);
     if (!arm->alignJointsBounds(limits)) return false;
-
-    yDebug("[reactCtrlThread][alignJointsBounds] post alignment:");
+    arm->asChain()->operator()(1).setMin(CTRL_DEG2RAD*-10); // restrict torso roll
+    arm->asChain()->operator()(1).setMax(CTRL_DEG2RAD*10); // restrict torso roll
+    yDebug("[reactCtrlThread][alignJointsBound] post alignment:");
     printJointsBounds();
-
+    if (virtualArm == nullptr)
+    {
+        virtualArm = new iCubArm(*arm);  //Creates a new Limb from an already existing Limb object - but they will be too independent limbs from now on
+    }
     return true;
 }
 
@@ -832,11 +830,11 @@ bool reactCtrlThread::enableTorso()
     {
         main_arm->arm->releaseLink(i);
     }
-    main_arm->vLimNominal(0,0)=main_arm->vLimNominal(2,0)=-vMax;
-    main_arm->vLimAdapted(0,0)=main_arm->vLimAdapted(2,0)=-vMax;
+    main_arm->vLimAdapted.setSubcol({-vMax, -vMax, -vMax}, 0, 0);
+    main_arm->vLimAdapted.setSubcol({-vMax, -vMax, -vMax}, 0, 1);
+    main_arm->vLimNominal.setSubcol({-vMax, -vMax, -vMax}, 0, 0);
+    main_arm->vLimNominal.setSubcol({-vMax, -vMax, -vMax}, 0, 1);
 
-    main_arm->vLimNominal(0,1)=main_arm->vLimNominal(2,1)=vMax;
-    main_arm->vLimAdapted(0,1)=main_arm->vLimAdapted(2,1)=vMax;
     alignJointsBounds();
     return true;
 }
@@ -893,6 +891,7 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, const Vector& _o_d, bool 
         main_arm->x_0=main_arm->x_t;
         main_arm->x_n=main_arm->x_0;
         main_arm->x_d=_x_d;
+        main_arm->notMovingCounter = 0;
        if (second_arm)
        {
            second_arm->q_dot.zero();
@@ -1002,20 +1001,24 @@ int reactCtrlThread::solveIK()
     }
     Vector res(dim, 0.0);
     std::array<double,3> vals = {0, 0.05, std::numeric_limits<double>::max()};
+    Matrix bounds;
     while(count < vals.size()) {
         exit_code = solver->optimize(vals[count]);
         if (exit_code == OSQP_SOLVED) {
             yInfo("Problem solved in %d run(s)\n", count+1);
-            res = solver->get_resultInDegPerSecond();
+            res = solver->get_resultInDegPerSecond(bounds);
             break;
         }
         count++;
     }
+    main_arm->vLimAdapted = bounds.submatrix(0,main_arm->chainActiveDOF,0,1) * CTRL_RAD2DEG;
     main_arm->q_dot = res.subVector(0, main_arm->chainActiveDOF-1);
     if (second_arm)
     {
         second_arm->q_dot.setSubvector(0, res.subVector(0, 2));
         second_arm->q_dot.setSubvector(NR_TORSO_JOINTS, res.subVector(main_arm->chainActiveDOF, res.size() - 1));
+        second_arm->vLimAdapted.setSubmatrix(bounds.submatrix(0, NR_TORSO_JOINTS-1,0,1) * CTRL_RAD2DEG, 0, 0);
+        second_arm->vLimAdapted.setSubmatrix(bounds.submatrix(main_arm->chainActiveDOF, bounds.rows()-1,0,1) * CTRL_RAD2DEG, NR_TORSO_JOINTS, 0);
     }
 
     if (exit_code == OSQP_TIME_LIMIT_REACHED)
