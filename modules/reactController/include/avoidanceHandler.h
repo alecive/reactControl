@@ -34,8 +34,8 @@ class AvoidanceHandlerAbstract
 
 public:
     AvoidanceHandlerAbstract(iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
-                             iCub::iKin::iKinChain* _secondChain, bool _useSelfColPoints, const std::string& _part,
-                             yarp::sig::Vector* data, unsigned int _verbosity=0);
+                             iCub::iKin::iKinChain* _secondChain, double _useSelfColPoints, const std::string& _part,
+                             yarp::sig::Vector* data, iCub::iKin::iKinChain* _torso, unsigned int _verbosity=0, bool mainPart=true);
     
     std::string getType() const { return type; }
 
@@ -45,7 +45,7 @@ public:
     
     std::deque<yarp::sig::Vector> getCtrlPointsPosition();
     
-    virtual yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim, bool&  /*velLimited*/) { return v_lim; }
+    virtual yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim, bool&  /*velLimited*/, std::vector<yarp::sig::Vector>& Aobs, std::vector<double> &bvals) { return v_lim; }
     
     virtual ~AvoidanceHandlerAbstract() { ctrlPointChains.clear(); }
 
@@ -57,8 +57,11 @@ protected:
     unsigned int verbosity;
     std::string type;
     std::string part;
+    bool mainPart;
+    double selfColDistance;
     iCub::iKin::iKinChain& chain;
     iCub::iKin::iKinChain* secondChain;
+    iCub::iKin::iKinChain* torso;
     const std::vector<collisionPoint_t> &collisionPoints;
     std::deque<iCub::iKin::iKinChain> ctrlPointChains;
     std::vector<collisionPoint_t> totalColPoints;
@@ -85,10 +88,10 @@ class AvoidanceHandlerTactile : public virtual AvoidanceHandlerAbstract
 
 public:
     AvoidanceHandlerTactile(iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
-                            iCub::iKin::iKinChain* _secondChain, bool _useSelfColPoints, const std::string& _part,
-                            yarp::sig::Vector* data, unsigned int _verbosity=0);
+                            iCub::iKin::iKinChain* _secondChain, double _useSelfColPoints, const std::string& _part,
+                            yarp::sig::Vector* data, iCub::iKin::iKinChain* _torso, unsigned int _verbosity=0, bool mainPart=true);
     void setParameters(const yarp::os::Property &params) override;
-    yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim, bool& velLimited) override;
+    yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim, bool& velLimited, std::vector<yarp::sig::Vector>& Aobs, std::vector<double> &bvals) override;
 
 protected:
     double avoidingSpeed;

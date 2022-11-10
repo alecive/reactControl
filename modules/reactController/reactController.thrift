@@ -62,6 +62,25 @@ service reactController_IDL
   bool set_6d(1:Vector _xd, 2: Vector _od)
 
   /**
+  * Sets new Cartesian targets for both arms
+  * @param _xd Vector that specifies the new target for main arm
+  * @param _xd2 Vector that specifies the new target for secondary arm
+  * @return true/false on success/failure.
+  */
+  bool set_both_xd(1:Vector _xd, 2: Vector _xd2)
+
+  /**
+  * Sets new 6D Cartesian targets for both arms
+  * @param _xd Vector that specifies the new target for main arm
+  * @param _od Vector that specifies the new orientation for main arm
+  * @param _xd2 Vector that specifies the new target for the secondary arm
+  * @param _od2 Vector that specifies the new orientation for secondary arm
+  * @return true/false on success/failure.
+  */
+  bool set_both_6d(1:Vector _xd, 2: Vector _od, 3:Vector _xd2, 4: Vector _od2)
+
+
+  /**
   * Moves robot to home configuration.
   * @return true/false on success/failure.
   **/

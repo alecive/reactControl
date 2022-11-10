@@ -31,8 +31,18 @@
 #include <unsupported/Eigen/MatrixFunctions>
 #include <utility>
 
-
+//#define NEO_TEST
+//#define IPOPT
+#ifdef NEO_TEST
+#include "NeoQP.h"
+#else
+#ifdef IPOPT
+#include "reactIpOpt.h"
+#include <IpIpoptApplication.hpp>
+#else
 #include "reactOSQP.h"
+#endif
+#endif
 #include "particleThread.h"
 #include "avoidanceHandler.h"
 #include "visualisationHandler.h"
@@ -48,6 +58,16 @@ using namespace iCub::skinDynLib;
 #define NR_ARM_JOINTS 7
 #define NR_ARM_JOINTS_FOR_INTERACTION_MODE 5
 #define NR_TORSO_JOINTS 3
+
+static Eigen::Matrix3d axisAngleToMatrix(const Vector& state)
+{
+    auto mat = axis2dcm(state);
+    Eigen::Matrix3d final;
+    final << mat(0,0), mat(0,1), mat(0,2),
+        mat(1,0), mat(1,1), mat(1,2),
+        mat(2,0), mat(2,1), mat(2,2);
+    return final;
+}
 
 class LPFilterSO3
 {
@@ -65,7 +85,7 @@ public:
         if (alpha_ >= 1) return final_state;
         auto final = axisAngleToMatrix(final_state);
         Eigen::AngleAxisd error(final * state_.transpose());
-        if (error.angle() < 0.1) return final_state;
+        if (error.angle() < 0.01) return final_state;
         auto res = Eigen::AngleAxisd(step(((error.axis() * error.angle()).array() * alpha_).matrix()));
         return Vector{res.axis().x(), res.axis().y(), res.axis().z(), res.angle()};
     }
@@ -85,16 +105,6 @@ private:
             twist[2], 0, -twist[0],
             -twist[1], twist[0], 0;
         return skew.exp() * state_;
-    }
-
-    Eigen::Matrix3d axisAngleToMatrix(const Vector& state)
-    {
-        auto mat = axis2dcm(state);
-        Eigen::Matrix3d final;
-        final << mat(0,0), mat(0,1), mat(0,2),
-            mat(1,0), mat(1,1), mat(1,2),
-            mat(2,0), mat(2,1), mat(2,2);
-        return final;
     }
 
     double alpha_;
@@ -131,6 +141,8 @@ struct ArmInterface
     size_t chainActiveDOF;
     //parallel virtual arm and chain on which QP will be working in the positionDirect mode case
     iCub::iKin::iCubArm    *virtualArm;
+    iCub::ctrl::minJerkTrajGen *minJerkTarget; //if referenceGen is "minJerk"
+    LPFilterSO3 *filter;
 
     yarp::sig::Vector x_0;  // Initial end-effector position
     yarp::sig::Vector x_t;  // Current end-effector position
@@ -160,20 +172,27 @@ struct ArmInterface
 
     std::vector<double> fingerPos;
     yarp::sig::Vector   homePos;
+    std::string referenceGen;
     std::vector<yarp::sig::Vector> last_trajectory;
     bool avoidance;
-    bool useSelfColPoints;
+    double useSelfColPoints;
     int notMovingCounter;
+    bool useSampling;
+    double dT;
+    bool mainPart;
 
-    explicit ArmInterface(std::string _part, bool _selfColPoints);
+    ArmInterface(std::string _part, double _selfColPoints, const std::string& refGen, double _dT, bool _main=true);
     void setVMax(bool useTorso, double vMax);
-    void updateCollPoints(double dT);
+    void updateCollPoints();
     bool prepareDrivers(const std::string& robot, const std::string& name, bool stiffInteraction);
     void release();
     void updateArm(const Vector& qT);
-    void initialization(double dT, iKinChain* chain, int verbosity);
+    void initialization(iKinChain* chain, iKinChain* torso, int verbosity);
     bool checkRecoveryPath(Vector& next_x);
     void updateRecoveryPath();
+    void updateNextTarget(bool&);
+    void resetTarget(const yarp::sig::Vector& _x_d, const yarp::sig::Vector& _o_d, double trajSpeed);
+
     /**
     * Aligns joint bounds according to the actual limits of the robot
      */
@@ -194,7 +213,7 @@ public:
     reactCtrlThread(int , std::string   , std::string   , const std::string&  _ , const std::string& ,
                     int , bool , double , double , double , double , double , std::string  ,
                     bool , bool , bool, bool , bool , bool, bool , bool , bool , bool ,
-                    particleThread *, double, bool);
+                    particleThread *, double, double);
     // INIT
     bool threadInit() override;
     // RUN
@@ -212,6 +231,10 @@ public:
     bool setNewTarget(const yarp::sig::Vector& _x_d, bool _movingCircle);
 
     bool setNewTarget(const yarp::sig::Vector& _x_d, const yarp::sig::Vector& _o_d, bool _movingCircle);
+
+    bool setBothTargets(const yarp::sig::Vector& _x_d, const yarp::sig::Vector& _x2_d);
+
+    bool setBothTargets(const yarp::sig::Vector& _x_d, const yarp::sig::Vector& _o_d, const yarp::sig::Vector& _x2_d, const yarp::sig::Vector& _o2_d);
 
     // Sets the new target relative to the current position
     bool setNewRelativeTarget(const yarp::sig::Vector&);
@@ -302,8 +325,6 @@ protected:
     double dT;  //period of the thread in seconds  =getPeriod();
 
     particleThread  *prtclThrd;     // Pointer to the particleThread in order to access its data - if referenceGen is "uniformParticle"
-    iCub::ctrl::minJerkTrajGen *minJerkTarget; //if referenceGen is "minJerk"
-    LPFilterSO3 *filter;
     std::unique_ptr<ArmInterface> main_arm;
     std::unique_ptr<ArmInterface> second_arm;
     int        state;        // Flag to know in which state the thread is in
@@ -316,6 +337,7 @@ protected:
     std::vector<int> jointsToSetPosA{0,1,2,3,4,5,6};
 
     // "Classical" interfaces for the torso
+    iCubTorso         *torso;
     IEncoders         *iencsT;
     IPositionDirect   *iposDirT;
     IControlMode      *imodT;
@@ -356,7 +378,22 @@ protected:
     // QPSolver STUFF
     int solverExitCode;
     double timeToSolveProblem_s; //time taken by q_dot = solveIK(solverExitCode)
+    std::vector<Vector> Aobst{};
+    std::vector<double> bvalues{};
+    Vector obstacle{0.0,0.0,0.0};
+    yarp::os::BufferedPort<yarp::os::Bottle> NeoObsInPort; //coming from python script
+
+#ifdef NEO_TEST
+    std::unique_ptr<NeoQP> solver;
+#else
+#ifdef IPOPT
+    Ipopt::SmartPtr<Ipopt::IpoptApplication> app; // pointer to instance of main application class for making calls to Ipopt
+    Ipopt::SmartPtr<ControllerNLP> nlp; //pointer to IK solver instance
+    bool firstSolve{true};
+#else
     std::unique_ptr<QPSolver> solver;
+#endif
+#endif
 
     VisualisationHandler visuhdl;
 
@@ -364,8 +401,6 @@ protected:
     * Solves the Inverse Kinematic task
      */
     int solveIK();
-
-    yarp::sig::Vector updateNextTarget(bool&);
 
     void nextMove(bool&);
 

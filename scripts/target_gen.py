@@ -1,179 +1,276 @@
 #!/usr/bin/python3
+import copy
 import time
 import yarp
 import numpy as np
 import re
 import sys
+import json
 
 
-def randomMovements(rpc_client, inport, use_cart=False, seed=0):
-    np.random.seed(seed)
-    return_to_home = False
-    x = np.round(np.arange(-0.3, -0.05, 0.1), 2)
-    y = np.round(np.arange(-0.2, 0.05, 0.1), 2)
-    z = np.round(np.arange(-0.05, 0.35, 0.1), 2)
-    poses = np.array(np.meshgrid(x, y, z)).T.reshape(-1, 3)
-    print("Size is ", poses.shape)
-
-    feasibility = [False] * poses.shape[0]
-    indexes = np.random.permutation(poses.shape[0])
-    feasible_poses = []
-    count = 0
-    for idx in indexes:
-        pos = poses[idx]
-        if use_cart:
-            result = setXD(pos[0], pos[1], pos[2], True)
-            rpc_client.write(result)
-
-        else:
-            result = setXD(pos[0], pos[1], pos[2], False)
-            send_command(rpc_client, result)
-
-        poseStr = None
-        while not poseStr:
-            poseStr = read_once(inport)
-
-        posErr = np.sqrt((pos[0] * 1000 - int(poseStr[0])) ** 2 + (pos[1] * 1000 - int(poseStr[1])) ** 2 + (
-                    pos[2] * 1000 - int(poseStr[2])) ** 2)
-        print(pos, idx, count, np.round(posErr, 2))
-        count += 1
-        if posErr < 10:  # 1 cm
-            feasibility[idx] = True
-            feasible_poses.append(pos)
-        if return_to_home:
-            result = yarp.Bottle()
-            result.clear()
-            result.addString("go_home")
-
-            send_command(rpc_client, result)
-            poseStr = None
-            while not poseStr:
-                poseStr = read_once(inport)
-            print(' '.join(poseStr[:3]))
-
-    print(count, len(feasible_poses))
-    print(np.array(feasible_poses))
-
-
-def streamedTargets(rpc_client, timeout=4, use_cart=False, use_right=False, seed=0):
-    np.random.seed(seed)
-    return_to_home = False
-    x = np.round(np.arange(-0.3, -0.15, 0.05), 2)  # x = np.round(np.arange(-0.3, -0.05, 0.05),2)
-    y = np.round(np.arange(-0.2, 0.0, 0.05), 2)  # y = np.round(np.arange(-0.2, 0.05, 0.05),2)
-    z = np.round(np.arange(0.05, 0.25, 0.05), 2)  # z = np.round(np.arange(-0.05, 0.35, 0.05),2)
-    poses = np.array(np.meshgrid(x, y, z)).T.reshape(-1, 3)
-    print("Size is ", poses.shape)
-    indexes = np.random.permutation(poses.shape[0])
-    count = 0
-    for idx in indexes:
-        pos = poses[idx]
-        if use_cart:
-            result = setXD(pos[0], -pos[1] if use_right else pos[1], pos[2], True)
-            rpc_client.write(result)
-
-        else:
-            result = setXD(pos[0], -pos[1] if use_right else pos[1], pos[2], False)
-            send_command(rpc_client, result)
-
-        print(pos)
-        start = time.time()
-        while time.time() - start < timeout:
-            pass
-
-
-def p2pMovement(rpc_client, reps=10, period=9, use_right=False):
-    points_right = [[-0.232, 0.258, 0.021, -0.1477, -0.7912, 0.5933, 3.0637],
-                    [-0.264, 0.032, 0.034, -0.112, 0.9935, 0.01514, 3.1355]]
-    points_left = [[-0.232, -0.258, 0.021, -0.1477, 0.5933, -0.7912, 3.0637],
-                   [-0.264, -0.032, 0.034, -0.112, 0.01514, 0.9935, 3.1355]]
-    points = points_right if use_right else points_left
-    ite = 0
-    start = time.time()
-    for i in range(reps):
-        for point in points:
-            while (time.time() - start) < period * ite:
-                pass
-            ite += 1
-            result = yarp.Bottle()
-            result.clear()
-            result.addString("set_6d")
-            l = result.addList()
-            l.addFloat64(point[0])
-            l.addFloat64(point[1])
-            l.addFloat64(point[2])
-            k = result.addList()
-            k.addFloat64(point[3])
-            k.addFloat64(point[4])
-            k.addFloat64(point[5])
-            k.addFloat64(point[6])
-            send_command(rpc_client, result)
-            # poseStr = None
-
-            # while not poseStr:
-            #    poseStr = read_once(inport)
-
-
-def lemniscateMovement(rpc_client, client, inport, center, step=0.15, reps=10, use_right=False):
-    points = [[0.0, 0.000, -0.000], [0.0, 0.037, -0.037], [0.0, 0.075, -0.074], [0.0, 0.113, -0.110],
-              [0.0, 0.152, -0.145], [0.0, 0.192, -0.179],
-              [0.0, 0.233, -0.211], [0.0, 0.276, -0.241], [0.0, 0.321, -0.269], [0.0, 0.367, -0.293],
-              [0.0, 0.415, -0.314], [0.0, 0.464, -0.331],
-              [0.0, 0.515, -0.344], [0.0, 0.567, -0.351], [0.0, 0.620, -0.353], [0.0, 0.672, -0.350],
-              [0.0, 0.723, -0.340], [0.0, 0.773, -0.323],
-              [0.0, 0.820, -0.301], [0.0, 0.864, -0.272], [0.0, 0.903, -0.237], [0.0, 0.937, -0.196],
-              [0.0, 0.964, -0.152], [0.0, 0.984, -0.103],
-              [0.0, 0.996, -0.052], [0.0, 0.996, 0.052], [0.0, 0.984, 0.103], [0.0, 0.964, 0.152], [0.0, 0.937, 0.196],
-              [0.0, 0.903, 0.237],
-              [0.0, 0.864, 0.272], [0.0, 0.820, 0.301], [0.0, 0.773, 0.323], [0.0, 0.723, 0.340], [0.0, 0.672, 0.350],
-              [0.0, 0.620, 0.353],
-              [0.0, 0.567, 0.351], [0.0, 0.515, 0.344], [0.0, 0.464, 0.331], [0.0, 0.415, 0.314], [0.0, 0.367, 0.293],
-              [0.0, 0.321, 0.269],
-              [0.0, 0.276, 0.241], [0.0, 0.233, 0.211], [0.0, 0.192, 0.179], [0.0, 0.152, 0.145], [0.0, 0.113, 0.110],
-              [0.0, 0.075, 0.074],
-              [0.0, 0.037, 0.037], [0.0, 0.000, 0.000], [0.0, -0.037, -0.037], [0.0, -0.075, -0.074],
-              [0.0, -0.113, -0.110], [0.0, -0.152, -0.145],
-              [0.0, -0.192, -0.179], [0.0, -0.233, -0.211], [0.0, -0.276, -0.241], [0.0, -0.321, -0.269],
-              [0.0, -0.367, -0.293], [0.0, -0.415, -0.314],
-              [0.0, -0.464, -0.331], [0.0, -0.515, -0.344], [0.0, -0.567, -0.351], [0.0, -0.620, -0.353],
-              [0.0, -0.672, -0.350], [0.0, -0.723, -0.340],
-              [0.0, -0.773, -0.323], [0.0, -0.820, -0.301], [0.0, -0.864, -0.272], [0.0, -0.903, -0.237],
-              [0.0, -0.937, -0.196], [0.0, -0.964, -0.152],
-              [0.0, -0.984, -0.103], [0.0, -0.996, -0.052], [0.0, -0.996, 0.052], [0.0, -0.984, 0.103],
-              [0.0, -0.964, 0.152], [0.0, -0.937, 0.196],
-              [0.0, -0.903, 0.237], [0.0, -0.864, 0.272], [0.0, -0.820, 0.301], [0.0, -0.773, 0.323],
-              [0.0, -0.723, 0.340], [0.0, -0.672, 0.350],
-              [0.0, -0.620, 0.353], [0.0, -0.567, 0.351], [0.0, -0.515, 0.344], [0.0, -0.464, 0.331],
-              [0.0, -0.415, 0.314], [0.0, -0.367, 0.293],
-              [0.0, -0.321, 0.269], [0.0, -0.276, 0.241], [0.0, -0.233, 0.211], [0.0, -0.192, 0.179],
-              [0.0, -0.152, 0.145], [0.0, -0.113, 0.110],
-              [0.0, -0.075, 0.074], [0.0, -0.037, 0.037]]
-    if (use_right):
-        center[1] *= -1
-    result = setXD(center[0], center[1], center[2], False)
+def both_arms_circular(rpc_client, client, inp, pars):
+    center = pars["center"]
+    center[1] *= -1  # prvni je prava
+    offset = -0.15
+    p1 = [center[0], center[1] + pars["radius"], center[2]]
+    p2 = [center[0], center[1] + pars["radius"] + offset, center[2]]
+    result = set_both_xd(p1, p2, False)
     send_command(rpc_client, result)
-    poseStr = None
-    while not poseStr:
-        poseStr = read_once(inport)
+    pose_str = None
+    while not pose_str:
+        pose_str = read_once(inp)
     result.clear()
     result.addString("set_streaming_xd")
     send_command(rpc_client, result)
+    small_start = time.time()
+    while time.time() - small_start < 0.1:
+        pass
+
+    start = time.time()
+    while time.time() - start < pars["time"]:
+        x = center[0]
+        y = center[1] + pars["radius"] * np.cos(2.0 * np.pi * pars["freq"] * (time.time() - start))
+        z = center[2] + pars["radius"] * np.sin(2.0 * np.pi * pars["freq"] * (time.time() - start))
+        print(x, y, z)
+        result = set_both_xd([x, y, z], [x, y + offset, z], True)
+        client.write(result)
+        small_start = time.time()
+        while time.time() - small_start < 0.02:
+            pass
+
+def bimanual_task(rpc_client, client, inp, pars):
+    center = pars["center"]
+    center[1] *= -1  # prvni je prava
+    pars["radius"] *= 0.5
+    center[1] -= 0.04
+    offset = -0.10 # -0.15
+    p1 = [center[0], center[1] + pars["radius"], center[2]]
+    p2 = [center[0], center[1] + pars["radius"] + offset, center[2]]
+    result = set_both_xd(p1, p2, False)
+    send_command(rpc_client, result)
+    pose_str = None
+    while not pose_str:
+        pose_str = read_once(inp)
+    result.clear()
+    result.addString("set_streaming_xd")
+    send_command(rpc_client, result)
+    small_start = time.time()
+    while time.time() - small_start < 0.1:
+        pass
+
+    start = time.time()
+    while time.time() - start < pars["time"]:
+        x = center[0]
+        y = center[1] + pars["radius"] * np.cos(2.0 * np.pi * pars["freq"] * (time.time() - start))
+        z = center[2] + pars["radius"] * np.sin(2.0 * np.pi * pars["freq"] * (time.time() - start))
+        print(x, y, z)
+        result = set_both_xd([x, y, z], [x, y + offset, z], True)
+        client.write(result)
+        small_start = time.time()
+        while time.time() - small_start < 0.02:
+            pass
+
+
+def both_arms_lemniscate(rpc_client, client, inp, pars):
+    center = pars["lemni_center"]
+    center[1] *= -1
+    offset = -0.15
+    p1 = [center[0], center[1], center[2]]
+    p2 = [center[0], center[1] + offset, center[2]]
+    result = set_both_xd(p1, p2, False)
+    send_command(rpc_client, result)
+    pose_str = None
+    while not pose_str:
+        pose_str = read_once(inp)
+    result.clear()
+    result.addString("set_streaming_xd")
+    send_command(rpc_client, result)
+    small_start = time.time()
+    while time.time() - small_start < 0.1:
+        pass
     gain = 0.13
     start = time.time()
     i = 0
-    for rep in range(reps):
-        for point in points:
-            while (time.time() - start) < i * step:
+    for rep in range(pars["lemni_reps"]):
+        for point in pars["points"]:
+            while (time.time() - start) < i * pars["lemni_step"]:
                 pass
             i += 1
             x = center[0] + gain * point[0]
             y = center[1] + gain * point[1]
             z = center[2] + gain * point[2]
             print(x, y, z)
-            result = setXD(x, y, z, True)
+            result = set_both_xd([x, y, z], [x, y + offset, z], True)
             client.write(result)
 
 
-def setXD(x, y, z, streaming=False):
+
+def both_arms_circular_colls(rpc_client, client, inp, pars):
+    center = pars["center"]
+    center2 = copy.deepcopy(pars["center"])
+    pars["radius"] *= 1.25
+    center[1] *= -1  # prvni je prava
+    result = set_both_xd([center[0], center[1] + pars["radius"], center[2]],
+                         [center2[0], center2[1] - pars["radius"], center2[2]], False)
+    send_command(rpc_client, result)
+    pose_str = None
+    while not pose_str:
+        pose_str = read_once(inp)
+    result.clear()
+    result.addString("set_streaming_xd")
+    send_command(rpc_client, result)
+    small_start = time.time()
+    while time.time() - small_start < 0.1:
+        pass
+
+    start = time.time()
+    while time.time() - start < pars["time"]:
+        x = center[0]
+        y = center[1] + pars["radius"] * np.cos(2.0 * np.pi * pars["freq"] * (time.time() - start))
+        z = center[2] + pars["radius"] * np.sin(2.0 * np.pi * pars["freq"] * (time.time() - start))
+        x2 = center2[0]
+        y2 = center2[1] - pars["radius"] * np.cos(2.0 * np.pi * pars["freq"] * (time.time() - start))
+        z2 = center2[2] + pars["radius"] * np.sin(2.0 * np.pi * pars["freq"] * (time.time() - start))
+        print(x, y, z)
+        result = set_both_xd([x, y, z], [x2, y2, z2], True)
+        client.write(result)
+        small_start = time.time()
+        while time.time() - small_start < 0.02:
+            pass
+
+
+def both_arms_holdpos(rpc_client, inp, timeout=30):
+    center = [-0.299, -0.174, 0.1]
+    center[1] *= -1
+    result = set_both_xd([center[0], center[1], center[2]], [center[0], -center[1], center[2]])
+    send_command(rpc_client, result)
+    pose_str = None
+    while not pose_str:
+        pose_str = read_once(inp)
+    result.clear()
+    result.addString("hold_position")
+    send_command(rpc_client, result)
+    start = time.time()
+    while time.time() - start < timeout:
+        pass
+
+
+def set_both_xd(p1, p2, streaming=False):
+    bot = yarp.Bottle()
+    bot.clear()
+    if streaming:
+        for p in p1:
+            bot.addFloat64(p)
+
+        for p in p2:
+            bot.addFloat64(p)
+    else:
+        bot.addString("set_both_xd")
+        m = bot.addList()
+        for p in p1:
+            m.addFloat64(p)
+        k = bot.addList()
+        for p in p2:
+            k.addFloat64(p)
+
+    return bot
+
+
+def streamed_exp(rpc_client, pars, use_right=False):
+    np.random.seed(pars["seed"])
+    x = np.round(np.arange(pars["xmin"], pars["xmax"], pars["xstep"]), 2)  # np.round(np.arange(-0.3, -0.05, 0.05),2)
+    y = np.round(np.arange(pars["ymin"], pars["ymax"], pars["ystep"]), 2)  # np.round(np.arange(-0.2, 0.05, 0.05),2)
+    y = -y if use_right else y
+    z = np.round(np.arange(pars["zmin"], pars["zmax"], pars["zstep"]), 2)  # np.round(np.arange(-0.05, 0.35, 0.05),2)
+    poses = np.array(np.meshgrid(x, y, z)).T.reshape(-1, 3)
+    rot = [[-0.1477, -0.7912, 0.5933, 3.0637], [-0.112, 0.9935, 0.01514, 3.1355]] if use_right \
+        else [[-0.1477, 0.5933, -0.7912, 3.0637], -0.112, 0.01514, 0.9935, 3.1355]
+    print("Size is ", poses.shape)
+    indexes = np.random.permutation(poses.shape[0])
+    for idx in indexes:
+        pos = poses[idx]
+        rot_idx = np.random.randint(0, 1)
+        # result = set_xd(pos[0], -pos[1] if use_right else pos[1], pos[2], False)
+        result = yarp.Bottle()
+        result.clear()
+        result.addString("set_6d")
+        m = result.addList()
+        m.addFloat64(pos[0])
+        m.addFloat64(pos[1])
+        m.addFloat64(pos[2])
+        k = result.addList()
+        k.addFloat64(rot[rot_idx][0])
+        k.addFloat64(rot[rot_idx][1])
+        k.addFloat64(rot[rot_idx][2])
+        k.addFloat64(rot[rot_idx][3])
+        send_command(rpc_client, result)
+
+        print(pos)
+        start = time.time()
+        while time.time() - start < pars["timeout"]:
+            pass
+
+
+def p2p_exp(client, pars, use_right=False):
+    points = pars["points_right"] if use_right else pars["points_left"]
+    ite = 0
+    start = time.time()
+    for i in range(pars["p2p_reps"] + 1):
+        for point in points:
+            while (time.time() - start) < pars["p2p_period"] * ite:
+                pass
+            ite += 1
+            result = yarp.Bottle()
+            result.clear()
+            result.addString("set_6d")
+            m = result.addList()
+            m.addFloat64(point[0])
+            m.addFloat64(point[1])
+            m.addFloat64(point[2])
+            k = result.addList()
+            k.addFloat64(point[3])
+            k.addFloat64(point[4])
+            k.addFloat64(point[5])
+            k.addFloat64(point[6])
+            send_command(client, result)
+            if i == pars["p2p_reps"]:
+                while (time.time() - start) < pars["p2p_period"] * ite:
+                    pass
+                break
+
+
+def lemniscate_exp(rpc_client, client, inp, pars, use_right=False):
+    center = pars["lemni_center"]
+    if use_right:
+        center[1] *= -1
+    result = set_xd(center[0], center[1], center[2], False)
+    send_command(rpc_client, result)
+    pose_str = None
+    while not pose_str:
+        pose_str = read_once(inp)
+    result.clear()
+    result.addString("set_streaming_xd")
+    send_command(rpc_client, result)
+    small_start = time.time()
+    while time.time() - small_start < 0.1:
+        pass
+    gain = 0.13
+    start = time.time()
+    i = 0
+    for rep in range(pars["lemni_reps"]):
+        for point in pars["points"]:
+            while (time.time() - start) < i * pars["lemni_step"]:
+                pass
+            i += 1
+            x = center[0] + gain * point[0]
+            y = center[1] + gain * point[1]
+            z = center[2] + gain * point[2]
+            print(x, y, z)
+            result = set_xd(x, y, z, True)
+            client.write(result)
+
+
+def set_xd(x, y, z, streaming=False):
     bot = yarp.Bottle()
     bot.clear()
     if streaming:
@@ -182,21 +279,21 @@ def setXD(x, y, z, streaming=False):
         bot.addFloat64(z)
     else:
         bot.addString("set_xd")
-        l = bot.addList()
-        l.addFloat64(x)
-        l.addFloat64(y)
-        l.addFloat64(z)
+        m = bot.addList()
+        m.addFloat64(x)
+        m.addFloat64(y)
+        m.addFloat64(z)
     return bot
 
 
-def holdPosition(rpc_client):
+def holdpos(rpc_client):
     result = yarp.Bottle()
     result.clear()
     result.addString("hold_position")
     send_command(rpc_client, result)
 
 
-def stopMovement(rpc_client):
+def stop_move(rpc_client):
     result = yarp.Bottle()
     result.clear()
     result.addString("stop")
@@ -204,49 +301,59 @@ def stopMovement(rpc_client):
     print("Stop sent")
 
 
-def circularMovement(rpc_client, client, inport, center, radius, frequency, t=60, use_right=False):
-    if (use_right):
+def circular_exp(rpc_client, client, inp, pars, use_right=False):
+    center = pars["center"]
+    if use_right:
         center[1] *= -1
-    result = setXD(center[0], center[1], center[2], False)
+    result = set_xd(center[0], center[1] + pars["radius"], center[2], False)
     send_command(rpc_client, result)
-    poseStr = None
-    while not poseStr:
-        poseStr = read_once(inport)
+    pose_str = None
+    while not pose_str:
+        pose_str = read_once(inp)
     result.clear()
     result.addString("set_streaming_xd")
     send_command(rpc_client, result)
+    small_start = time.time()
+    while time.time() - small_start < 0.1:
+        pass
 
     start = time.time()
-    while time.time() - start < t:
+    while time.time() - start < pars["time"]:
         x = center[0]
-        y = center[1] + radius * np.cos(2.0 * np.pi * frequency * (time.time() - start))
-        z = center[2] + radius * np.sin(2.0 * np.pi * frequency * (time.time() - start))
+        y = center[1] + pars["radius"] * np.cos(2.0 * np.pi * pars["freq"] * (time.time() - start))
+        z = center[2] + pars["radius"] * np.sin(2.0 * np.pi * pars["freq"] * (time.time() - start))
         print(x, y, z)
-        result = setXD(x, y, z, True)
+        result = set_xd(x, y, z, True)
         client.write(result)
         small_start = time.time()
         while time.time() - small_start < 0.02:
             pass
 
 
-def straightLine(rpc_client, client, inport, start_pos, step, use_right=False):
-    stop = 0.25
+def linmov_exp(rpc_client, client, inp, pars, use_right=False):
+    stop = pars["stop"]
+    step = pars["step"]
+    start_pos = pars["start"]
     if use_right:
         start_pos[1] *= -1
         stop *= -1
         step *= -1
-    result = setXD(start_pos[0], start_pos[1], start_pos[2], False)
+    result = set_xd(start_pos[0], start_pos[1], start_pos[2], False)
     send_command(rpc_client, result)
-    poseStr = None
-    while not poseStr:
-        poseStr = read_once(inport)
+    pose_str = None
+    while not pose_str:
+        pose_str = read_once(inp)
     result.clear()
     result.addString("set_streaming_xd")
     send_command(rpc_client, result)
+    small_start = time.time()
+    while time.time() - small_start < 0.1:
+        pass
+
     y = start_pos[1]
     while (y < stop and not use_right) or (y > stop and use_right):
         y += step
-        result = setXD(start_pos[0], y, start_pos[2], True)
+        result = set_xd(start_pos[0], y, start_pos[2], True)
         client.write(result)
         small_start = time.time()
         while time.time() - small_start < 0.02:
@@ -255,19 +362,22 @@ def straightLine(rpc_client, client, inport, start_pos, step, use_right=False):
     small_start = time.time()
     while time.time() - small_start < 2:
         pass
-    result = setXD(start_pos[0], start_pos[1], start_pos[2], False)
-    send_command(rpc_client, result)
+    result = set_xd(start_pos[0], start_pos[1], start_pos[2], False)
+    send_command(client, result)
+    pose_str = None
+    while not pose_str:
+        pose_str = read_once(inp)
 
 
-def classicScenario(rpc_client, inport, timeout=30, use_right=False):
+def classic_exp(rpc_client, inp, timeout=30, use_right=False):
     poses = [[-0.299, -0.174, 0.05], [-0.299, -0.174, 0.15], [-0.299, -0.174, 0.00], [-0.299, -0.174, 0.12]]
     for pos in poses:
-        result = setXD(pos[0], -pos[1] if use_right else pos[1], pos[2], False)
+        result = set_xd(pos[0], -pos[1] if use_right else pos[1], pos[2], False)
         send_command(rpc_client, result)
-        poseStr = None
+        pose_str = None
 
-        while not poseStr:
-            poseStr = read_once(inport)
+        while not pose_str:
+            pose_str = read_once(inp)
 
     result = yarp.Bottle()
     result.clear()
@@ -282,17 +392,34 @@ def classicScenario(rpc_client, inport, timeout=30, use_right=False):
         pass
 
 
-def visualScenario(rpc_client, inport, use_right=False):
+def holdpos_exp(rpc_client, inp, timeout=30, use_right=False):
+    center = [-0.299, -0.174, 0.1]
+    if use_right:
+        center[1] *= -1
+    result = set_xd(center[0], center[1], center[2], False)
+    send_command(rpc_client, result)
+    pose_str = None
+    while not pose_str:
+        pose_str = read_once(inp)
+    result.clear()
+    result.addString("hold_position")
+    send_command(rpc_client, result)
+    start = time.time()
+    while time.time() - start < timeout:
+        pass
+
+
+def visual_exp(rpc_client, inp, use_right=False):
     poses = [[-0.299, -0.174, 0.05], [-0.299, -0.174, 0.15], [-0.299, -0.174, 0.00], [-0.299, -0.174, 0.1],
              [-0.299, -0.074, 0.1]]
     for pos in poses:
-        result = setXD(pos[0], -pos[1] if use_right else pos[1], pos[2], False)
+        result = set_xd(pos[0], -pos[1] if use_right else pos[1], pos[2], False)
         send_command(rpc_client, result)
-        poseStr = None
+        pose_str = None
 
-        while not poseStr:
-            poseStr = read_once(inport)
-        print(poseStr)
+        while not pose_str:
+            pose_str = read_once(inp)
+        print(pose_str)
         print(pos)
 
 
@@ -304,16 +431,18 @@ def send_command(rpc_client, command):
     return ans.toString()
 
 
-def read_once(inport):
+def read_once(inp):
     bottle = yarp.Bottle()
     bottle.clear()
     # read the messge
-    inport.read(bottle)
+    inp.read(bottle)
     # print("Received ", bottle.toString())
     return bottle.toString().split(' ')
 
 
-if __name__ == "__main__":
+def main(move_type):
+    with open("scripts/sample.json") as fp:
+        params = json.load(fp)
     yarp.Network.init()  # Initialise YARP
     conf = open('app/conf/reactController.ini')
     part = "left"
@@ -323,52 +452,62 @@ if __name__ == "__main__":
             break
 
     conf.close()
-    use_cart = False
-    use_right = (part == "right")
-    rpcport_name = "/testCart/target:i" if use_cart else "/reactController/rpc:i"
-    inport_name = "/testCart/finished:o" if use_cart else "/reactController/finished:o"
+    use_right_ = (part == "right")
+    rpcport_name = "/reactController/rpc:i"
+    inport_name = "/reactController/finished:o"
 
-    streamedPort = "/reactController/streamedTargets:i"
+    streamedport = "/reactController/streamedTargets:i"
     inport = yarp.Port()
     inport.open("/reader")
     yarp.Network.connect(inport_name, inport.getName())
 
-    outPort = yarp.Port()
-    outPort.open('/pokus:o')
-    yarp.Network.connect(outPort.getName(), streamedPort)
+    outport = yarp.Port()
+    outport.open('/pokus:o')
+    yarp.Network.connect(outport.getName(), streamedport)
 
-    outPortRpc = yarp.RpcClient()
-    outPortRpc.open('/pokusRpc:o')
-    yarp.Network.connect(outPortRpc.getName(), rpcport_name)
+    outport_rpc = yarp.RpcClient()
+    outport_rpc.open('/pokusRpc:o')
+    yarp.Network.connect(outport_rpc.getName(), rpcport_name)
 
-    stopMovement(outPortRpc)
+    stop_move(outport_rpc)
 
-    move_type = int(sys.argv[1])
     start = time.time()
     while time.time() - start < 1:
         pass
     if move_type == 0:
-        visualScenario(outPortRpc, inport, use_right)
-        holdPosition(outPortRpc)
+        visual_exp(outport_rpc, inport, use_right_)
+        holdpos(outport_rpc)
     elif move_type == 1:
-        classicScenario(outPortRpc, inport, 30, use_right)
+        holdpos_exp(outport_rpc, inport, 18, use_right_)
     elif move_type == 2:
-        streamedTargets(outPortRpc, 3, use_cart, use_right, 10)
+        streamed_exp(outport_rpc, params["randomTargets"], use_right_)
     elif move_type == 3:
-        p2pMovement(outPortRpc, reps=5, period=6, use_right=use_right)
+        p2p_exp(outport_rpc, params["p2p"], use_right=use_right_)
     elif move_type == 4:
-        circularMovement(outPortRpc, outPort, inport, [-0.299, -0.074, 0.1], 0.08, 0.2, t=30, use_right=use_right)
+        circular_exp(outport_rpc, outport, inport, params["circle"], use_right=use_right_)
     elif move_type == 5:
-        lemniscateMovement(outPortRpc, outPort, inport, [-0.28, -0.17, 0.09], step=0.1, reps=5, use_right=use_right)
+        lemniscate_exp(outport_rpc, outport, inport, params["lemniscate"], use_right=use_right_)
     elif move_type == 6:
-        straightLine(outPortRpc, outPort, inport, [-0.304, -0.202, 0.023], 0.1 / 50, use_right)
-    # else:
-    #     randomMovements(outPortRpc, inport, use_cart, 0)
-
+        linmov_exp(outport_rpc, outport, params["linMov"], use_right_)
+    elif move_type == 7:
+        both_arms_circular(outport_rpc, outport, inport, params["circle"])
+    elif move_type == 8:
+        both_arms_circular_colls(outport_rpc, outport, inport, params["circle"])
+    elif move_type == 9:
+        both_arms_lemniscate(outport_rpc, outport, inport, params["lemniscate"])
+    elif move_type == 10:
+        both_arms_holdpos(outport_rpc, inport, 30)
+    elif move_type == 11:
+        bimanual_task(outport_rpc, outport, inport, params["circle"])
+    
     start = time.time()
-    while time.time() - start < 1:
+    while time.time() - start < 2:
         pass
     if move_type > 0:
-        stopMovement(outPortRpc)
+        stop_move(outport_rpc)
         # close the network
     yarp.Network.fini()
+
+
+if __name__ == "__main__":
+    main(int(sys.argv[1]))

@@ -104,7 +104,7 @@ private:
     
     bool hittingConstraints; //inequality constraints for safety of shoudler assembly and to prevent self-collisions torso-upper arm, upper-arm - forearm  
     bool orientationControl; //if orientation should be controlled as well
-    bool selfColPoints; // add robot body parts as the collision points to the avoidance handler
+    double selfColPoints; // minimum distance between robot body parts (-1 to turn off self-collision avoidance)
     
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
@@ -142,7 +142,7 @@ public:
         referenceGen = "minJerk";
         hittingConstraints = true;
         orientationControl = true;
-        selfColPoints = true;
+        selfColPoints = -1;
         
         tactileCollisionPointsOn = true;
         visualCollisionPointsOn = true;
@@ -213,6 +213,34 @@ public:
         yInfo("[reactController] return false\n");
         return false;
     }
+
+    bool set_both_xd(const yarp::sig::Vector& _xd, const yarp::sig::Vector& _xd2) override
+    {
+        if (_xd.size()>=3 && _xd2.size() >=3)
+        {
+            yInfo(" ");
+            yInfo("[reactController] received new x_d: %s\t x2_d: %s", _xd.toString(3).c_str(), _xd2.toString(3).c_str());
+            return rctCtrlThrd->setBothTargets(_xd, _xd2);
+        }
+        yInfo("[reactController] return false\n");
+        return false;
+    }
+
+    bool set_both_6d(const yarp::sig::Vector& _xd, const yarp::sig::Vector& _od,
+                     const yarp::sig::Vector& _xd2,const yarp::sig::Vector& _od2) override
+    {
+        if (_xd.size()>=3 && _od.size() >=4 && _xd2.size()>=3 && _od2.size() >=4)
+        {
+            yInfo(" ");
+            yInfo("[reactController] received new x_d: %s\t o_d: %s", _xd.toString(3).c_str(), _od.toString(3).c_str());
+            yInfo("[reactController] received new x2_d: %s\t o2_d: %s", _xd2.toString(3).c_str(), _od2.toString(3).c_str());
+            return rctCtrlThrd->setBothTargets(_xd, _od, _xd2, _od2);
+        }
+        yInfo("[reactController] return false\n");
+        return false;
+    }
+
+
 
     bool go_home() override
     {
@@ -623,24 +651,13 @@ public:
             //****************** self-collision points ******************
             if (rf.check("selfColPoints"))
             {
-                if(rf.find("selfColPoints").asString()=="on")
-                {
-                    selfColPoints = true;
-                    yInfo("[reactController] selfColPoints flag set to on.");
-                }
-                else
-                {
-                    selfColPoints = false;
-                    yInfo("[reactController] selfColPoints flag set to off.");
-                }
+                selfColPoints = rf.find("selfColPoints").asFloat64();
+                yInfo("[reactController] selfColPoints distance set to %g.",selfColPoints);
             }
-            else
-            {
-                yInfo("[reactController] Could not find selfColPoints flag (on/off) in the config file; using %d as default",selfColPoints);
-            }
+            else yInfo("[reactController] Could not find restPosWeight in the config file; using %g as default",selfColPoints);
 
 
-         //********************** Visualizations in simulator ***********************
+            //********************** Visualizations in simulator ***********************
             if (robot == "icubSim"){
                 if (rf.check("visualizeTargetInSim"))
                 {

@@ -28,13 +28,14 @@ using namespace iCub::iKin;
 using namespace iCub::skinDynLib;
 
 AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
-                                                   iCub::iKin::iKinChain* _secondChain, bool _useSelfColPoints, const std::string& _part,
-                                                   yarp::sig::Vector* data, const unsigned int _verbosity):
-        chain(_chain), collisionPoints(_colPoints), secondChain(_secondChain), part(_part), verbosity(_verbosity), type("none")
+                                                   iCub::iKin::iKinChain* _secondChain, double _useSelfColPoints, const std::string& _part,
+                                                   yarp::sig::Vector* data, iCub::iKin::iKinChain* _torso, const unsigned int _verbosity, bool _mainPart):
+        chain(_chain), collisionPoints(_colPoints), secondChain(_secondChain), torso(_torso), part(_part), verbosity(_verbosity), type("none"),  mainPart(_mainPart),
+        selfColDistance(_useSelfColPoints)
 {
     selfColPoints.resize(4);
     selfControlPoints.resize(2);
-    if (_useSelfColPoints)
+    if (selfColDistance > 0)
     {
         // front chest, back, face, back of head, ears (2x), hip (3x), front chest low band (relative coords to SKIN_FRONT_TORSO)
         std::vector<std::vector<double>> posx{{-0.13, -0.122, -0.084}, {0.05,  0.065, 0.08}, {-0.12, -0.112, -0.082},
@@ -189,7 +190,7 @@ void AvoidanceHandlerAbstract::checkSelfCollisions()
     std::vector<int> indexes = {SkinPart_2_LinkNum[SKIN_LEFT_HAND].linkNum + 3,
                                 SkinPart_2_LinkNum[SKIN_LEFT_FOREARM].linkNum + 3,
                                 SkinPart_2_LinkNum[SKIN_LEFT_UPPER_ARM].linkNum + 3};
-    if (secondChain)
+    if (secondChain && !mainPart)
     {
         for (int i = 0; i < 3; ++i)
         {
@@ -204,8 +205,10 @@ void AvoidanceHandlerAbstract::checkSelfCollisions()
     int index = 0;
     for (int k = 0; k < 2; ++k)
     {
+        double limit = LIMIT;
         for (int j = 0; j < transforms[0].size(); ++j)
         {
+            if (transforms[0].size() > 1 && j == 0 && k == 0) limit = selfColDistance;
             for (const auto& colPoint : selfColPoints[j])
             {
                 Vector pos = transforms[k][j] * colPoint;
@@ -221,9 +224,9 @@ void AvoidanceHandlerAbstract::checkSelfCollisions()
                     }
                 }
                 neardist = sqrt(neardist);
-                if (neardist < LIMIT) // distance lower than 0.04 m
+                if (neardist < limit) // distance lower than 0.04 m
                 {
-                    collisionPoint_t cp {(k == 0) ? SKIN_LEFT_HAND : SKIN_LEFT_FOREARM, (1.1 - neardist/LIMIT)*2};
+                    collisionPoint_t cp {(k == 0) ? SKIN_LEFT_HAND : SKIN_LEFT_FOREARM, (1.1 - neardist/limit)*2};
                     cp.x = selfControlPoints[k][nearest];
                     Vector n = pos.subVector(0, 2) - selfControlPoints[k][nearest];
                     cp.n = n / yarp::math::norm(n);
@@ -239,10 +242,9 @@ void AvoidanceHandlerAbstract::checkSelfCollisions()
 
 /****************************************************************/
 AvoidanceHandlerTactile::AvoidanceHandlerTactile(iCub::iKin::iKinChain &_chain,const std::vector<collisionPoint_t> &_colPoints,
-                                                 iCub::iKin::iKinChain* _secondChain, bool _useSelfColPoints, const std::string& _part,
-                                                 yarp::sig::Vector* data, const unsigned int _verbosity):
-        AvoidanceHandlerAbstract(_chain,_colPoints, _secondChain,
-                                 _useSelfColPoints, _part, data, _verbosity)
+                                                 iCub::iKin::iKinChain* _secondChain, double _useSelfColPoints, const std::string& _part,
+                                                 yarp::sig::Vector* data, iCub::iKin::iKinChain* _torso, const unsigned int _verbosity, bool _mainPart):
+        AvoidanceHandlerAbstract(_chain,_colPoints, _secondChain, _useSelfColPoints, _part, data, _torso, _verbosity, _mainPart)
 {
     type="tactile";
     avoidingSpeed = 1;  // produce collisionPoint.magnitude * avoidingSpeed rad/s repulsive speed
@@ -263,7 +265,7 @@ void AvoidanceHandlerTactile::setParameters(const Property &parameters)
 }
 
 /****************************************************************/
-Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, bool& velLimited)
+Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, bool& velLimited, std::vector<yarp::sig::Vector>& Aobs, std::vector<double> &bvals)
 {
     printMessage(2,"AvoidanceHandlerTactile::getVLIM\n");
     Matrix VLIM=v_lim;
@@ -272,9 +274,11 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, bool& velLimited)
     int dim_offset = dim-7;  // 3 if dim == 10; 0 if dim == 7
     ctrlPointChains.clear();
     totalColPoints = collisionPoints;
+//    if (!mainPart) totalColPoints.clear();
     checkSelfCollisions();
     for(const auto & colPoint : totalColPoints)
     {
+        double coef = 0.8;
         iKinChain customChain= chain; //instantiates a new chain, copying from the old (full) one
         if (verbosity >= 5)
         {
@@ -287,18 +291,21 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, bool& velLimited)
         // if the skin part is a hand, no need to remove any links from the chain
         if ((colPoint.skin_part == SKIN_LEFT_FOREARM) || (colPoint.skin_part == SKIN_RIGHT_FOREARM))
         {
+            coef = 0.5;
             customChain.rmLink(6+dim_offset); customChain.rmLink(5+dim_offset);
             // we keep link 4(+3) from elbow to wrist - it is getH(4(+3)) that is the FoR at the wrist in which forearm skin is expressed; and we want to keep the elbow joint part of the game
             printMessage(2,"obstacle threatening skin part %s, blocking links 5(+3) and 6(+3) on subchain for avoidance\n",SkinPart_s[colPoint.skin_part].c_str());
         }
         else if ((colPoint.skin_part == SKIN_LEFT_UPPER_ARM) || (colPoint.skin_part == SKIN_RIGHT_UPPER_ARM))
         {
+            coef = 0.1;
             customChain.rmLink(6+dim_offset); customChain.rmLink(5+dim_offset);
             customChain.rmLink(4+dim_offset); customChain.rmLink(3+dim_offset);
             printMessage(2,"obstacle threatening skin part %s, blocking links 3(+3)-6(+3) on subchain for avoidance\n",SkinPart_s[colPoint.skin_part].c_str());
         }
         else if (colPoint.skin_part == SKIN_FRONT_TORSO)
         {
+            coef = 0.2;
             customChain.rmLink(6+dim_offset); customChain.rmLink(5+dim_offset); customChain.rmLink(4+dim_offset);
             customChain.rmLink(3+dim_offset); customChain.rmLink(2+dim_offset); customChain.rmLink(1+dim_offset);
             customChain.rmLink(0+dim_offset);
@@ -308,12 +315,17 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, bool& velLimited)
         // SetHN to move the end effector toward the point to be controlled - the average locus of collision threat from safety margin
         yarp::sig::Matrix HN = eye(4);
         computeFoR(colPoint.x, colPoint.n, HN);
+        if (colPoint.skin_part == SKIN_FRONT_TORSO)
+        {
+            HN = SE3inv(customChain.getH(2)) * torso->getH(2) * HN;
+        }
+        printMessage(2, "Distance from colPoint is %g in skin part %s, magnitude %g, and normal is %s\n", norm(colPoint.x), SkinPart_s[colPoint.skin_part].c_str(), colPoint.magnitude, colPoint.n.toString(3).c_str());
         printMessage(5,"HN matrix at collision point w.r.t. local frame: \n %s \n",HN.toString(3,3).c_str());
         customChain.setHN(HN); //setting the end-effector transform to the collision point w.r.t subchain
         if (verbosity >=5)
         {
             yarp::sig::Matrix H = customChain.getH();
-            printf("H matrix at collision point w.r.t. root: \n %s \n",H.toString(3,3).c_str());
+            printf("H matrix at collision point %d w.r.t. root: \n %s \n", colPoint.skin_part, H.toString(3,3).c_str());
         }
 
         printMessage(2,"Chain with control point - index %d (last index %d), nDOF: %d.\n",i,collisionPoints.size()-1,customChain.getDOF());
@@ -324,31 +336,63 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, bool& velLimited)
         printMessage(2, "s = (J.transposed()*normal) * avoidingSpeed * collisionPoints[i].magnitude \n (%s)T = (%s)T * %f * %f\n",s.toString(3,3).c_str(),(J.transposed()*normal).toString(3,3).c_str(),avoidingSpeed,colPoint.magnitude);
         s = s * -1.0; //we reverse the direction to obtain joint velocities that bring about avoidance
         printMessage(2,"s * (-1) -> joint contributions toward avoidance: \n (%s) \n",s.toString(3,3).c_str());
+        printMessage(2,"(%s) %g \n",s.toString(3,3).c_str(), colPoint.magnitude);
 
-        for (size_t j=0; j<s.length(); j++)
-        {
-            velLimited = true;
-            printMessage(2,"        Joint: %d, s[j]: %f, limits before: Min: %f, Max: %f\n",j,s[j],VLIM(j,0),VLIM(j,1));
-            if (s[j]>0.001) //joint contributes to avoidance, we will set the min velocity accordingly
-            {
-                if (colPoint.magnitude < 0.3) s[j] = 0.0;
-                s[j]=std::min(v_lim(j,1),s[j]); //make sure new min vel is <= max vel
-                VLIM(j,0)=std::max(VLIM(j,0),s[j]); // set min vel to max of s[j] and current limit ~ avoiding action
-                VLIM(j,1)=std::max(VLIM(j,0),VLIM(j,1)); //make sure current max is at least equal to current min
-                printMessage(2,"            s>=0 clause, joint contributes to avoidance, adjusting Min; limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
-            }
-            else if (s[j] < -0.001) //joint acts to bring control point toward obstacle - we will shape the max vel
-            {
-                if (colPoint.magnitude < 0.3) s[j] = 0.0;
-                s[j]=std::max(v_lim(j,0),s[j]);
-                VLIM(j,1)=std::min(VLIM(j,1),s[j]);
-                VLIM(j,0)=std::min(VLIM(j,0),VLIM(j,1));
-                printMessage(2,"            s<0 clause, joint contributes to approach, adjusting Max; limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
-            }
+        Aobs[i] = (J.transposed()*normal);
+        bvals[i] =(0.2-0.4*colPoint.magnitude) * coef;//0.3-0.8*
+//        printf("i %d\t Mag %g \t bval %g\n", i, colPoint.magnitude, bvals[i]);
+        velLimited = true;
+        if (colPoint.skin_part == SKIN_FRONT_TORSO) {
+            printf("%s < %g", Aobs[i].toString(3).c_str(), bvals[i]);
         }
+            //        for (size_t j=0; j<s.length(); j++)
+//        {
+//            printMessage(2,"        Joint: %d, s[j]: %f, limits before: Min: %f, Max: %f\n",j,s[j],VLIM(j,0),VLIM(j,1));
+//            if (s[j]>0.0001) //joint contributes to avoidance, we will set the min velocity accordingly
+//            {
+//                velLimited = true;
+////                if (s[j] > 0.02)
+////                {
+//////                    if (colPoint.magnitude < 0.3) s[j] = 0.0;
+////                }
+////                else
+////                {
+//                    s[j] = 10*s[j] + v_lim(j,0); // + s[j];
+//                    if (colPoint.magnitude < 0.3 ) s[j] = std::min(0.0, s[j]);
+////                }
+//                s[j] = std::min(v_lim(j, 1), s[j]);        // make sure new min vel is <= max vel
+//                VLIM(j, 0) = std::max(VLIM(j, 0), s[j]);       // set min vel to max of s[j] and current limit ~ avoiding action
+//                VLIM(j, 1) = std::max(VLIM(j, 0), VLIM(j, 1)); // make sure current max is at least equal to current min
+//
+//                printMessage(2,"            s>=0 clause, joint contributes to avoidance, adjusting Min; limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
+//            }
+//            else if (s[j] < -0.0001) //joint acts to bring control point toward obstacle - we will shape the max vel
+//            {
+//                velLimited = true;
+////                if (s[j] < -0.02) {
+//////                    if (colPoint.magnitude < 0.3) s[j] = 0.0;
+////                }
+////                else
+////                {
+//                    s[j] = 10*s[j] + v_lim(j,1);
+//                    if (colPoint.magnitude < 0.3 ) s[j] = std::max(0.0, s[j]);
+////                }
+//                s[j] = std::max(v_lim(j, 0), s[j]);
+//                VLIM(j, 1) = std::min(VLIM(j, 1), s[j]);
+//                VLIM(j, 0) = std::min(VLIM(j, 0), VLIM(j, 1));
+//
+//                printMessage(2,"            s<0 clause, joint contributes to approach, adjusting Max; limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
+//            }
+//        }
         ctrlPointChains.push_back(customChain);
         i++;
     }
+//    if (velLimited)
+//    {
+//        printf("\n");
+//    }
+    printMessage(2, "VLIM is\n%s\n", VLIM.toString(3).c_str());
+
     return VLIM;
 }
 
