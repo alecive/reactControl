@@ -288,7 +288,7 @@ void ArmInterface::initialization(iKinChain* chain, iKinChain* torso,  int verbo
 
     filter = new LPFilterSO3(o_home, dT, 1.);
     I = new Integrator(dT,q,lim);
-    avhdl = std::make_unique<AvoidanceHandlerTactile>(*virtualArm->asChain(), collisionPoints, chain,
+    avhdl = std::make_unique<AvoidanceHandler>(*virtualArm->asChain(), collisionPoints, chain,
                                                       useSelfColPoints, part_short, encsA, torso, verbosity, mainPart);
 }
 
@@ -471,7 +471,7 @@ bool reactCtrlThread::threadInit()
     solver = std::make_unique<QPSolver>(main_arm->virtualArm, hittingConstraints,
                                         second_arm? second_arm->virtualArm : nullptr,
                                         vMax, orientationControl,dT,
-                                        main_arm->homePos*CTRL_DEG2RAD, restPosWeight, main_arm->part_short, main_arm->encsA);
+                                        main_arm->homePos*CTRL_DEG2RAD, restPosWeight, main_arm->part_short);
 #endif
 #endif
 
@@ -662,28 +662,23 @@ bool reactCtrlThread::preprocCollisions()
     getCollisionsFromPorts();
     bool vel_limited = false;
     main_arm->updateRecoveryPath();
-    bvalues = std::vector(160,std::numeric_limits<double>::max());
-    Aobst.resize(160);
-    for (int i = 0; i < 160; i++)
-    {
-        Aobst[i].resize(10,0.0);
-    }
-    main_arm->vLimAdapted=main_arm->avhdl->getVLIM(CTRL_DEG2RAD * main_arm->vLimNominal, vel_limited, Aobst, bvalues) * CTRL_RAD2DEG;
+
+    main_arm->avhdl->getVLIM(vel_limited, main_arm->Aobst, main_arm->bvalues);
     if (second_arm)
     {
         second_arm->updateRecoveryPath();
-        second_arm->vLimAdapted=second_arm->avhdl->getVLIM(CTRL_DEG2RAD * second_arm->vLimNominal, vel_limited, Aobst, bvalues) * CTRL_RAD2DEG;
-        if (vel_limited && verbosity > 0)
-        {
-            yDebug("main_arm->vLimAdapted = \n%s\n\n",main_arm->vLimAdapted.transposed().toString(3,3).c_str());
-            yDebug("second_arm->vLimAdapted = \n%s\n",second_arm->vLimAdapted.transposed().toString(3,3).c_str());
-        }
-        main_arm->vLimAdapted(0,0) = std::max(main_arm->vLimAdapted(0,0), second_arm->vLimAdapted(0,0));
-        main_arm->vLimAdapted(0,1) = std::min(main_arm->vLimAdapted(0,1), second_arm->vLimAdapted(0,1));
-        main_arm->vLimAdapted(1,0) = std::max(main_arm->vLimAdapted(1,0), second_arm->vLimAdapted(1,0));
-        main_arm->vLimAdapted(1,1) = std::min(main_arm->vLimAdapted(1,1), second_arm->vLimAdapted(1,1));
-        main_arm->vLimAdapted(2,0) = std::max(main_arm->vLimAdapted(2,0), second_arm->vLimAdapted(2,0));
-        main_arm->vLimAdapted(2,1) = std::min(main_arm->vLimAdapted(2,1), second_arm->vLimAdapted(2,1));
+        second_arm->avhdl->getVLIM(vel_limited, second_arm->Aobst, second_arm->bvalues); // TODO: Aobst  per arm
+//        if (vel_limited && verbosity > 0)
+//        {
+//            yDebug("main_arm->vLimAdapted = \n%s\n\n",main_arm->vLimAdapted.transposed().toString(3,3).c_str());
+//            yDebug("second_arm->vLimAdapted = \n%s\n",second_arm->vLimAdapted.transposed().toString(3,3).c_str());
+//        }
+//        main_arm->vLimAdapted(0,0) = std::max(main_arm->vLimAdapted(0,0), second_arm->vLimAdapted(0,0));
+//        main_arm->vLimAdapted(0,1) = std::min(main_arm->vLimAdapted(0,1), second_arm->vLimAdapted(0,1));
+//        main_arm->vLimAdapted(1,0) = std::max(main_arm->vLimAdapted(1,0), second_arm->vLimAdapted(1,0));
+//        main_arm->vLimAdapted(1,1) = std::min(main_arm->vLimAdapted(1,1), second_arm->vLimAdapted(1,1));
+//        main_arm->vLimAdapted(2,0) = std::max(main_arm->vLimAdapted(2,0), second_arm->vLimAdapted(2,0));
+//        main_arm->vLimAdapted(2,1) = std::min(main_arm->vLimAdapted(2,1), second_arm->vLimAdapted(2,1));
     }
     return vel_limited;
 }
@@ -1143,7 +1138,7 @@ int reactCtrlThread::solveIK()
         xr2.setSubvector(3, second_arm->o_d);
 #ifndef NEO_TEST
 #    ifndef IPOPT
-        solver->init(xr, main_arm->q_dot, main_arm->vLimAdapted, comingHome ? 10 : restPosWeight, Aobst, bvalues, xr2, second_arm->q_dot, second_arm->vLimAdapted);
+        solver->init(xr, main_arm->q_dot, main_arm->vLimAdapted, comingHome ? 10 : restPosWeight, main_arm->Aobst, main_arm->bvalues, second_arm->Aobst, second_arm->bvalues, xr2, second_arm->q_dot, second_arm->vLimAdapted);
 #    endif
 #endif
     } else {
@@ -1153,7 +1148,7 @@ int reactCtrlThread::solveIK()
 #    ifdef IPOPT
 //        nlp->init(xr, main_arm->q_dot, main_arm->vLimAdapted);
 #    else
-        solver->init(xr, main_arm->q_dot, main_arm->vLimAdapted, comingHome ? 10 : restPosWeight, Aobst, bvalues);
+        solver->init(xr, main_arm->q_dot, main_arm->vLimAdapted, comingHome ? 10 : restPosWeight, main_arm->Aobst, main_arm->bvalues);
 #    endif
 #endif
     }

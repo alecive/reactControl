@@ -27,10 +27,10 @@ using namespace yarp::os;
 using namespace iCub::iKin;
 using namespace iCub::skinDynLib;
 
-AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
+AvoidanceHandler::AvoidanceHandler(iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
                                                    iCub::iKin::iKinChain* _secondChain, double _useSelfColPoints, const std::string& _part,
                                                    yarp::sig::Vector* data, iCub::iKin::iKinChain* _torso, const unsigned int _verbosity, bool _mainPart):
-        chain(_chain), collisionPoints(_colPoints), secondChain(_secondChain), torso(_torso), part(_part), verbosity(_verbosity), type("none"),  mainPart(_mainPart),
+        chain(_chain), collisionPoints(_colPoints), secondChain(_secondChain), torso(_torso), part(_part), verbosity(_verbosity),  mainPart(_mainPart),
         selfColDistance(_useSelfColPoints)
 {
     selfColPoints.resize(4);
@@ -123,7 +123,7 @@ AvoidanceHandlerAbstract::AvoidanceHandlerAbstract(iCub::iKin::iKinChain &_chain
 
 
 /****************************************************************/
-std::deque<Vector> AvoidanceHandlerAbstract::getCtrlPointsPosition()
+std::deque<Vector> AvoidanceHandler::getCtrlPointsPosition()
 {
     std::deque<Vector> ctrlPoints;
     for (auto & ctrlPointChain : ctrlPointChains)
@@ -134,11 +134,11 @@ std::deque<Vector> AvoidanceHandlerAbstract::getCtrlPointsPosition()
 }
 
 
-int AvoidanceHandlerAbstract::printMessage(const unsigned int l, const char *f, ...) const
+int AvoidanceHandler::printMessage(const unsigned int l, const char *f, ...) const
 {
     if (verbosity>=l)
     {
-        fprintf(stdout,"[%s] ",type.c_str());
+        fprintf(stdout,"[Avoidance handler] ");
 
         va_list ap;
         va_start(ap,f);
@@ -151,7 +151,7 @@ int AvoidanceHandlerAbstract::printMessage(const unsigned int l, const char *f, 
 
 
 //creates a full transform as given by a DCM matrix at the pos and norm w.r.t. the original frame, from the pos and norm (one axis set arbitrarily)  
-bool AvoidanceHandlerAbstract::computeFoR(const yarp::sig::Vector &pos, const yarp::sig::Vector &norm, yarp::sig::Matrix &FoR)
+bool AvoidanceHandler::computeFoR(const yarp::sig::Vector &pos, const yarp::sig::Vector &norm, yarp::sig::Matrix &FoR)
 {
     if (norm == zeros(3))
     {
@@ -183,7 +183,7 @@ bool AvoidanceHandlerAbstract::computeFoR(const yarp::sig::Vector &pos, const ya
     return true;
 }
 
-void AvoidanceHandlerAbstract::checkSelfCollisions()
+void AvoidanceHandler::checkSelfCollisions()
 {
     std::vector<std::vector<Matrix>> transforms;
     transforms.resize(2);
@@ -241,39 +241,21 @@ void AvoidanceHandlerAbstract::checkSelfCollisions()
 
 
 /****************************************************************/
-AvoidanceHandlerTactile::AvoidanceHandlerTactile(iCub::iKin::iKinChain &_chain,const std::vector<collisionPoint_t> &_colPoints,
-                                                 iCub::iKin::iKinChain* _secondChain, double _useSelfColPoints, const std::string& _part,
-                                                 yarp::sig::Vector* data, iCub::iKin::iKinChain* _torso, const unsigned int _verbosity, bool _mainPart):
-        AvoidanceHandlerAbstract(_chain,_colPoints, _secondChain, _useSelfColPoints, _part, data, _torso, _verbosity, _mainPart)
-{
-    type="tactile";
-    avoidingSpeed = 1;  // produce collisionPoint.magnitude * avoidingSpeed rad/s repulsive speed
-
-    parameters.unput("avoidingSpeed");
-    parameters.put("avoidingSpeed",avoidingSpeed);
-}
-
-/****************************************************************/
-void AvoidanceHandlerTactile::setParameters(const Property &parameters)
-{
-    if (parameters.check("avoidingVelocity"))
-    {
-        avoidingSpeed=parameters.find("avoidingSpeed").asFloat64();
-        this->parameters.unput("avoidingSpeed");
-        this->parameters.put("avoidingSpeed",avoidingSpeed);
-    }
-}
-
-/****************************************************************/
-Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, bool& velLimited, std::vector<yarp::sig::Vector>& Aobs, std::vector<double> &bvals)
+void AvoidanceHandler::getVLIM(bool& velLimited, std::vector<yarp::sig::Vector>& Aobs, std::vector<double> &bvals)
 {
     printMessage(2,"AvoidanceHandlerTactile::getVLIM\n");
-    Matrix VLIM=v_lim;
     int dim = static_cast<int>(chain.getDOF());
     int i = 0;
     int dim_offset = dim-7;  // 3 if dim == 10; 0 if dim == 7
     ctrlPointChains.clear();
     totalColPoints = collisionPoints;
+    bvals = std::vector(80,std::numeric_limits<double>::max());
+    Aobs.resize(80);
+    for (int k = 0; k < 80; k++)
+    {
+        Aobs[k].resize(10,0.0);
+    }
+
 //    if (!mainPart) totalColPoints.clear();
     checkSelfCollisions();
     for(const auto & colPoint : totalColPoints)
@@ -303,7 +285,7 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, bool& velLimited, s
             customChain.rmLink(4+dim_offset); customChain.rmLink(3+dim_offset);
             printMessage(2,"obstacle threatening skin part %s, blocking links 3(+3)-6(+3) on subchain for avoidance\n",SkinPart_s[colPoint.skin_part].c_str());
         }
-        else if (colPoint.skin_part == SKIN_FRONT_TORSO)
+        else if (colPoint.skin_part == SKIN_FRONT_TORSO && mainPart)
         {
             coef = 0.2;
             customChain.rmLink(6+dim_offset); customChain.rmLink(5+dim_offset); customChain.rmLink(4+dim_offset);
@@ -315,7 +297,7 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, bool& velLimited, s
         // SetHN to move the end effector toward the point to be controlled - the average locus of collision threat from safety margin
         yarp::sig::Matrix HN = eye(4);
         computeFoR(colPoint.x, colPoint.n, HN);
-        if (colPoint.skin_part == SKIN_FRONT_TORSO)
+        if (colPoint.skin_part == SKIN_FRONT_TORSO && mainPart)
         {
             HN = SE3inv(customChain.getH(2)) * torso->getH(2) * HN;
         }
@@ -331,69 +313,14 @@ Matrix AvoidanceHandlerTactile::getVLIM(const Matrix &v_lim, bool& velLimited, s
         printMessage(2,"Chain with control point - index %d (last index %d), nDOF: %d.\n",i,collisionPoints.size()-1,customChain.getDOF());
         Matrix J=customChain.GeoJacobian().submatrix(0,2,0,customChain.getDOF()-1); //first 3 rows ~ dPosition/dJoints
         Vector normal = customChain.getH().getCol(2).subVector(0,2); //get the end-effector frame of the standard or custom chain (control point derived from skin), takes the z-axis (3rd column in transform matrix) ~ normal, only its first three elements of the 4 in the homogenous transf. format
-        Vector s=(J.transposed()*normal) * avoidingSpeed * colPoint.magnitude; //project movement along the normal into joint velocity space and scale by default avoidingSpeed and magnitude of skin (or PPS) activation
         printMessage(2, "J for positions at control point:\n %s \nJ.transposed:\n %s \nNormal at control point: (%s), norm: %f \n",J.toString(3,3).c_str(),J.transposed().toString(3,3).c_str(), normal.toString(3,3).c_str(),norm(normal));
-        printMessage(2, "s = (J.transposed()*normal) * avoidingSpeed * collisionPoints[i].magnitude \n (%s)T = (%s)T * %f * %f\n",s.toString(3,3).c_str(),(J.transposed()*normal).toString(3,3).c_str(),avoidingSpeed,colPoint.magnitude);
-        s = s * -1.0; //we reverse the direction to obtain joint velocities that bring about avoidance
-        printMessage(2,"s * (-1) -> joint contributions toward avoidance: \n (%s) \n",s.toString(3,3).c_str());
-        printMessage(2,"(%s) %g \n",s.toString(3,3).c_str(), colPoint.magnitude);
 
         Aobs[i] = (J.transposed()*normal);
         bvals[i] =(0.2-0.4*colPoint.magnitude) * coef;//0.3-0.8*
-//        printf("i %d\t Mag %g \t bval %g\n", i, colPoint.magnitude, bvals[i]);
         velLimited = true;
-        if (colPoint.skin_part == SKIN_FRONT_TORSO) {
-            printf("%s < %g", Aobs[i].toString(3).c_str(), bvals[i]);
-        }
-            //        for (size_t j=0; j<s.length(); j++)
-//        {
-//            printMessage(2,"        Joint: %d, s[j]: %f, limits before: Min: %f, Max: %f\n",j,s[j],VLIM(j,0),VLIM(j,1));
-//            if (s[j]>0.0001) //joint contributes to avoidance, we will set the min velocity accordingly
-//            {
-//                velLimited = true;
-////                if (s[j] > 0.02)
-////                {
-//////                    if (colPoint.magnitude < 0.3) s[j] = 0.0;
-////                }
-////                else
-////                {
-//                    s[j] = 10*s[j] + v_lim(j,0); // + s[j];
-//                    if (colPoint.magnitude < 0.3 ) s[j] = std::min(0.0, s[j]);
-////                }
-//                s[j] = std::min(v_lim(j, 1), s[j]);        // make sure new min vel is <= max vel
-//                VLIM(j, 0) = std::max(VLIM(j, 0), s[j]);       // set min vel to max of s[j] and current limit ~ avoiding action
-//                VLIM(j, 1) = std::max(VLIM(j, 0), VLIM(j, 1)); // make sure current max is at least equal to current min
-//
-//                printMessage(2,"            s>=0 clause, joint contributes to avoidance, adjusting Min; limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
-//            }
-//            else if (s[j] < -0.0001) //joint acts to bring control point toward obstacle - we will shape the max vel
-//            {
-//                velLimited = true;
-////                if (s[j] < -0.02) {
-//////                    if (colPoint.magnitude < 0.3) s[j] = 0.0;
-////                }
-////                else
-////                {
-//                    s[j] = 10*s[j] + v_lim(j,1);
-//                    if (colPoint.magnitude < 0.3 ) s[j] = std::max(0.0, s[j]);
-////                }
-//                s[j] = std::max(v_lim(j, 0), s[j]);
-//                VLIM(j, 1) = std::min(VLIM(j, 1), s[j]);
-//                VLIM(j, 0) = std::min(VLIM(j, 0), VLIM(j, 1));
-//
-//                printMessage(2,"            s<0 clause, joint contributes to approach, adjusting Max; limits after: Min: %f, Max: %f\n",VLIM(j,0),VLIM(j,1));
-//            }
-//        }
         ctrlPointChains.push_back(customChain);
         i++;
     }
-//    if (velLimited)
-//    {
-//        printf("\n");
-//    }
-    printMessage(2, "VLIM is\n%s\n", VLIM.toString(3).c_str());
-
-    return VLIM;
 }
 
 

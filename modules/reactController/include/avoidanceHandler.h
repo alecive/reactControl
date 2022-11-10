@@ -22,32 +22,23 @@
 #define __AVOIDANCEHANDLER_H__
 
 #include <iCub/iKin/iKinFwd.h>
-
 #include "common.h"
 
 
 
 /****************************************************************/
-class AvoidanceHandlerAbstract
+class AvoidanceHandler
 {
-
-
 public:
-    AvoidanceHandlerAbstract(iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
+    AvoidanceHandler(iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
                              iCub::iKin::iKinChain* _secondChain, double _useSelfColPoints, const std::string& _part,
                              yarp::sig::Vector* data, iCub::iKin::iKinChain* _torso, unsigned int _verbosity=0, bool mainPart=true);
-    
-    std::string getType() const { return type; }
 
-    virtual yarp::os::Property getParameters() const { return parameters; }
-    
-    virtual void setParameters(const yarp::os::Property &params) { parameters = params; }
-    
     std::deque<yarp::sig::Vector> getCtrlPointsPosition();
     
-    virtual yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim, bool&  /*velLimited*/, std::vector<yarp::sig::Vector>& Aobs, std::vector<double> &bvals) { return v_lim; }
+    void getVLIM(bool& velLimited, std::vector<yarp::sig::Vector>& Aobs, std::vector<double> &bvals);
     
-    virtual ~AvoidanceHandlerAbstract() { ctrlPointChains.clear(); }
+    virtual ~AvoidanceHandler() { ctrlPointChains.clear(); }
 
     const std::vector<yarp::sig::Vector>& getSelfColPointsTorso() { return selfColPoints[3]; }
 
@@ -55,7 +46,6 @@ public:
 
 protected:
     unsigned int verbosity;
-    std::string type;
     std::string part;
     bool mainPart;
     double selfColDistance;
@@ -65,7 +55,6 @@ protected:
     const std::vector<collisionPoint_t> &collisionPoints;
     std::deque<iCub::iKin::iKinChain> ctrlPointChains;
     std::vector<collisionPoint_t> totalColPoints;
-    yarp::os::Property parameters;
     std::vector<std::vector<yarp::sig::Vector>> selfColPoints;
     std::vector<std::vector<yarp::sig::Vector>> selfControlPoints;
 
@@ -79,25 +68,5 @@ protected:
     int printMessage(unsigned int l, const char *f, ...) const;
 
 };
-
-
-
-/****************************************************************/
-class AvoidanceHandlerTactile : public virtual AvoidanceHandlerAbstract
-{
-
-public:
-    AvoidanceHandlerTactile(iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
-                            iCub::iKin::iKinChain* _secondChain, double _useSelfColPoints, const std::string& _part,
-                            yarp::sig::Vector* data, iCub::iKin::iKinChain* _torso, unsigned int _verbosity=0, bool mainPart=true);
-    void setParameters(const yarp::os::Property &params) override;
-    yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim, bool& velLimited, std::vector<yarp::sig::Vector>& Aobs, std::vector<double> &bvals) override;
-
-protected:
-    double avoidingSpeed;
-
-
-};
-
 
 #endif

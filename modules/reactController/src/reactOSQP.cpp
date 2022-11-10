@@ -4,10 +4,12 @@
 
 #include "reactOSQP.h"
 
+#include <fstream>
+
 ArmHelper::ArmHelper(iCubArm *chain_, double dt_, int offset_,  double vmax_, double manip_thr_, const Vector& restPos,
                      bool hitting_constr_, int vars_offset_, int constr_offset_):
         arm(chain_), offset(offset_), dt(dt_), vmax(vmax_), manip_thr(manip_thr_), adapt_w5(1), rest_jnt_pos(restPos),
-        hitting_constraints(hitting_constr_), vars_offset(vars_offset_), constr_offset(constr_offset_)
+        hit_constr(hitting_constr_), vars_offset(vars_offset_), constr_offset(constr_offset_)
 {
     chain_dof = static_cast<int>(arm->getDOF())-offset;
     v0.resize(chain_dof, 0.0);
@@ -108,8 +110,8 @@ void ArmHelper::computeBounds()
             dmin=1.0;
             dmax=(qi>=qGuardMaxExt[i] ? 0.0 : (qi- qGuardMaxExt[i])/(qGuardMaxInt[i]-qGuardMaxExt[i]));
         }
-        bounds(i, 0) =  std::max(dmin*-vmax, v_lim(i+offset, 0));  // apply joint limit bounds only when it is stricter than the avoidance limits
-        bounds(i, 1) =  std::min(dmax*vmax, v_lim(i+offset, 1));
+        bounds(i, 0) = dmin*-vmax; //  std::max(dmin*-vmax, v_lim(i+offset, 0));  // apply joint limit bounds only when it is stricter than the avoidance limits
+        bounds(i, 1) =  dmax*vmax; // std::min(, v_lim(i+offset, 1));
         if (bounds(i,0) > bounds(i,1))
         {
             bounds(i,0) = bounds(i,1) = 0;
@@ -150,7 +152,7 @@ void ArmHelper::updateBounds(Eigen::VectorXd& lowerBound, Eigen::VectorXd& upper
     upperBound[7+chain_dof+6+constr_offset]=112.42*CTRL_DEG2RAD-(1.71*(q0[3]-q0[4]-q0[5]));
     lowerBound[8+chain_dof+6+constr_offset]=-66.60*CTRL_DEG2RAD-(q0[4]+q0[5]);
     upperBound[8+chain_dof+6+constr_offset]=213.30*CTRL_DEG2RAD-(q0[4]+q0[5]);
-    if (hitting_constraints)
+    if (hit_constr)
     {
         // avoid hitting torso
         lowerBound[9+chain_dof+6+constr_offset]=-shou_n - (q0[4] + shou_m*q0[5]);
@@ -162,16 +164,9 @@ void ArmHelper::updateBounds(Eigen::VectorXd& lowerBound, Eigen::VectorXd& upper
         lowerBound[11+chain_dof+6+constr_offset]=-elb_n - (elb_m*q0[6] + q0[7]);
         upperBound[11+chain_dof+6+constr_offset]=std::numeric_limits<double>::max();
     }
-//    for (int i = 0; i < chain_dof; i++)
-//    {
-//        lowerBound[constr_offset + chain_dof + 12 + 3 + 3*hitting_constraints + i] = 0;
-//        upperBound[constr_offset + chain_dof + 12 + 3 + 3*hitting_constraints + i] = std::numeric_limits<double>::max();
-//        lowerBound[constr_offset + chain_dof + 10 + 12 + 3 + 3*hitting_constraints + i] = -std::numeric_limits<double>::max();
-//        upperBound[constr_offset + chain_dof + 10 + 12 + 3 + 3*hitting_constraints + i] = 0;
-//    }
 }
 
-void ArmHelper::addConstraints(Eigen::SparseMatrix<double>& linearMatrix) const
+void ArmHelper::addConstraints(Eigen::SparseMatrix<double>& linearMatrix, int obs_contr) const
 {
     for (int i = 0; i < chain_dof + 6; ++i)
     {
@@ -188,7 +183,7 @@ void ArmHelper::addConstraints(Eigen::SparseMatrix<double>& linearMatrix) const
     linearMatrix.insert(chain_dof + 12 + 1 + constr_offset, 2 + vars_offset) = -1.71 * dt;
     linearMatrix.insert(chain_dof + 12 + 2 + constr_offset, 1 + vars_offset) = dt;
     linearMatrix.insert(chain_dof + 12 + 2 + constr_offset, 2 + vars_offset) = dt;
-    if (hitting_constraints)
+    if (hit_constr)
     {
         linearMatrix.insert(chain_dof + 12 + 3 + constr_offset, 1 + vars_offset) = dt;
         linearMatrix.insert(chain_dof + 12 + 3 + constr_offset, 2 + vars_offset) = shou_m * dt;
@@ -205,29 +200,30 @@ void ArmHelper::addConstraints(Eigen::SparseMatrix<double>& linearMatrix) const
         linearMatrix.insert(i + constr_offset + chain_dof + 6, 2) = J0(i, 2);
         for (int j = 3; j < chain_dof+offset; ++j)
         {
-            linearMatrix.insert(i + chain_dof + 6, j - offset+vars_offset) = J0(i, j);
+            linearMatrix.insert(i + constr_offset + chain_dof + 6, j - offset+vars_offset) = J0(i, j);
         }
     }
-//    for (int i = 0; i < chain_dof; i++)
-//    {
-//        linearMatrix.insert(constr_offset + chain_dof + 12 + 3 + 3*hitting_constraints + i, i + vars_offset) = sqrt(rest_w[i]);
-//        linearMatrix.insert(constr_offset + chain_dof + 12 + 3 + 3*hitting_constraints + i, chain_dof + 6 + vars_offset) = 1;
-//        linearMatrix.insert(constr_offset + chain_dof + 10 + 12 + 3 + 3*hitting_constraints + i, i + vars_offset) = sqrt(rest_w[i]);
-//        linearMatrix.insert(constr_offset + chain_dof + 10 + 12 + 3 + 3*hitting_constraints + i, chain_dof + 6 + vars_offset) = -1;
-//    }
+    for (int i = 0; i < obs_contr; ++i) {
+        for (int j = 0; j < 3; j++) {
+            linearMatrix.insert(i + chain_dof + 12 + 3 + constr_offset + 3 * hit_constr, j) = 0.0;
+        }
+
+        for (int j = 3; j < chain_dof+offset; ++j) {
+            linearMatrix.insert(i + chain_dof + 12 + 3 + constr_offset + 3 * hit_constr, j-offset + vars_offset) = 0.0;
+        }
+    }
 }
 
 //public:
 /****************************************************************/
 QPSolver::QPSolver(iCubArm *chain_, bool hitConstr, iCubArm* second_chain_, double vmax_, bool orientationControl_,
-                             double dT_, const Vector& restPos, double restPosWeight_, const std::string& part_, yarp::sig::Vector* data) :
+                             double dT_, const Vector& restPos, double restPosWeight_, const std::string& part_) :
         second_arm(nullptr), dt(dT_), w1(0.1), w2(restPosWeight_), orig_w2(restPosWeight_), w3(10), w4(2), part(part_)
 {
     double manip_thr = 0.0;  // not used anymore
     main_arm = std::make_unique<ArmHelper>(chain_, dt, 0, vmax_*CTRL_DEG2RAD, manip_thr, restPos, hitConstr);
-    use_constr = true;
     vars_offset = main_arm->chain_dof + 6; // + 1;
-    constr_offset = main_arm->chain_dof + 12 + 3 + hitConstr * 3 + 4*40*use_constr; // + 20; // + 4*10; // TODO: added + 4*10
+    constr_offset = main_arm->chain_dof + 12 + 3 + hitConstr * 3 + obs_constr_num/2;
     second_arm = second_chain_ ? std::make_unique<ArmHelper>(second_chain_, dt, 3, vmax_*CTRL_DEG2RAD, manip_thr,restPos,
                                                         hitConstr,vars_offset, constr_offset) : nullptr;
     if (!orientationControl_) w4 = 0;
@@ -236,7 +232,7 @@ QPSolver::QPSolver(iCubArm *chain_, bool hitConstr, iCubArm* second_chain_, doub
     if (second_arm)
     {
         vars += second_arm->chain_dof + 6;
-        constr += 6 + second_arm->chain_dof + 6 + 3 + hitConstr * 3;
+        constr += 6 + second_arm->chain_dof + 6 + 3 + hitConstr * 3 + obs_constr_num/2;
     }
     hessian.resize(vars, vars);
     set_hessian();
@@ -247,22 +243,20 @@ QPSolver::QPSolver(iCubArm *chain_, bool hitConstr, iCubArm* second_chain_, doub
     upperBound.resize(constr);
     upperBound.setZero();
     linearMatrix.resize(constr, vars);
-    Aobstacles.resize(4*40);
-    bvalue.resize(4*40, 0.0);
-    if (use_constr) {
-        for (int i = 0; i < 4 * 40; ++i) {
-            lowerBound[i + main_arm->chain_dof + 12 + 3 + 3 * main_arm->hitting_constraints] = -std::numeric_limits<double>::max();
-            Aobstacles[i].resize(main_arm->chain_dof, 0.0);
-            upperBound[i + main_arm->chain_dof + 12 + 3 + 3 * main_arm->hitting_constraints] = std::numeric_limits<double>::max();
-            for (int j = 0; j < main_arm->chain_dof; ++j) {
-                linearMatrix.insert(i + main_arm->chain_dof + 12 + 3 + 3 * main_arm->hitting_constraints, j) = 0.0;
-            }
-        }
+    for (int i = 0; i < obs_constr_num/2; ++i)
+    {
+        lowerBound[i + main_arm->chain_dof + 12 + 3 + 3 * hitConstr] = -std::numeric_limits<double>::max();
+        upperBound[i + main_arm->chain_dof + 12 + 3 + 3 * hitConstr] = std::numeric_limits<double>::max();
     }
-//    generateRobotColPoints(data);
+    main_arm->addConstraints(linearMatrix, obs_constr_num/2);
 
-    main_arm->addConstraints(linearMatrix);
-    if (second_arm != nullptr) second_arm->addConstraints(linearMatrix);
+    if (second_arm != nullptr) {
+        for (int i = 0; i < obs_constr_num / 2; ++i) {
+            lowerBound[i + second_arm->chain_dof + 12 + 3 + constr_offset + 3 * hitConstr] = -std::numeric_limits<double>::max();
+            upperBound[i + second_arm->chain_dof + 12 + 3 + constr_offset + 3 * hitConstr] = std::numeric_limits<double>::max();
+        }
+        second_arm->addConstraints(linearMatrix, obs_constr_num/2);
+    }
 
     solver.data()->setNumberOfVariables(vars);
     solver.data()->setNumberOfConstraints(constr); // hiting_constraints*6
@@ -289,26 +283,43 @@ QPSolver::~QPSolver() = default;
 /****************************************************************/
 void QPSolver::init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, double rest_pos_w,
                     const std::vector<yarp::sig::Vector>& Aobs, const std::vector<double> &bvals,
-//                    const std::vector<Vector>& obstacles,
+                    const std::vector<yarp::sig::Vector>& Aobs2, const std::vector<double> &bvals2,
                     const Vector &_xr2, const Vector &_v02, const Matrix &_v2_lim)
 {
     w2 = (rest_pos_w >= 0) ? rest_pos_w : orig_w2;
     main_arm->init(_xr, _v0, _v_lim);
     if (second_arm) second_arm->init(_xr2, _v02, _v2_lim);
 
-    Aobstacles = Aobs;
-    bvalue = bvals;
-    if (use_constr) {
-        //    printf("Bvalues:\t");
-        for (int i = 0; i < 4 * 40; i++) {
-            for (int j = 0; j < Aobstacles[i].size(); ++j) {
-                linearMatrix.coeffRef(i + main_arm->chain_dof + 12 + 3 + 3 * main_arm->hitting_constraints, j) = Aobstacles[i][j];
+    for (int i = 0; i < obs_constr_num/2; ++i)
+    {
+        for (int j = 0; j < Aobs[i].size(); ++j)
+        {
+            linearMatrix.coeffRef(i + main_arm->chain_dof + 12 + 3 + 3*main_arm->hit_constr, j) = Aobs[i][j];
+        }
+        for (int j = Aobs[i].size(); j < main_arm->chain_dof; ++j)
+        {
+            linearMatrix.coeffRef(i + main_arm->chain_dof + 12 + 3 + 3*main_arm->hit_constr, j) = 0.0;
+        }
+        upperBound[i + main_arm->chain_dof + 12 + 3 + 3 * main_arm->hit_constr] = bvals[i];
+
+    }
+    if (second_arm != nullptr)
+    {
+        for (int i = 0; i < obs_constr_num/2; ++i) {
+            for (int j = 0; j < 3; j++) {
+                linearMatrix.coeffRef(i + constr_offset + second_arm->chain_dof + 12 + 3 + 3*second_arm->hit_constr, j) = Aobs2[i][j];
             }
-            upperBound[i + main_arm->chain_dof + 12 + 3 + 3 * main_arm->hitting_constraints] = bvalue[i];
-            //        if (bvalue[i] < std::numeric_limits<double>::max()-10) printf("%2.2f ", bvalue[i]);
+            for (int j = 3; j < Aobs2[i].size(); ++j) {
+                linearMatrix.coeffRef(i + constr_offset + second_arm->chain_dof + 12 + 3 + 3*second_arm->hit_constr, j + vars_offset) = Aobs2[i][j];
+            }
+            for (int j = Aobs2[i].size(); j < 3+second_arm->chain_dof; ++j) {
+                linearMatrix.coeffRef(i + constr_offset + second_arm->chain_dof + 12 + 3 + 3*second_arm->hit_constr, j + vars_offset) = 0.0;
+            }
+
+            upperBound[i + constr_offset + second_arm->chain_dof + 12 + 3 + 3 * second_arm->hit_constr] = bvals2[i];
         }
     }
-//    printf("\n");
+
     update_gradient();
     update_constraints();
 }
@@ -335,7 +346,7 @@ void QPSolver::update_hessian(double pos_error)
     int scale = (pos_error > 0)? 10 : 1;
     for (int i = 3; i < 6; ++i)
     {
-        hessian.coeffRef(main_arm->chain_dof+i,main_arm->chain_dof+i) = w4/scale;
+        hessian.coeffRef(main_arm->chain_dof+i,main_arm->chain_dof+i) = 2*w4/scale;
     }
 
     if (second_arm != nullptr)
@@ -344,10 +355,10 @@ void QPSolver::update_hessian(double pos_error)
 //        {
 //            hessian.coeffRef(second_arm->chain_dof+i+vars_offset,second_arm->chain_dof+i+vars_offset) = 2*w3;
 //        }
-        for (int i = 3; i < 6; ++i)
-        {
-            hessian.coeffRef(second_arm->chain_dof+i+vars_offset,second_arm->chain_dof+i+vars_offset) = w4/scale;
-        }
+//        for (int i = 3; i < 6; ++i)
+//        {
+//            hessian.coeffRef(second_arm->chain_dof+i+vars_offset,second_arm->chain_dof+i+vars_offset) = 2*w4/scale;
+//        }
     }
 
     solver.updateHessianMatrix(hessian);
@@ -379,7 +390,6 @@ void QPSolver::set_hessian()
     {
         hessian.insert(i, i) = 2 * main_arm->adapt_w5*main_arm->rest_w[i] + 2 * w2 * dt * dt * main_arm->rest_w[i];
     }
-//    hessian.insert(16,16) = 2 * w1*10;
 
     for (int i = 0; i < 3; ++i)
     {
@@ -394,12 +404,12 @@ void QPSolver::set_hessian()
     {
         for (int i = 0; i < second_arm->chain_dof; ++i)
         {
-            hessian.insert(i+vars_offset, i+vars_offset) = 2 * w1 + 2 * w2 * dt * dt * second_arm->rest_w[i+3];
+            hessian.insert(i+vars_offset, i+vars_offset) = 2 * second_arm->adapt_w5*main_arm->rest_w[i+3] + 2 * w2 * dt * dt * second_arm->rest_w[i+3];
         }
 
         for (int i = 0; i < 3; ++i)
         {
-            hessian.insert(second_arm->chain_dof+i+vars_offset,second_arm->chain_dof+i+vars_offset) = 2*w3;
+            hessian.insert(second_arm->chain_dof+i+vars_offset,second_arm->chain_dof+i+vars_offset) = 2*10*w3;
         }
 
         for (int i = 3; i < 6; ++i)
@@ -456,7 +466,6 @@ Vector QPSolver::get_resultInDegPerSecond(Matrix& bounds)
         }
         bounds.setSubmatrix(second_arm->bounds, main_arm->chain_dof, 0);
     }
-  //  printf("INF-NORM %g\n", sol[16]);
     return CTRL_RAD2DEG*v;
 }
 
@@ -478,5 +487,13 @@ int QPSolver::optimize(double pos_error)
     }
     solver.setPrimalVariable(primalVar);
     solver.solve();
+    std::ofstream f("test.txt");
+    if (f.is_open())
+    {
+        f << "Lin matrix:\n" << linearMatrix << '\n';
+        f << "Lowerbound:\n" <<  lowerBound << '\n';
+        f << "Upperbound:\n" <<  upperBound << '\n';
+    }
+//    linearMatrix.toDense().
     return static_cast<int>(solver.workspace()->info->status_val);
 }

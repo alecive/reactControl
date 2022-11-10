@@ -168,7 +168,10 @@ struct ArmInterface
     yarp::sig::Matrix vLimNominal;     //matrix with min/max velocity limits for the current chain
     yarp::sig::Matrix vLimAdapted;  //matrix with min/max velocity limits after adptation by avoidanceHandler
     std::vector<collisionPoint_t> collisionPoints; //list of "avoidance vectors" from peripersonal space / safety margin
-    std::unique_ptr<AvoidanceHandlerAbstract> avhdl;
+    std::unique_ptr<AvoidanceHandler> avhdl;
+    std::vector<Vector> Aobst{};
+    std::vector<double> bvalues{};
+
 
     std::vector<double> fingerPos;
     yarp::sig::Vector   homePos;
@@ -378,8 +381,6 @@ protected:
     // QPSolver STUFF
     int solverExitCode;
     double timeToSolveProblem_s; //time taken by q_dot = solveIK(solverExitCode)
-    std::vector<Vector> Aobst{};
-    std::vector<double> bvalues{};
     Vector obstacle{0.0,0.0,0.0};
     yarp::os::BufferedPort<yarp::os::Bottle> NeoObsInPort; //coming from python script
 
