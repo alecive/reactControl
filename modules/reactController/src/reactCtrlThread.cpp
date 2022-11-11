@@ -390,7 +390,7 @@ reactCtrlThread::reactCtrlThread(int _rate, std::string _name, std::string _robo
         verbosity(_verbosity), useTorso(!_disableTorso), trajSpeed(_trajSpeed), globalTol(_globalTol), vMax(_vMax),
         tol(_tol), timeLimit(_timeLimit), referenceGen(std::move(_referenceGen)), tactileCollPointsOn(_tactileCPOn),
         visualCollPointsOn(_visualCPOn), proximityCollPointsOn(_proximityCPOn), gazeControl(_gazeControl),
-        stiffInteraction(_stiffInteraction), hittingConstraints(_hittingConstraints),
+        stiffInteraction(_stiffInteraction), hittingConstraints(_hittingConstraints), main_arm_constr(true),
         orientationControl(_orientationControl), visualizeCollisionPointsInSim(_visCollisionPointsInSim), counter(0),
         restPosWeight(_restPosWeight), state(STATE_WAIT), iencsT(nullptr), iposDirT(nullptr), imodT(nullptr),
         ilimT(nullptr), encsT(nullptr), jntsT(0), igaze(nullptr), contextGaze(0), movingTargetCircle(false), radius(0),
@@ -662,12 +662,13 @@ bool reactCtrlThread::preprocCollisions()
     getCollisionsFromPorts();
     bool vel_limited = false;
     main_arm->updateRecoveryPath();
-
+    vel_limited = !main_arm->collisionPoints.empty();
     main_arm->avhdl->getVLIM(vel_limited, main_arm->Aobst, main_arm->bvalues);
     if (second_arm)
     {
         second_arm->updateRecoveryPath();
-        second_arm->avhdl->getVLIM(vel_limited, second_arm->Aobst, second_arm->bvalues); // TODO: Aobst  per arm
+        vel_limited = !second_arm->collisionPoints.empty();
+        second_arm->avhdl->getVLIM(vel_limited, second_arm->Aobst, second_arm->bvalues);
 //        if (vel_limited && verbosity > 0)
 //        {
 //            yDebug("main_arm->vLimAdapted = \n%s\n\n",main_arm->vLimAdapted.transposed().toString(3,3).c_str());
@@ -731,30 +732,9 @@ void reactCtrlThread::run()
     updateArmChain();
     if (streamingTarget)    //read "trajectory" - in this special case, it is only set of next target positions for possibly multiple control points
     {
-        if (Bottle *xdNew=streamedTargets.read(false))
+        if (readStreamingTarget())
         {
-            main_arm->x_d = {xdNew->get(0).asFloat64(), xdNew->get(1).asFloat64(), xdNew->get(2).asFloat64()};
-            main_arm->x_0 = main_arm->x_t;
-            if (xdNew->size() <= 7)
-            {
-                if (xdNew->size() == 7)
-                    main_arm->o_d = {xdNew->get(3).asFloat64(), xdNew->get(4).asFloat64(),
-                                     xdNew->get(5).asFloat64(), xdNew->get(6).asFloat64()};
-                else if (xdNew->size() == 6 && second_arm)
-                {
-                    second_arm->x_d = {xdNew->get(3).asFloat64(), xdNew->get(4).asFloat64(), xdNew->get(5).asFloat64()};
-                    second_arm->x_0 = second_arm->x_t;
-                }
-            }
-            else if (second_arm)
-            {
-                second_arm->x_d = {xdNew->get(8).asFloat64(), xdNew->get(9).asFloat64(), xdNew->get(10).asFloat64()};
-                second_arm->x_0 = second_arm->x_t;
-                if (xdNew->size() == 14)
-                    second_arm->o_d = {xdNew->get(11).asFloat64(), xdNew->get(12).asFloat64(),
-                                       xdNew->get(13).asFloat64(), xdNew->get(14).asFloat64()};
-            }
-            state = STATE_REACH;
+           state = STATE_REACH;
         }
 //        std::vector<Vector> x_planned;
 //        if (readMotionPlan(x_planned))
@@ -771,9 +751,15 @@ void reactCtrlThread::run()
     }
     case STATE_REACH:
     {
-        if (second_arm) printMessage(0, "norm(x_t-x_d) = %g \t norm(x2_t-x2_d) = %g\n",
+        if (second_arm)
+        {
+            printMessage(0, "norm(x_t-x_d) = %g \t norm(x2_t-x2_d) = %g\n",
                          norm(main_arm->x_t-main_arm->x_d), norm(second_arm->x_t-second_arm->x_d));
-        else printMessage(2, "norm(x_t-x_d) = %g\n", norm(main_arm->x_t-main_arm->x_d));
+        }
+        else
+        {
+            printMessage(2, "norm(x_t-x_d) = %g\n", norm(main_arm->x_t-main_arm->x_d));
+        }
 
         auto o_t = axisAngleToMatrix(main_arm->o_t);
         auto o_d = axisAngleToMatrix(main_arm->o_d);
@@ -1008,9 +994,12 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, const Vector& _o_d, bool 
             second_arm->q_dot.zero();
             second_arm->virtualArm->setAng(second_arm->q*CTRL_DEG2RAD); //with new target, we make the two chains identical at the start
             second_arm->I->reset(second_arm->q);
-            second_arm->x_d = second_arm->x_home;
-            second_arm->x_n = second_arm->x_home;
-            second_arm->o_d = second_arm->o_home;
+            second_arm->x_0 = second_arm->x_t;
+            second_arm->x_d = second_arm->x_t;
+            second_arm->x_n = second_arm->x_t;
+            second_arm->o_d = second_arm->o_t;
+            second_arm->o_n = second_arm->o_t;
+            second_arm->o_0 = second_arm->o_t;
             second_arm->useSampling = false;
         }
 //        if (referenceGen == "uniformParticle"){
@@ -1041,8 +1030,7 @@ bool reactCtrlThread::setBothTargets(const yarp::sig::Vector& _x_d, const yarp::
 
 bool reactCtrlThread::setBothTargets(const yarp::sig::Vector& _x_d, const yarp::sig::Vector& _o_d, const yarp::sig::Vector& _x2_d, const yarp::sig::Vector& _o2_d)
 {
-    if (second_arm == nullptr) return false;
-    if (_x_d.size()==3 && _o_d.size()==4 && _x2_d.size()==3 && _o2_d.size()==4)
+    if (second_arm != nullptr && _x_d.size()==3 && _o_d.size()==4 && _x2_d.size()==3 && _o2_d.size()==4)
     {
         streamingTarget = false;
         t_0=Time::now();
@@ -1076,7 +1064,7 @@ bool reactCtrlThread::setNewRelativeTarget(const Vector& _rel_x_d)
     return setNewTarget(_x_d,false);
 }
 
-bool reactCtrlThread::setNewCircularTarget(const double _radius,const double _frequency)
+bool reactCtrlThread::setNewCircularTarget(const double _radius, const double _frequency)
 {
     streamingTarget = false;
     radius = _radius;
@@ -1202,7 +1190,7 @@ int reactCtrlThread::solveIK()
         }
         break;
 #    else
-        exit_code = solver->optimize(vals[count]);
+        exit_code = solver->optimize(vals[count], main_arm_constr);
         if (exit_code >= OSQP_SOLVED) {
 //            yInfo("Problem solved in %d run(s)\n", count + 1);
             res = solver->get_resultInDegPerSecond(bounds);
@@ -1641,6 +1629,51 @@ bool reactCtrlThread::readMotionPlan(std::vector<Vector> &x_desired)
         }
     }
     return hasPlan;
+}
+
+
+bool reactCtrlThread::readStreamingTarget()
+{
+    if (Bottle *xdNew=streamedTargets.read(false))
+    {
+        main_arm->x_d = {xdNew->get(0).asFloat64(), xdNew->get(1).asFloat64(), xdNew->get(2).asFloat64()};
+        main_arm->x_0 = main_arm->x_t;
+        main_arm_constr = true;
+        if (xdNew->size() <= 7)
+        {
+            if (xdNew->size() == 7 && xdNew->get(6).isFloat64()) {
+                main_arm->o_d = {xdNew->get(3).asFloat64(), xdNew->get(4).asFloat64(),
+                                 xdNew->get(5).asFloat64(), xdNew->get(6).asFloat64()};
+            }
+            else if (xdNew->size() >= 6 && second_arm)
+            {
+                second_arm->x_d = {xdNew->get(3).asFloat64(), xdNew->get(4).asFloat64(), xdNew->get(5).asFloat64()};
+                second_arm->x_0 = second_arm->x_t;
+                if (xdNew->size() == 7) {
+                    main_arm_constr = xdNew->get(6).asInt32();
+                }
+            }
+        }
+        else if (second_arm)
+        {
+            second_arm->x_d = {xdNew->get(8).asFloat64(), xdNew->get(9).asFloat64(), xdNew->get(10).asFloat64()};
+            second_arm->x_0 = second_arm->x_t;
+            if (xdNew->size() == 12) {
+                main_arm_constr = xdNew->get(11).asInt32();
+            }
+            if (xdNew->size() >= 15)
+            {
+                second_arm->o_d = {xdNew->get(11).asFloat64(), xdNew->get(12).asFloat64(),
+                                   xdNew->get(13).asFloat64(), xdNew->get(14).asFloat64()};
+                if (xdNew->size() == 16) {
+                    main_arm_constr = xdNew->get(15).asInt32();
+                }
+
+            }
+        }
+        return true;
+    }
+    return false;
 }
 
 

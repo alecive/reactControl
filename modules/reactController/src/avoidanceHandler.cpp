@@ -205,15 +205,17 @@ void AvoidanceHandler::checkSelfCollisions()
     int index = 0;
     for (int k = 0; k < 2; ++k)
     {
-        double limit = LIMIT;
         for (int j = 0; j < transforms[0].size(); ++j)
         {
+            double limit = LIMIT;
+            int nearest = -1;
+            double neardist = std::numeric_limits<double>::max();
+            Vector nearest_pos = {0.0, 0.0, 0.0, 1.0};
+
             if (transforms[0].size() > 1 && j == 0 && k == 0) limit = selfColDistance;
             for (const auto& colPoint : selfColPoints[j])
             {
                 Vector pos = transforms[k][j] * colPoint;
-                int nearest = -1;
-                double neardist = std::numeric_limits<double>::max();
                 for (int i = 0; i < selfControlPoints[k].size(); i++)
                 {
                     double n = yarp::math::norm2(pos.subVector(0, 2) - selfControlPoints[k][i]);
@@ -221,20 +223,22 @@ void AvoidanceHandler::checkSelfCollisions()
                     {
                         nearest = i;
                         neardist = n;
+                        nearest_pos = pos;
                     }
                 }
-                neardist = sqrt(neardist);
-                if (neardist < limit) // distance lower than 0.04 m
-                {
-                    collisionPoint_t cp {(k == 0) ? SKIN_LEFT_HAND : SKIN_LEFT_FOREARM, (1.1 - neardist/limit)*2};
-                    cp.x = selfControlPoints[k][nearest];
-                    Vector n = pos.subVector(0, 2) - selfControlPoints[k][nearest];
-                    cp.n = n / yarp::math::norm(n);
-                    totalColPoints.push_back(cp);
-                    yDebug("colPoint %d with pos = %s and dist = %.3f for k = %d and j = %d\n", index, cp.x.toString().c_str(), neardist, k,j);
-                }
-                index++;
             }
+            neardist = sqrt(neardist);
+            if (neardist < limit) // distance lower than 0.04 m
+            {
+                collisionPoint_t cp {(k == 0) ? SKIN_LEFT_HAND : SKIN_LEFT_FOREARM, (1.1 - neardist*5)};
+                cp.x = selfControlPoints[k][nearest];
+                Vector n = nearest_pos.subVector(0, 2) - selfControlPoints[k][nearest];
+                cp.n = n / yarp::math::norm(n);
+                totalColPoints.push_back(cp);
+                yDebug("colPoint %d with pos = %s, dist = %.3f and mag = %.2f for k = %d and j = %d\n",
+                       index, cp.x.toString().c_str(), neardist, cp.magnitude, k,j);
+            }
+            index++;
         }
     }
 }
@@ -249,9 +253,9 @@ void AvoidanceHandler::getVLIM(bool& velLimited, std::vector<yarp::sig::Vector>&
     int dim_offset = dim-7;  // 3 if dim == 10; 0 if dim == 7
     ctrlPointChains.clear();
     totalColPoints = collisionPoints;
-    bvals = std::vector(80,std::numeric_limits<double>::max());
-    Aobs.resize(80);
-    for (int k = 0; k < 80; k++)
+    bvals = std::vector(40,std::numeric_limits<double>::max());
+    Aobs.resize(40);
+    for (int k = 0; k < 40; k++)
     {
         Aobs[k].resize(10,0.0);
     }
@@ -285,7 +289,7 @@ void AvoidanceHandler::getVLIM(bool& velLimited, std::vector<yarp::sig::Vector>&
             customChain.rmLink(4+dim_offset); customChain.rmLink(3+dim_offset);
             printMessage(2,"obstacle threatening skin part %s, blocking links 3(+3)-6(+3) on subchain for avoidance\n",SkinPart_s[colPoint.skin_part].c_str());
         }
-        else if (colPoint.skin_part == SKIN_FRONT_TORSO && mainPart)
+        else if (colPoint.skin_part == SKIN_FRONT_TORSO)
         {
             coef = 0.2;
             customChain.rmLink(6+dim_offset); customChain.rmLink(5+dim_offset); customChain.rmLink(4+dim_offset);
@@ -297,7 +301,7 @@ void AvoidanceHandler::getVLIM(bool& velLimited, std::vector<yarp::sig::Vector>&
         // SetHN to move the end effector toward the point to be controlled - the average locus of collision threat from safety margin
         yarp::sig::Matrix HN = eye(4);
         computeFoR(colPoint.x, colPoint.n, HN);
-        if (colPoint.skin_part == SKIN_FRONT_TORSO && mainPart)
+        if (colPoint.skin_part == SKIN_FRONT_TORSO)
         {
             HN = SE3inv(customChain.getH(2)) * torso->getH(2) * HN;
         }
@@ -309,15 +313,31 @@ void AvoidanceHandler::getVLIM(bool& velLimited, std::vector<yarp::sig::Vector>&
             yarp::sig::Matrix H = customChain.getH();
             printf("H matrix at collision point %d w.r.t. root: \n %s \n", colPoint.skin_part, H.toString(3,3).c_str());
         }
+//        printf("chain.getH() (end-effector): \n %s \n",customChain.getH().toString(3,3).c_str());
+//        if (colPoint.skin_part != SKIN_FRONT_TORSO && !mainPart)
+//        {
+//            customChain.rmLink(0); customChain.rmLink(1); customChain.rmLink(2);
+//        }
+//        printf("chain.getH() (end-effector): \n %s \n",customChain.getH().toString(3,3).c_str());
 
         printMessage(2,"Chain with control point - index %d (last index %d), nDOF: %d.\n",i,collisionPoints.size()-1,customChain.getDOF());
         Matrix J=customChain.GeoJacobian().submatrix(0,2,0,customChain.getDOF()-1); //first 3 rows ~ dPosition/dJoints
         Vector normal = customChain.getH().getCol(2).subVector(0,2); //get the end-effector frame of the standard or custom chain (control point derived from skin), takes the z-axis (3rd column in transform matrix) ~ normal, only its first three elements of the 4 in the homogenous transf. format
         printMessage(2, "J for positions at control point:\n %s \nJ.transposed:\n %s \nNormal at control point: (%s), norm: %f \n",J.toString(3,3).c_str(),J.transposed().toString(3,3).c_str(), normal.toString(3,3).c_str(),norm(normal));
 
-        Aobs[i] = (J.transposed()*normal);
-        bvals[i] =(0.2-0.4*colPoint.magnitude) * coef;//0.3-0.8*
-        velLimited = true;
+//        if (!mainPart && colPoint.skin_part != SKIN_FRONT_TORSO)
+//        {
+//            Aobs[i].setSubvector(3, J.transposed()*normal);
+//            Aobs[i][0] = 0.0;
+//            Aobs[i][1] = 0.0;
+//            Aobs[i][2] = 0.0;
+//        }
+//        else
+//        {
+            Aobs[i] = J.transposed()*normal;
+//        }
+        bvals[i] = (0.3-0.6*colPoint.magnitude) * coef;  // (0.2-0.4*colPoint.magnitude) * coef;//0.3-0.6*
+//        velLimited = true;
         ctrlPointChains.push_back(customChain);
         i++;
     }

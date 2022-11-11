@@ -357,6 +357,7 @@ protected:
     double radius;
     double frequency;
     yarp::sig::Vector circleCenter;
+    bool main_arm_constr;
 
     bool streamingTarget;
     yarp::os::BufferedPort<yarp::os::Bottle> streamedTargets;
@@ -480,6 +481,7 @@ protected:
      */
     bool readMotionPlan(std::vector<yarp::sig::Vector> &x_desired);
 
+    bool readStreamingTarget();
 
     /**
     * Prints a message according to the verbosity level:
