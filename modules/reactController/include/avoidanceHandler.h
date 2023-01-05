@@ -32,22 +32,26 @@ class AvoidanceHandler
 public:
     AvoidanceHandler(iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
                              iCub::iKin::iKinChain* _secondChain, double _useSelfColPoints, const std::string& _part,
-                             yarp::sig::Vector* data, iCub::iKin::iKinChain* _torso, unsigned int _verbosity=0, bool mainPart=true);
+                             yarp::sig::Vector* data, iCub::iKin::iKinChain* _torso, unsigned int _verbosity=0);
 
     std::deque<yarp::sig::Vector> getCtrlPointsPosition();
     
-    void getVLIM(bool& velLimited, std::vector<yarp::sig::Vector>& Aobs, std::vector<double> &bvals);
+    void getVLIM(std::vector<yarp::sig::Vector>& Aobs, std::vector<double> &bvals, bool mainpart=true);
     
     virtual ~AvoidanceHandler() { ctrlPointChains.clear(); }
 
     const std::vector<yarp::sig::Vector>& getSelfColPointsTorso() { return selfColPoints[3]; }
 
-    void checkSelfCollisions();
+    bool existsCtrlPoint()
+    {
+        return !ctrlPointChains.empty();
+    }
+
+    void checkSelfCollisions(bool mainpart=true);
 
 protected:
     unsigned int verbosity;
     std::string part;
-    bool mainPart;
     double selfColDistance;
     iCub::iKin::iKinChain& chain;
     iCub::iKin::iKinChain* secondChain;

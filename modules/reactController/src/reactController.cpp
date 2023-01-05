@@ -226,6 +226,18 @@ public:
         return false;
     }
 
+    bool set_p_both_xd(const yarp::sig::Vector& _xd, const yarp::sig::Vector& _xd2, int32_t m_arm_constr) override
+    {
+        if (_xd.size()>=3 && _xd2.size() >=3)
+        {
+            yInfo(" ");
+            yInfo("[reactController] received new x_d: %s\t x2_d: %s", _xd.toString(3).c_str(), _xd2.toString(3).c_str());
+            return rctCtrlThrd->setBothTargets(_xd, _xd2, m_arm_constr);
+        }
+        yInfo("[reactController] return false\n");
+        return false;
+    }
+
     bool set_both_6d(const yarp::sig::Vector& _xd, const yarp::sig::Vector& _od,
                      const yarp::sig::Vector& _xd2,const yarp::sig::Vector& _od2) override
     {

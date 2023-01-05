@@ -58,14 +58,17 @@ class NeoQP
     int chain_dof;
     bool hitting_constraints;
     double dt, vmax, w_d, w_q, w_n;
+    int obs_constr_num{20};
     double w_eps{1};
-    double di{0.2};
+    double di{0.25};
     double ds{0.1};
     std::vector<double> bvalue;
     std::vector<Vector> Aobstacles;
     std::vector<Matrix> Hessian;
     std::vector<colPoint_t> totalColPoints;
     std::vector<std::vector<yarp::sig::Vector>> selfColPoints;
+    std::vector<Vector> ctrlPointsPositions;
+
 
 
     // self-avoidance constraints
@@ -80,7 +83,7 @@ class NeoQP
     OsqpEigen::Solver solver;
 
     /****************************************************************/
-    void update_bounds(double pos_error);
+    void update_bounds();
     void set_hessian();
     void update_gradient();
     void update_hessian();
@@ -98,7 +101,8 @@ public:
 
     void init(const Vector &_xr, const Vector &_v0, const std::vector<Vector>& obstacles); //, const std::vector<Vector>& Alims, const std::vector<double>& blims);
     Vector get_resultInDegPerSecond();
-    int optimize(double pos_error);
+    int optimize();
+    std::deque<yarp::sig::Vector> getCtrlPointsPosition();
 };
 
 

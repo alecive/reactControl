@@ -20,6 +20,12 @@ if !isnothing(pos)
     println("Popped!")
 end
 
+function browser(p)
+    tmp_filename = "plot.html"
+    savefig(p, tmp_filename)
+    run(`firefox $tmp_filename`)
+end
+
 function prepareTimeData(d, cart=false)
     solverExitCode = 2+3
     timeToSolveProblem_s = 3+3
@@ -30,7 +36,7 @@ function prepareTimeData(d, cart=false)
     if (cart)
         return (t=t, time_diff=time_diff)
     end
-    
+    display(histogram(d[:,solverExitCode]))
     return (t=t, time_diff=time_diff, solver_time=d[:,timeToSolveProblem_s], solver_exit=d[:,solverExitCode])
 end
 
@@ -46,11 +52,21 @@ function prepareArmData(t, d, indexes, posThr, oriThr, dT, exper)
     data["refpose_diff"] = zeros(size(d)[1],)
     data["theta"] = zeros(size(d)[1],)
     data["reftheta"] = zeros(size(d)[1],)
-    
+    oris_cur = []
+    angle_diff = zeros(size(d)[1],)
+    data["ori_vels"] = zeros(size(d)[1], 3)
     for i = 1:size(d)[1]
         ori_des = RotMatrix(AngleAxis(d[i, indexes.o_n[end]], d[i, indexes.o_n[1]], d[i, indexes.o_n[2]], d[i, indexes.o_n[3]]))
         ori_final = RotMatrix(AngleAxis(d[i, indexes.o_d[end]], d[i, indexes.o_d[1]], d[i, indexes.o_d[2]], d[i, indexes.o_d[3]]))
         ori_cur = RotMatrix(AngleAxis(d[i, indexes.o_t[end]], d[i, indexes.o_t[1]], d[i, indexes.o_t[2]], d[i, indexes.o_t[3]]))
+        if (!isempty(oris_cur))
+            ori_cur_quat = QuatRotation(ori_cur)
+            ori_last_quat = QuatRotation(oris_cur[end])
+            res_ori = transpose(ori_last_quat) * ori_cur_quat
+            ori_vel = [2*res_ori.x/dT, 2*res_ori.y/dT, 2*res_ori.z/dT]
+            data["ori_vels"][i,1:end] = ori_vel
+        end
+        push!(oris_cur, ori_cur)
         Hr = Matrix{Float64}(I,4,4)
         Hfinal = Matrix{Float64}(I,4,4)
         He = Matrix{Float64}(I,4,4)
@@ -62,12 +78,14 @@ function prepareArmData(t, d, indexes, posThr, oriThr, dT, exper)
         He[1:3,4]=d[i, indexes.x_t]
         T = ori_des * transpose(ori_cur)
         Tfinal = ori_final * transpose(ori_cur)
+        Tdes = ori_des * transpose(ori_final)
+        angle_diff[i] = rotation_angle(Tdes)
         data["theta"][i] = rotation_angle(T)
         data["reftheta"][i] = rotation_angle(Tfinal)
         data["pose_diff"][i] = norm(Hr-He)
         data["refpose_diff"][i] = norm(Hfinal-He)
     end
-    
+  
     data["cart_vels"] = diff(d[:,indexes.x_t], dims=1)./dT
     data["cart_vels_norm"] = vecnorm_row(data["cart_vels"])
     data["cart_acc"] = diff(data["cart_vels"], dims=1)./dT
@@ -77,7 +95,11 @@ function prepareArmData(t, d, indexes, posThr, oriThr, dT, exper)
     
     sgfilter = SGolay(25, 10, 0, 1) 
     sgfilter2 = SGolay(25, 10, 2, 1/dT) 
-    
+    sgfilter3 = SGolay(25, 20, 0, 1) 
+    data["ori_vels_norm"] = vecnorm_row(data["ori_vels"])
+    data["ori_vels"][:,1] = movmean(data["ori_vels"][:,1], 25)
+    data["ori_vels"][:,2] = movmean(data["ori_vels"][:,2], 25)
+    data["ori_vels"][:,3] = movmean(data["ori_vels"][:,3], 25)
     data["joint_vels"] = d[:,indexes.qDot]
     data["joint_vels2"] = diff(d[:,indexes.qIntegrated], dims=1)./dT
     data["joint_vels4"] = diff(d[:,indexes.q], dims=1)./dT
@@ -183,7 +205,7 @@ function parseData(folder, exper, posThr, oriThr, dT, cart=false)
     if exper == 3
         for i = 2:size(df,1) # change between targets
             if sum(abs.(df[i, target_pos] - df[i-1, target_pos])) > 0.001 && sum(abs.(df[i-1, target_pos])) > 0.001
-                skip_lines = i-1
+               skip_lines = i-1
                break
             end
         end
@@ -208,6 +230,8 @@ function parseData(folder, exper, posThr, oriThr, dT, cart=false)
     elseif exper == 1
         skip_lines = 501
         end_lines=1500
+    elseif exper == 11
+        skip_lines = 350
     end
     
     # end_lines = 710
@@ -224,9 +248,9 @@ function parseData(folder, exper, posThr, oriThr, dT, cart=false)
         param_idx = nothing
         param_idx2 = nothing
     else
-        mArm = (chainDOF=1, avoidance=4, x_d=5:7, x_t=8:10, x_n=11:13, o_d=14:17, o_t=18:21, o_n=22:25, qDot=26:35, q=36:45, qIntegrated=46:55, vLimAdapted=56:75);
-        if (size(data)[2] > 77)
-            sArm = (chainDOF=76, avoidance=77, x_d=78:80, x_t=81:83, x_n=84:86, o_d=87:90, o_t=91:94, o_n=95:98, qDot=99:108, q=109:118, qIntegrated=119:128, vLimAdapted=129:148);
+        mArm = (chainDOF=1, avoidance=4, x_d=5:7, x_t=8:10, x_n=11:13, o_d=14:17, o_t=18:21, o_n=22:25, qDot=26:35, q=36:45, qIntegrated=46:55, vLimAdapted=56:75, obs1=76:78, obs2=79:81, obs3=82:84);
+        if (size(data)[2] > 84)
+            sArm = (chainDOF=85, avoidance=86, x_d=87:89, x_t=90:92, x_n=93:95, o_d=96:99, o_t=100:103, o_n=104:107, qDot=108:117, q=118:127, qIntegrated=128:137, vLimAdapted=138:157, obs1=158:160, obs2=161:163, obs3=164:166);
             sArm_data = prepareArmData(general_data.t, data, sArm, posThr, oriThr, param_idx.dT, exper)
         else
             sArm = nothing
@@ -277,16 +301,16 @@ end
 function plotTargets(t, data, mArm, exper, name)
     if exper > 2
         p1 = plot(;xlabel="Y [m]", ylabel="Z [m]")
-        scatter!(data[:,mArm.x_d[2]], data[:,mArm.x_d[3]]; label="Target pos")
-        scatter!(data[:,mArm.x_n[2]], data[:,mArm.x_n[3]]; label="Next pos")
-        scatter!(data[:,mArm.x_t[2]], data[:,mArm.x_t[3]]; label="Current pos")
+        plot!(data[:,mArm.x_d[2]], data[:,mArm.x_d[3]]; label="Target pos")
+        plot!(data[:,mArm.x_n[2]], data[:,mArm.x_n[3]]; label="Next pos")
+        plot!(data[:,mArm.x_t[2]], data[:,mArm.x_t[3]]; label="Current pos")
     else
         p1 = plot3d(;camera=(60,0), xlabel="X [m]", ylabel="Y [m]", zlabel="Z [m]", aspect_ratio=:equal)      
         scatter3d!(data[:,mArm.x_d[1]], data[:,mArm.x_d[2]], data[:,mArm.x_d[3]]; markersize=6, label="Target pos")
         scatter3d!(data[:,mArm.x_n[1]], data[:,mArm.x_n[2]], data[:,mArm.x_n[3]]; label="Next pos")
-        scatter3d!(data[:,mArm.x_t[1]], data[:,mArm.x_t[2]], data[:,mArm.x_t[3]]; label="Current pos")
+        plot3d!(data[:,mArm.x_t[1]], data[:,mArm.x_t[2]], data[:,mArm.x_t[3]]; lw=3, label="Current pos")
     end
-    display(p1)
+    browser(p1)
     savefig(p1,"targets_"* name * "_exp" * string(exper) * ".png")
 
 end
@@ -398,19 +422,53 @@ function analyzeData(f_name, folders, expers, posThr, oriThr, dT, show_plots=fal
                 obst_time = obstacle_data[:,3] .- start_time
                 obst_dist = vecnorm_row(obstacle_data[:,4:6].-data[1:size(obstacle_data,1),mArm.x_t])
                 obst_dist_ref = vecnorm_row(obstacle_data[:,4:6].-data[1:size(obstacle_data,1),mArm.x_d])
+                obst_dist_cp1 = vecnorm_row(obstacle_data[:,4:6].-data[1:size(obstacle_data,1),mArm.obs1])
+                obst_dist_cp1[vecnorm_row(data[1:size(obstacle_data,1),mArm.obs1]) .< 0.01] .= Inf;
+                obst_dist_cp2 = vecnorm_row(obstacle_data[:,4:6].-data[1:size(obstacle_data,1),mArm.obs2])
+                obst_dist_cp2[vecnorm_row(data[1:size(obstacle_data,1),mArm.obs2]) .< 0.01] .= Inf;
+                obst_dist_cp3 = vecnorm_row(obstacle_data[:,4:6].-data[1:size(obstacle_data,1),mArm.obs3])
+                obst_dist_cp3[vecnorm_row(data[1:size(obstacle_data,1),mArm.obs3]) .< 0.01] .= Inf;
+                min_dist = min.(obst_dist_cp1, obst_dist_cp2, obst_dist_cp3)
+                min_dist[min_dist .== Inf] .= NaN;
+
                 # if show_plots
-                    p = plot(; title="Obst dist")
-                    plot!(obst_time, obst_dist; label="EE vs obstacle dist", linewidth=3);
+                    p1 = plot(;ylims=(0,0.1))
                     plot!(obst_time, obst_dist_ref; label="Target vs obstacle dist", linewidth=3)
-                    display(p)
+                    scatter!(obst_time, obst_dist; label="EE vs obstacle dist", linewidth=3);
+                    plot!(obst_time, min_dist; label="Shortest distance to obstacle", lw=3);
+                    display(p1)
+                    # p2 = plot()
+                    # plot!(obst_time, obst_dist_ref; label="Target vs obstacle dist", linewidth=3)
+                    # plot!(obst_time, obst_dist_cp1; label="Hand vs obstacle dist", linewidth=3);
+                    # p3 = plot()
+                    # plot!(obst_time, obst_dist_ref; label="Target vs obstacle dist", linewidth=3)
+                    # plot!(obst_time, obst_dist_cp2; label="Forearm vs obstacle dist", linewidth=3)
+                    # p4 = plot()
+                    # plot!(obst_time, obst_dist_ref; label="Target vs obstacle dist", linewidth=3)
+                    # plot!(obst_time, obst_dist_cp3; label="Upperarm vs obstacle dist", linewidth=3)
+                    # p8 = plot(p1,p2,p3,p4; layout=grid(4,1), size=(800,1200))
+                    # title = scatter(ones(3), marker=0,markeralpha=0, annotations=(2, 1, text("Control Points vs Obstacle", font(18))), titlefontsize=18,axis=([], false), grid=false, leg=false,size=(200,100))
+                    # p = plot(title, p8,layout=grid(2,1,heights=[0.02,0.98]))
+                    # display(p)
+                    # savefig(p, "obsDist_"* folders[idx] * "_exp" * string(exper-1) * ".png")
                 # end
             end
             if (show_plots)
                 allPlots(general_data, mArm, mArm_data, data, param_idx, exper-1, cart, folders[idx])
+                if !isnothing(sArm)
+                    allPlots(general_data, sArm, sArm_data, data, param_idx, exper-1, cart, folders[idx])
+                end
             end
-            if exper == 3
+            if !isnothing(sArm)
+                p = plot()
+                arm_dist = vecnorm_row(data[:,mArm.x_t].-data[:,sArm.x_t])
+                plot!(arm_dist)
+                display(p)
+            end
+            if exper == 3 || exper == 2
                 stats["cart_vel_profile"] = movmean(mArm_data["cart_vels_norm"], 20)    
                 stats["joint_vel_profile"] = movmean(mArm_data["joint_vels_norm"],20)
+                stats["ori_vel_profile"] = movmean(mArm_data["ori_vels_norm"], 20)
             end
             push!(stats["rmse_refpos"], sqrt(mean(abs2,mArm_data["refpos_error"])))
             push!(stats["rmse_pos"], sqrt(mean(abs2,mArm_data["pos_error"])))
@@ -496,7 +554,11 @@ function allPlots(general_data, mArm, mArm_data, data, param_idx, exper, cart=fa
 end
 
 
-function plotJerks(multistats, baseline, expers, patterns=[""])
+function plotJerks(multistats, baseline, expers, subidxs, patterns=[""])
+    line_styles = [:solid, :solid,:solid, :dot, :dot, :dot]
+    colors = [1,2,3,1,2,3]
+    line_styles = line_styles[subidxs]
+    colors = colors[subidxs]
     for pat in patterns
         plot_array = [] 
         for key in ["joint_jerk_max", "joint_jerk_median", "joint_jerk_mean", "cart_jerk_max", "cart_jerk_median", "cart_jerk_mean"] #"rmse_pos", "rmse_ori", "rmse_pose", 
@@ -509,6 +571,7 @@ function plotJerks(multistats, baseline, expers, patterns=[""])
                 end
             end
             p1 = plot(; xticks = (1:4, expers))
+            idx = 1
             for (stat, values) in pairs(multistats)
                 if contains(stat, pat)
                     vals = values[key]
@@ -516,8 +579,9 @@ function plotJerks(multistats, baseline, expers, patterns=[""])
                         vals = vals ./ baseline_vals[key]
                     end
                     lab = stat # split(stat, '_')[1]
-                    plot!(vals; linewidth = 4, markershape = :circle, markersize= 6, title = key, legend = key == "cart_jerk_mean", label=lab)
+                    plot!(vals; linewidth = 4, markershape = :circle, markersize= 6, line=(line_styles[idx]), color=colors[idx], title = key, legend = key == "cart_jerk_mean", label=lab)
                     offset += 0.0
+                    idx+=1
                     # println("\t\t" * stat * ":  " * string(values[key]))
                 end
             end
@@ -530,37 +594,88 @@ function plotJerks(multistats, baseline, expers, patterns=[""])
     end
 end
 
-function plotVelProfile(multistats)
+
+# function plot_bell(x0, xd, T)
+
+#     v = @(t)((xd-x0) * (10*(t/T).^2*(3/T) - 15*(t/T).^3*(4/T) + ...
+#              6*(t/T).^4*(5/T)));
+    
+#     figure('color', 'white');
+#     fplot(v, [0 T], 'k--', 'LineWidth', 1.5);
+#     xlabel('t [s]');
+#     ylabel('[-/s]');
+#     grid('minor');
+# end
+
+
+function plotVelProfile(multistats, subidxs)
     plot_array = [] 
-    ylabels = ["Velocity [deg/s]", "Velocity [m/s]"]
-    for key in ["joint_vel_profile", "cart_vel_profile"] 
+    ylabels = 
+    line_styles = [:solid,:solid,:solid, :dot, :dot, :dot, :solid]
+    colors = [1,2,3,1,2,3,4]
+    colors = colors[subidxs]
+    line_styles = line_styles[subidxs]
+
+    for (key, ylab) in zip(["joint_vel_profile", "cart_vel_profile", "ori_vel_profile"], ["Velocity [deg/s]", "Velocity [m/s]", "Velocity [rad/s]"])
     #    for pat in ["MJ", "None"]
             offset = 0
             p1 = plot()
+            idx = 1
             for (stat, values) in pairs(multistats)
                 # if contains(stat, pat) || contains(stat, "cart")
-                    vals = values[key][950:1650]
+                    # vals = values[key][950:1750]
+                    vals = values[key][950:1200]
                     lab = stat # split(stat, '_')[1]
-                    plot!((1:length(vals)) .+ offset,vals; ylabel=ylabels[1+Int(key == "cart_vel_profile")], linewidth = 4, title = key, legend = key == "cart_vel_profile", label=lab)
-                    offset +=  60
+                    plot!((1:length(vals)) .+ offset,vals; color=colors[idx], line=(line_styles[idx], 4), ylabel=ylab, linewidth = 3, title = key, legend = key == "cart_vel_profile", label=lab)
+                    offset +=  0
+                    idx += 1
                 # end
             end
+            if (key == "cart_vel_profile")
+                t = collect(1:120)
+                T = 120
+                bell_shape = 10 .* (10 .*(t./T).^2 .*(3 ./T) .- 15 .*(t./T).^3 .*(4 ./T) + 6 .*(t./T).^4 .*(5 ./T))
+                ref_vals = zeros(250,)
+                ref_vals[42:41+T] = bell_shape
+                # ref_vals[550:549+T] = bell_shape
+                
+                plot!(ref_vals, linewidth = 3, line=(:dash), color=(:black), label="Exact MinJerk", legend=true)
+            end
+
             push!(plot_array, p1)
         # end
     end
+    # for (stat, values) in pairs(multistats)
+    #     # if contains(stat, pat) || contains(stat, "cart")
+    #         # vals = values[key][950:1750]
+    #         vals = values["ori_vel_profile"]
+    #         lab = stat # split(stat, '_')[1]
+    #         p = plot(vals[:,1]; linewidth = 3, title = lab, label="vel x")
+    #         plot!(vals[:,2]; linewidth = 3, title = lab, label="vel y")
+    #         plot!(vals[:,3]; linewidth = 3, title = lab, label="vel z")
+    #         display(p)
+    #         p1 = plot(vecnorm_row(vals); linewidth = 3, title = lab)
+    #         display(p1)
+    #     # end
+    # end
     title = scatter(ones(3), marker=0,markeralpha=0, annotations=(2, 1, text("Exp 3", font(18))), titlefontsize=18,axis=([], false), grid=false, leg=false,size=(200,100))
-    pp = plot(plot_array...;layout=grid(2,1), size=(1000,1000))
+    pp = plot(plot_array...;layout=grid(1,3), size=(1500,800))
     p = plot(title, pp,layout=grid(2,1,heights=[0.02,0.98]))
     display(p)
-    savefig(p, "vel_profile2.png")
+    savefig(p, "vel_profile.png")
 end
 
-function plotJerksInTime(multistats, step, baseline, suptitle)
+function plotJerksInTime(multistats, step, baseline, suptitle, subidxs)
     labels = []
     max_joint_jerks = Vector{Vector{Float64}}()
     max_cart_jerks = Vector{Vector{Float64}}()
     baseline_joint = nothing
     baseline_cart = nothing
+    line_styles = [:solid, :solid,:solid, :dot, :dot, :dot, :solid]
+    colors = [1,2,3,1,2,3,4]
+    colors = colors[subidxs]
+    line_styles = line_styles[subidxs]
+
     for (stat, values) in pairs(multistats)
         idx = 1
         lab = stat # split(stat, '_')[1]
@@ -583,12 +698,12 @@ function plotJerksInTime(multistats, step, baseline, suptitle)
     end
     p1 = plot(;title="Joint jerk norm")
     for i = 1:length(labels)
-        plot!((1:length(max_cart_jerks[i])).*t, max_joint_jerks[i]./maximum(baseline_joint); label=labels[i], lw=3)
+        plot!((1:length(max_cart_jerks[i])).*t, max_joint_jerks[i]./maximum(baseline_joint); color=colors[i], line=(line_styles[i]), label=labels[i], lw=3)
     end
     
     p2 = plot(;title="Cart jerk norm")
     for i = 1:length(labels)
-        plot!((1:length(max_cart_jerks[i])).*t, max_cart_jerks[i]./maximum(baseline_cart); label=labels[i], lw=3)
+        plot!((1:length(max_cart_jerks[i])).*t, max_cart_jerks[i]./maximum(baseline_cart);  color=colors[i], line=(line_styles[i]), label=labels[i], lw=3)
     end
     title = scatter(ones(3), marker=0,markeralpha=0, annotations=(2, 1, text(suptitle, font(18))), titlefontsize=18,axis=([], false), grid=false, leg=false,size=(200,100))
     p = plot(title, p1, p2,layout=grid(3,1,heights=[0.02,0.49, 0.49]))
@@ -597,12 +712,17 @@ function plotJerksInTime(multistats, step, baseline, suptitle)
     savefig(p, "jerks_" * replace(suptitle, " " => "_") * ".png")
 end
 
-function plotNextPosError(multistats, step, suptitle)
+function plotNextPosError(multistats, step, suptitle, subidxs)
     labels = []
     max_pos_error = Vector{Vector{Float64}}()
     max_ori_error = Vector{Vector{Float64}}()
     mean_pos_error = Vector{Vector{Float64}}()
     mean_ori_error = Vector{Vector{Float64}}()
+    line_styles = [:solid, :solid,:solid, :dot, :dot, :dot, :solid]
+    colors = [1,2,3,1,2,3,4]
+    colors = colors[subidxs]
+    line_styles = line_styles[subidxs]
+
     for (stat, values) in pairs(multistats)
         idx = 1
         lab = stat # split(stat, '_')[1]
@@ -629,13 +749,13 @@ function plotNextPosError(multistats, step, suptitle)
     end
     p1 = plot(;title="Next Pos error", lw=3)
     for i = 1:length(labels)
-        plot!((1:length(max_pos_error[i])).*t, max_pos_error[i]; lw=3, label=labels[i])
+        plot!((1:length(max_pos_error[i])).*t, max_pos_error[i]; color=colors[i], line=(line_styles[i]), lw=3, label=labels[i])
         # plot!((1:length(mean_pos_error[i])).*t, mean_pos_error[i]; label=labels[i])
     end
     
     p2 = plot(;title="Next ori error", lw=3)
     for i = 1:length(labels)
-        plot!((1:length(max_ori_error[i])).*t, max_ori_error[i];  lw=3, label=labels[i])
+        plot!((1:length(max_ori_error[i])).*t, max_ori_error[i];  color=colors[i], line=(line_styles[i]), lw=3, label=labels[i])
         # plot!((1:length(mean_ori_error[i])).*t, mean_ori_error[i]; label=labels[i])
     end
     title = scatter(ones(3), marker=0,markeralpha=0, annotations=(2, 1, text(suptitle, font(18))), titlefontsize=18,axis=([], false), grid=false, leg=false,size=(200,100))
@@ -647,12 +767,15 @@ function plotNextPosError(multistats, step, suptitle)
 end
 
 
-function plotStreamedBoxplots(multistats, suptitle)
+function plotStreamedBoxplots(multistats, suptitle, subidxs)
     labels = []
     refpos = Vector{Vector{Float64}}()
     refori = Vector{Vector{Float64}}()
     pos = Vector{Vector{Float64}}()
     ori = Vector{Vector{Float64}}()
+    colors = [1,2,3,1,2,3,4]
+    colors = colors[subidxs]
+
     for (stat, values) in pairs(multistats)
         lab = stat # split(stat, '_')[1]
         push!(labels, lab)
@@ -663,19 +786,19 @@ function plotStreamedBoxplots(multistats, suptitle)
     end
     p1 = plot(;title="Next Pos error", xrotation = 90)
     for i = 1:length(labels)
-        boxplot!([labels[i]], pos[i]; legend=:false)
+        boxplot!([labels[i]], pos[i]; color=colors[i], legend=:false)
     end
     p2 = plot(;title="Next Ori error", xrotation = 90)
     for i = 1:length(labels)
-        boxplot!([labels[i]], ori[i]; legend=:false)
+        boxplot!([labels[i]], ori[i]; color=colors[i], legend=:false)
     end
     p3 = plot(;title="Target Pos error", xrotation = 90)
     for i = 1:length(labels)
-        boxplot!([labels[i]], refpos[i]; legend=:false)
+        boxplot!([labels[i]], refpos[i]; color=colors[i], legend=:false)
     end
     p4 = plot(;title="Target Ori error", xrotation = 90)
     for i = 1:length(labels)
-        boxplot!([labels[i]], refori[i]; legend=:false)
+        boxplot!([labels[i]], refori[i]; color=colors[i], legend=:false)
     end
     title = scatter(ones(3), marker=0,markeralpha=0, annotations=(2, 1, text(suptitle, font(18))), titlefontsize=18,axis=([], false), grid=false, leg=false,size=(200,100))
     p5 = plot(p1,p2,p3,p4; layout=grid(2,2), size=(800,600))
@@ -687,7 +810,7 @@ function plotStreamedBoxplots(multistats, suptitle)
 
 end
 
-function plotTTRBoxplots(multistats, suptitle)
+function plotTTRBoxplots(multistats, suptitle, subidxs)
     labels = Vector{String}()
     reached_num = Vector{Vector{Float64}}()
     time_ttr_all = Vector{Vector{Float64}}()
@@ -700,6 +823,10 @@ function plotTTRBoxplots(multistats, suptitle)
     ori_ttr = Vector{Vector{Float64}}()
     reached_targets = Vector{Vector{Float64}}()
     unreached_targets = Vector{Vector{Float64}}()
+    colors = [1,2,3,1,2,3,4]
+    colors = colors[subidxs]
+
+    
     for (stat, values) in pairs(multistats)
         lab = stat # split(stat, '_')[1]
         push!(labels, lab)
@@ -740,23 +867,23 @@ function plotTTRBoxplots(multistats, suptitle)
     # end
     p2 = plot(;title="Pos error", legend=:false, yaxis=:log)
     for i = 1:length(labels)
-        boxplot!([labels[i]], pos_ttr_all[i])
+        boxplot!([labels[i]], pos_ttr_all[i]; color=colors[i])
     end
     p3 = plot(;title="Ori error",legend=:false, yaxis=:log)
     for i = 1:length(labels)
-        boxplot!([labels[i]], ori_ttr_all[i])
+        boxplot!([labels[i]], ori_ttr_all[i]; color=colors[i])
     end
     p4 = plot(;title="Time to reach (Pos reached)")
     for i = 1:length(labels)
-        boxplot!([labels[i]], time_pos_ttr[i]; legend=:false)
+        boxplot!([labels[i]], time_pos_ttr[i]; color=colors[i], legend=:false)
     end
     p5 = plot(;title="Time to reach (Ori reached)")
     for i = 1:length(labels)
-        boxplot!([labels[i]], time_ori_ttr[i]; legend=:false)
+        boxplot!([labels[i]], time_ori_ttr[i]; color=colors[i], legend=:false)
     end
     p4 = plot(;title="Time to reach")
     for i = 1:length(labels)
-        boxplot!([labels[i]], time_ttr[i]; legend=:false)
+        boxplot!([labels[i]], time_ttr[i]; color=colors[i], legend=:false)
     end
     # p5 = plot(;title="Pos error (reached only)")
     # for i = 1:length(labels)
@@ -766,13 +893,14 @@ function plotTTRBoxplots(multistats, suptitle)
     # for i = 1:length(labels)
     #     boxplot!([labels[i]], ori_ttr[i]; legend=:false)
     # end
-    # p7 = plot(;title="Reached targets statistics", ylim=(1-0.5*length(labels) - 0.2, 0.7), yticks = (1 .- 0.5.*collect(1:length(labels)), labels))
-    # scatter!(reached_targets[1], ones(size(reached_targets[1])) .- 0.5; mc=:green, msc=:green, markersize=3, label="Reached", legend=:false)
-    # scatter!(unreached_targets[1], ones(size(unreached_targets[1])).- 0.5; mc=:red, msc=:red, markersize=3, label="Not reached")   
-    # for i = 2:length(labels)
-    #     scatter!(reached_targets[i], ones(size(reached_targets[i])) .- 0.5*i; mc=:green, msc=:green, markersize=3, legend=:false)
-    #     scatter!(unreached_targets[i], ones(size(unreached_targets[i])).- 0.5*i; mc=:red, msc=:red, markersize=3, legend=:false)   
-    # end
+    p7 = plot(;title="Reached targets statistics", ylim=(1-0.5*length(labels) - 0.2, 0.7), yticks = (1 .- 0.5.*collect(1:length(labels)), labels))
+    scatter!(reached_targets[1], ones(size(reached_targets[1])) .- 0.5; mc=:green, msc=:green, markersize=3, label="Reached", legend=:false)
+    scatter!(unreached_targets[1], ones(size(unreached_targets[1])).- 0.5; mc=:red, msc=:red, markersize=3, label="Not reached")   
+    for i = 2:length(labels)
+        scatter!(reached_targets[i], ones(size(reached_targets[i])) .- 0.5*i; mc=:green, msc=:green, markersize=3, legend=:false)
+        scatter!(unreached_targets[i], ones(size(unreached_targets[i])).- 0.5*i; mc=:red, msc=:red, markersize=3, legend=:false)   
+    end
+    display(p7)
     # l = @layout [grid(1,3),
     #             grid(1,3),
     #                 grid(1,1)]
@@ -784,56 +912,56 @@ function plotTTRBoxplots(multistats, suptitle)
 end
 
 
-posThr = 0.006
+posThr = 0.005
 oriThr = deg2rad(5)
 dT = 0.02
 t = 0.5
 st = Int(trunc(t/dT))
-obsRes = true
+obsRes = false
 showFigs = false
 if obsRes
-    f_name = "tes"
-    folders = ["lims_cn", "lims_mn", "lims_cod", "lims_mod"] #, "mag_03_mn", "mag_03_cn", "mag_03_mod", "mag_03_cod", "mag_04_cod", "mag_05_mn", "mag_01_mn"] #, "react_o1_meannormal", "react_o01_meannormal", "react_o01_maxnormal"]
-    # folders = ["mag_03_mn", "mag_03_cn", "mag_03_mod", "mag_03_cod", "mag_04_cod"] #, "react_o1_meannormal", "react_o01_meannormal", "react_o01_maxnormal"]
-    # folders = ["lims_cn", "lims_mn", "lims_cod", "lims_mod", "mag_03_cn", "mag_03_mn"]
-    folders = ["lims2_cod5", "con3_cod4", "lims2_cod4", "con3_cod4_virtual"]#, "NEO_MJ", "NEO_None"]
-    # folders = ["R_33"]
-    for i in [1,3,4]
+    f_name = "obstacles"
+    folders = ["react_MJ", "NEO_MJ", "react_None", "NEO_None"]
+    # folders = ["NEO_MJ5"]
+    exps = [13,14,15] # [1,3,4,5]
+    for i in exps
         stats_exp1 = analyzeData(f_name, folders, [i], posThr, oriThr, dT, showFigs)
-        plotNextPosError(stats_exp1, st, "Exp "*string(i-1))
-        plotJerksInTime(stats_exp1, st, folders[1], "Exp "*string(i-1))
-        plotStreamedBoxplots(stats_exp1, "Exp "*string(i-1))
-        if i == 3
-            plotTTRBoxplots(stats_exp1, "Exp 2")
-        end
+        plotNextPosError(stats_exp1, st, "Exp "*string(i-1), [1,2,4,5])
+        plotJerksInTime(stats_exp1, st, folders[1], "Exp "*string(i-1), [1,2,4,5])
+        plotStreamedBoxplots(stats_exp1, "Exp "*string(i-1), [1,2,4,5])
+        # if i == 3
+            plotTTRBoxplots(stats_exp1, "Exp 2", [1,2,4,5])
+        # end
     end
-    # stats_exp1345 = analyzeData(f_name, folders, [1,3,4], posThr, oriThr, dT, false)
-    # plotJerks(stats_exp1345, folders[1], ["Exp 0", "Exp 2", "Exp 3", "Exp 4"])
+    stats_exp1345 = analyzeData(f_name, folders, exps, posThr, oriThr, dT, false)
+    plotJerks(stats_exp1345, folders[1], ["Exp 0", "Exp 2", "Exp 3", "Exp 4"], [1,2,4,5])
 else
-    f_name = "test"
-    folders = ["reactv7_30_None",  "NEO-NM_30_None", "ipopt_30_None", "cart"] #"results/NEO_30_None",
-    folders = ["cart"]
+    f_name = "new_noobs"
+    # folders = ["reactv7_30_None",  "NEO-NM_30_None", "ipopt_30_None", "cart"] #"results/NEO_30_None",
+    # folders = ["cart"]
     # folders = ["reactv7_30_MinJerk", "NEO-NM_30_MinJerk", "ipopt_30_MinJerk", "cart"] #"results/NEO_30_None",
     # folders = ["react_MJ", "NEO_MJ", "Nguyen_MJ", "cart"]
     # folders = ["react_None", "NEO_None", "Nguyen_None", "cart"]
-    folders = ["react_MJ", "NEO_MJ", "Nguyen_MJ", "react_None", "NEO_None", "Nguyen_None", "cart"]
-    # stats_exp2 = analyzeData(f_name, folders, [2], posThr, oriThr, dT, true)
-
-    folders = ["react_normal", "react_manip2", "react_manip3"]#, "react_INF10sqrt", "react_INF10"]#, "react_INF"]
+    # folders =["react_MJ_s5", "NEO_MJ_s5", "Nguyen_MJ_s5", "react_None_s5", "NEO_None_s5", "Nguyen_None_s5", "cart"] 
+    folders =["react_MJ_s5", "NEO_MJ_s5", "react_MJ2_s5", "react_None_s5", "NEO_None_s5", "react_None2_s5", "cart"] 
+    stats_exp2 = analyzeData(f_name, folders, [2], posThr, oriThr, dT, showFigs)
     stats_exp3 = analyzeData(f_name, folders, [3], posThr, oriThr, dT, showFigs)
-    # folders = ["react_MJ", "NEO_MJ", "Nguyen_MJ", "react_None", "NEO_None", "Nguyen_None"]
+    pop!(folders)
     stats_exp4 = analyzeData(f_name, folders, [4], posThr, oriThr, dT, showFigs)
-    stats_exp5 = analyzeData(f_name, folders, [5], posThr, oriThr, dT, showFigs)
-    stats_exp45 = analyzeData(f_name, folders, [3,4,5], posThr, oriThr, dT, true)
-
-    plotVelProfile(stats_exp3)
-    # plotTTRBoxplots(stats_exp2, "Exp 1")
-    plotTTRBoxplots(stats_exp3, "Exp 2")
-    plotNextPosError(stats_exp4, st, "Exp 3")
-    plotNextPosError(stats_exp5, st, "Exp 4")
-    plotJerksInTime(stats_exp4, st, folders[1], "Exp 3")
-    plotJerksInTime(stats_exp5, st, folders[1], "Exp 4")
-    plotStreamedBoxplots(stats_exp4, "Exp 3")
-    plotStreamedBoxplots(stats_exp5, "Exp 4")
-    plotJerks(stats_exp45, folders[1], ["Exp 1", "Exp 2", "Exp 3", "Exp 4"])
+    # stats_exp5 = analyzeData(f_name, folders, [5], posThr, oriThr, dT, showFigs)
+    # stats_exp45 = analyzeData(f_name, folders, [2,3,4,5], posThr, oriThr, dT, false)
+    
+    # plotVelProfile(stats_exp2)
+    plotTTRBoxplots(stats_exp2, "Exp 1", [1,2,3,4,5,6,7])
+    plotVelProfile(stats_exp3, [1,2,3,4,5,6,7])
+    plotTTRBoxplots(stats_exp3, "Exp 2", [1,2,3,4,5,6,7])
+    # plotNextPosError(stats_exp3, st, "Exp 2")
+    # plotStreamedBoxplots(stats_exp3, "Exp 2")
+    plotNextPosError(stats_exp4, st, "Exp 3", [1,2,3,4,5,6])
+    plotJerksInTime(stats_exp4, st, folders[1], "Exp 3", [1,2,3,4,5,6])
+    plotStreamedBoxplots(stats_exp4, "Exp 3", [1,2,3,4,5,6])
+    # plotNextPosError(stats_exp5, st, "Exp 4")
+    # plotJerksInTime(stats_exp5, st, folders[1], "Exp 4")
+    # plotStreamedBoxplots(stats_exp5, "Exp 4")
+    # plotJerks(stats_exp45, folders[1], ["Exp 1", "Exp 2", "Exp 3", "Exp 4"])
 end

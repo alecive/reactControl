@@ -148,64 +148,50 @@ void VisualisationHandler::sendiCubGuiObject(const std::string& object_type, Vec
     if (outPortiCubGui.getOutputCount()>0)
     {
         Bottle obj;
-        if (object_type == "particle")
-        {
-            obj.addString("object");
-            obj.addString(object_type);
+        obj.addString("object");
+        obj.addString(object_type);
 
-            // size
-            obj.addFloat64(20.0);
-            obj.addFloat64(20.0);
-            obj.addFloat64(20.0);
-
-            // positions - iCubGui works in mm
-            obj.addFloat64(M2MM*x(0));
-            obj.addFloat64(M2MM*x(1));
-            obj.addFloat64(M2MM*x(2));
-
-            // orientation
-            obj.addFloat64(0.0);
-            obj.addFloat64(0.0);
-            obj.addFloat64(0.0);
-
-            // color
-            obj.addInt32(125);
-            obj.addInt32(255);
-            obj.addInt32(125);
-
-            // transparency
-            obj.addFloat64(0.9);
+        // size
+        if (object_type == "target") {
+            obj.addFloat64(40.0);
+            obj.addFloat64(40.0);
+            obj.addFloat64(40.0);
         }
-        else if(object_type == "target")
-        {
-            obj.addString("object");
-            obj.addString(object_type);
+        else {
+            obj.addFloat64(20.0);
+            obj.addFloat64(20.0);
+            obj.addFloat64(20.0);
+        }
+        // positions - iCubGui works in mm
+        obj.addFloat64(M2MM*x(0));
+        obj.addFloat64(M2MM*x(1));
+        obj.addFloat64(M2MM*x(2));
 
-            // size
-            obj.addFloat64(40.0);
-            obj.addFloat64(40.0);
-            obj.addFloat64(40.0);
+        // orientation
+        obj.addFloat64(0.0);
+        obj.addFloat64(0.0);
+        obj.addFloat64(0.0);
 
-            // positions - iCubGui works in mm
-            obj.addFloat64(M2MM*x(0));
-            obj.addFloat64(M2MM*x(1));
-            obj.addFloat64(M2MM*x(2));
-
-            // orientation
-            obj.addFloat64(0.0);
-            obj.addFloat64(0.0);
-            obj.addFloat64(0.0);
-
-            // color
+        // color
+        if (object_type == "particle") {
+            obj.addInt32(0);
+            obj.addInt32(0);
+            obj.addInt32(255);
+        }
+        else if(object_type == "target") {
             obj.addInt32(0);
             obj.addInt32(255);
             obj.addInt32(0);
-
-            // transparency
-            obj.addFloat64(0.7);
         }
+        else if (object_type.substr(0,4) == "prox")
+        {
+            obj.addInt32(255);
+            obj.addInt32(0);
+            obj.addInt32(255);
+        }
+        // transparency
+        obj.addFloat64(0.9);
         outPortiCubGui.write(obj);
-
     }
 }
 

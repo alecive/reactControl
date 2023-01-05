@@ -56,6 +56,7 @@ class QPSolver
     OsqpEigen::Solver solver;
     int obs_constr_num{80};
     std::string part;
+    bool obsConstrActive, eeDistConstr;
 
 
     /****************************************************************/
@@ -73,7 +74,7 @@ public:
     void init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim, double rest_pos_w,
               const std::vector<yarp::sig::Vector>& Aobs, const std::vector<double> &bvals,
               const std::vector<yarp::sig::Vector>& Aobs2={}, const std::vector<double> &bvals2={},
-              const Vector &_xr2 = {}, const Vector &_v02 = {}, const Matrix &_v2_lim = {});
+              const Vector &_xr2 = {}, const Vector &_v02 = {}, const Matrix &_v2_lim = {}, bool ee_dist_constr=false);
     Vector get_resultInDegPerSecond(Matrix& bounds);
     int optimize(double pos_error, bool main_arm_constr=true);
 };

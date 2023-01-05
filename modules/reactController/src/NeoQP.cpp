@@ -4,6 +4,8 @@
 
 #include "NeoQP.h"
 
+#include <fstream>
+
 using namespace yarp::sig;
 using namespace yarp::math;
 using namespace yarp::os;
@@ -31,9 +33,7 @@ void NeoQP::generateRobotColPoints(yarp::sig::Vector* data)
                 for (int j = 0; j < posz[l].size(); ++j)
                 {
                     if (l == 4 && i == 1 && j == 1) continue;
-                    Vector pos(4);
-                    selfColPoints[3].push_back(pos);
-                    selfColPoints[3].back() = {posx[l][j], posy[l][i], posz[l][j], 1};
+                    selfColPoints[3].push_back({posx[l][j], posy[l][i], posz[l][j], 1});
                 }
             }
         }
@@ -116,6 +116,17 @@ bool NeoQP::computeFoR(const yarp::sig::Vector &pos, const yarp::sig::Vector &no
     return true;
 }
 
+/****************************************************************/
+std::deque<Vector> NeoQP::getCtrlPointsPosition()
+{
+    std::deque<Vector> ctrlPoints;
+    for (auto & ctrlPointPos : ctrlPointsPositions)
+    {
+        ctrlPoints.push_back(ctrlPointPos);
+    }
+    return ctrlPoints;
+}
+
 void NeoQP::checkCollisions(const std::vector<Vector> &obstacles)
 {
     totalColPoints.clear();
@@ -137,9 +148,9 @@ void NeoQP::checkCollisions(const std::vector<Vector> &obstacles)
             double neardist = std::numeric_limits<double>::max();
             int nearest = -1;
             for (int k = 0; k < selfColPoints[j].size(); k++) { //const auto& colPoint : selfColPoints[j]) {
-                Vector pos = transforms[j] * selfColPoints[j][k];
+                const Vector pos = transforms[j] * selfColPoints[j][k];
                 {
-                    double n = yarp::math::norm2(pos.subVector(0, 2) - obstacle);
+                    const double n = yarp::math::norm2(pos.subVector(0, 2) - obstacle);
                     if (n < neardist) {
                         nearest = k;
                         neardist = n;
@@ -149,9 +160,13 @@ void NeoQP::checkCollisions(const std::vector<Vector> &obstacles)
             neardist = sqrt(neardist);
             if (neardist < di)
             {
-                Vector pos = transforms[j] * selfColPoints[j][nearest];
-                Vector n = pos.subVector(0, 2) - obstacle;
-                colPoint_t cp {skinparts[j], pos.subVector(0,2), obstacle, n / yarp::math::norm(n), {0,0,0}, neardist};
+                const Vector pos = transforms[j] * selfColPoints[j][nearest];
+//                auto obs_pos = obstacle;
+//                obs_pos.push_back(1);
+//                obs_pos = SE3inv(transforms[j]) * obs_pos;
+//                obs_pos.pop_back();
+                const Vector n = obstacle - pos.subVector(0, 2);
+                const colPoint_t cp {skinparts[j], selfColPoints[j][nearest].subVector(0,2), obstacle, n / yarp::math::norm(n), {0,0,0}, neardist};
                 totalColPoints.push_back(cp);
                 yDebug("colPoint %s with pos = %s and dist = %.3f\n", SkinPart_s[skinparts[j]].c_str(), cp.obs.toString().c_str(), neardist);
             }
@@ -164,24 +179,29 @@ void NeoQP::checkCollisions(const std::vector<Vector> &obstacles)
 /****************************************************************/
 void NeoQP::computeObstacles(const std::vector<Vector> &obstacles)
 {
+    ctrlPointsPositions.clear();
     checkCollisions(obstacles);
-    int dim_offset = 3;  // 3 if dim == 10; 0 if dim == 7
+    const int dim_offset = 3;  // 3 if dim == 10; 0 if dim == 7
     int i = 0;
     for(const auto & colPoint : totalColPoints)
     {
+        double ds_ = ds;
         iKinChain customChain = *arm->asChain(); //instantiates a new chain, copying from the old (full) one
 
         if ((colPoint.skin_part == SKIN_LEFT_FOREARM) || (colPoint.skin_part == SKIN_RIGHT_FOREARM))
         {
+            ds_ = 0.08;
             customChain.rmLink(6+dim_offset); customChain.rmLink(5+dim_offset);
         }
         else if ((colPoint.skin_part == SKIN_LEFT_UPPER_ARM) || (colPoint.skin_part == SKIN_RIGHT_UPPER_ARM))
         {
+            ds_ = 0.05;
             customChain.rmLink(6+dim_offset); customChain.rmLink(5+dim_offset);
             customChain.rmLink(4+dim_offset); customChain.rmLink(3+dim_offset);
         }
         else if (colPoint.skin_part == SKIN_FRONT_TORSO)
         {
+            ds_ = 0.05;
             customChain.rmLink(6+dim_offset); customChain.rmLink(5+dim_offset); customChain.rmLink(4+dim_offset);
             customChain.rmLink(3+dim_offset); customChain.rmLink(2+dim_offset); customChain.rmLink(1+dim_offset);
             customChain.rmLink(0+dim_offset);
@@ -191,22 +211,23 @@ void NeoQP::computeObstacles(const std::vector<Vector> &obstacles)
         computeFoR(colPoint.x, colPoint.n, HN);
         customChain.setHN(HN); //setting the end-effector transform to the collision point w.r.t subchain
 
-        Matrix J=customChain.GeoJacobian().submatrix(0,2,0,customChain.getDOF()-1); //first 3 rows ~ dPosition/dJoints - Jd
-        Vector normal = customChain.getH().getCol(2).subVector(0,2); //get the end-effector frame of the standard or custom chain (control point derived from skin), takes the z-axis (3rd column in transform matrix) ~ normal, only its first three elements of the 4 in the homogenous transf. format
+        const Matrix J=customChain.GeoJacobian().submatrix(0,2,0,customChain.getDOF()-1); //first 3 rows ~ dPosition/dJoints - Jd
+//        Vector normal = customChain.getH().getCol(2).subVector(0,2); //get the end-effector frame of the standard or custom chain (control point derived from skin), takes the z-axis (3rd column in transform matrix) ~ normal, only its first three elements of the 4 in the homogenous transf. format
 //        Vector s=(J.transposed()*normal) * avoidingSpeed * colPoint.magnitude; //project movement along the normal into joint velocity space and scale by default avoidingSpeed and magnitude of skin (or PPS) activation
-        Vector n = (colPoint.obs - colPoint.x)/norm(colPoint.obs - colPoint.x);
+//        Vector n = (colPoint.obs - colPoint.x)/norm(colPoint.obs - colPoint.x);
 //        printf("%s\n", customChain.getH().toString(3).c_str());
-        auto R = customChain.getH().submatrix(0,2,0,2).transposed();
+//        auto R = customChain.getH().submatrix(0,2,0,2).transposed();
 //        Matrix Jev;
 //        Jev.resize(6,6);
 //        Jev.zero();
 //        Jev.setSubmatrix(R, 0,0);
 //        Jev.setSubmatrix(R, 3,3);
-//        printf("%s\n\n", Jev.toString(3).c_str());
 //        J = R * J;
-        Aobstacles[i].setSubvector(0,J.transposed()*n);
-        bvalue[i] = w_eps*(colPoint.distance-ds)/(di-ds) - dot(colPoint.n, colPoint.vel);
+        ds_ = 0.05;
+        Aobstacles[i].setSubvector(0,J.transposed()*colPoint.n);
+        bvalue[i] = w_eps*(colPoint.distance-ds)/(di-ds_) - dot(colPoint.n, colPoint.vel);
         i++;
+        ctrlPointsPositions.push_back(customChain.EndEffPosition());
     }
 }
 
@@ -288,8 +309,8 @@ NeoQP::NeoQP(iCubArm *chain_, bool hitConstr, double vmax_, double dT_,  const s
         arm(chain_), hitting_constraints(hitConstr), dt(dT_), vmax(vmax_*CTRL_DEG2RAD), part(part_)
 {
     chain_dof = static_cast<int>(arm->getDOF());
-    int vars = chain_dof + 6;
-    int constr = chain_dof + 12 + 3 + hitting_constraints * 3 + chain_dof+4;
+    const int vars = chain_dof + 6;
+    const int constr = chain_dof + 12 + 3 + hitting_constraints * 3 + chain_dof+obs_constr_num;
     w_n = 1;
     w_q = 0.01;
     w_d = 2;
@@ -306,8 +327,8 @@ NeoQP::NeoQP(iCubArm *chain_, bool hitConstr, double vmax_, double dT_,  const s
     lowerBound.setZero();
     upperBound.resize(constr);
     upperBound.setZero();
-    Aobstacles.resize(4);
-    bvalue.resize(4, 0.0);
+    Aobstacles.resize(obs_constr_num);
+    bvalue.resize(obs_constr_num, std::numeric_limits<double>::max());
     linearMatrix.resize(constr, vars);
     for (int i = 0; i < chain_dof + 6; ++i) {
         linearMatrix.insert(i, i) = 1;
@@ -319,20 +340,20 @@ NeoQP::NeoQP(iCubArm *chain_, bool hitConstr, double vmax_, double dT_,  const s
         linearMatrix.insert(i + chain_dof + 12, i) = 1;
     }
 
-    linearMatrix.insert(2*chain_dof + 12, 0) = 1.71 * dt;
-    linearMatrix.insert(2*chain_dof + 12, 1) = -1.71 * dt;
-    linearMatrix.insert(2*chain_dof + 12 + 1, 0) = 1.71 * dt;
-    linearMatrix.insert(2*chain_dof + 12 + 1, 1) = -1.71 * dt;
-    linearMatrix.insert(2*chain_dof + 12 + 1, 2) = -1.71 * dt;
-    linearMatrix.insert(2*chain_dof + 12 + 2, 1) = dt;
-    linearMatrix.insert(2*chain_dof + 12 + 2, 2) = dt;
+    linearMatrix.insert(2*chain_dof + 12, 3) = 1.71 * dt;
+    linearMatrix.insert(2*chain_dof + 12, 4) = -1.71 * dt;
+    linearMatrix.insert(2*chain_dof + 12 + 1, 3) = 1.71 * dt;
+    linearMatrix.insert(2*chain_dof + 12 + 1, 4) = -1.71 * dt;
+    linearMatrix.insert(2*chain_dof + 12 + 1, 5) = -1.71 * dt;
+    linearMatrix.insert(2*chain_dof + 12 + 2, 4) = dt;
+    linearMatrix.insert(2*chain_dof + 12 + 2, 5) = dt;
     if (hitting_constraints) {
-        linearMatrix.insert(2*chain_dof + 12 + 3, 1) = dt;
-        linearMatrix.insert(2*chain_dof + 12 + 3, 2) = shou_m * dt;
-        linearMatrix.insert(2*chain_dof + 12 + 4, 3) = -elb_m * dt;
-        linearMatrix.insert(2*chain_dof + 12 + 4, 4) = dt;
-        linearMatrix.insert(2*chain_dof + 12 + 5, 3) = elb_m * dt;
-        linearMatrix.insert(2*chain_dof + 12 + 5, 4) = dt;
+        linearMatrix.insert(2*chain_dof + 12 + 3, 4) = dt;
+        linearMatrix.insert(2*chain_dof + 12 + 3, 5) = shou_m * dt;
+        linearMatrix.insert(2*chain_dof + 12 + 4, 6) = -elb_m * dt;
+        linearMatrix.insert(2*chain_dof + 12 + 4, 7) = dt;
+        linearMatrix.insert(2*chain_dof + 12 + 5, 6) = elb_m * dt;
+        linearMatrix.insert(2*chain_dof + 12 + 5, 7) = dt;
     }
     J0 = arm->GeoJacobian();
     for (int i = 0; i < 6; ++i)
@@ -342,12 +363,14 @@ NeoQP::NeoQP(iCubArm *chain_, bool hitConstr, double vmax_, double dT_,  const s
             linearMatrix.insert(i + chain_dof + 6, j) = J0(i, j);
         }
     }
-    for (int i = 0; i < 4; ++i) {
+    for (int i = 0; i < obs_constr_num; ++i) {
         for (int j = 0; j < chain_dof; ++j) {
             linearMatrix.insert(i + 2 * chain_dof + 12 + 3 + 3 * hitting_constraints, j) = 0.0;
         }
         lowerBound[i + 2 * chain_dof + 12 + 3 + 3 * hitting_constraints] = -std::numeric_limits<double>::max();
         Aobstacles[i].resize(chain_dof,0.0);
+        upperBound[i + 2 * chain_dof + 12 + 3 + 3 * hitting_constraints] = std::numeric_limits<double>::max();
+
     }
     generateRobotColPoints(data);
 
@@ -358,10 +381,10 @@ NeoQP::NeoQP(iCubArm *chain_, bool hitConstr, double vmax_, double dT_,  const s
     solver.data()->setLinearConstraintsMatrix(linearMatrix);
     solver.data()->setLowerBound(lowerBound);
     solver.data()->setUpperBound(upperBound);
-    solver.settings()->setMaxIteration(20000);
-    solver.settings()->setAbsoluteTolerance(1e-5);
-    solver.settings()->setRelativeTolerance(1e-5);
-    solver.settings()->setTimeLimit(0.5*dt);
+    solver.settings()->setMaxIteration(30000);
+    solver.settings()->setAbsoluteTolerance(1e-4);
+    solver.settings()->setRelativeTolerance(1e-4);
+    solver.settings()->setTimeLimit(0.9*dt);
     solver.settings()->setCheckTermination(10);
     solver.settings()->setPolish(true);
     solver.settings()->setRho(0.001);
@@ -384,8 +407,8 @@ void NeoQP::init(const Vector &_xr, const Vector &_v0, const std::vector<Vector>
     H0=arm->getH();
     p0=H0.getCol(3).subVector(0,2);
     pr=_xr.subVector(0, 2);
-    Vector ang=_xr.subVector(3,6);
-    Matrix R = axis2dcm(ang).submatrix(0,2,0,2)*H0.submatrix(0,2,0,2).transposed();
+    const Vector ang=_xr.subVector(3,6);
+    const Matrix R = axis2dcm(ang).submatrix(0,2,0,2)*H0.submatrix(0,2,0,2).transposed();
 
     v_des.resize(6,0);
     v_des.setSubvector(0, (pr-p0) / dt);
@@ -404,8 +427,8 @@ void NeoQP::init(const Vector &_xr, const Vector &_v0, const std::vector<Vector>
         }
         Hessian.push_back(mat);
     }
-    double manip = sqrt(det(J0 * J0.transposed()));
-    Matrix b = luinv(J0*J0.transposed());
+    const double manip = sqrt(det(J0 * J0.transposed()));
+    const Matrix b = luinv(J0*J0.transposed());
     Vector w(36,0.0);
     for (int j = 0; j < 6; j++)
     {
@@ -415,7 +438,7 @@ void NeoQP::init(const Vector &_xr, const Vector &_v0, const std::vector<Vector>
     Jm.resize(chain_dof);
     for (int i = 0; i < chain_dof; ++i)
     {
-        Matrix c = J0 * Hessian[i].transposed();
+        const Matrix c = J0 * Hessian[i].transposed();
         Vector v(36,0.0);
         for (int j = 0; j < 6; j++)
         {
@@ -423,23 +446,23 @@ void NeoQP::init(const Vector &_xr, const Vector &_v0, const std::vector<Vector>
         }
         Jm[i] = manip * dot(v,w);
     }
-    for (int i = 0; i < 4; i++)
+    for (int i = 0; i < obs_constr_num; i++)
     {
         Aobstacles[i].zero();
         bvalue[i] = std::numeric_limits<double>::max();
     }
-    if (norm2(obstacles[0]) > 1e-2)
+    if (!obstacles.empty())
     {
         computeObstacles(obstacles);
-        for (int j = 0; j < 4; ++j) {
+        for (int j = 0; j < obs_constr_num; ++j) {
             upperBound[j + 2 * chain_dof + 12 + 3 + 3 * hitting_constraints] = bvalue[j];
         }
     }
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < obs_constr_num; i++) {
         for (int j = 0; j < Aobstacles[i].size(); ++j) {
             linearMatrix.coeffRef(i + 2 * chain_dof + 12 + 3 + 3 * hitting_constraints, j) = Aobstacles[i][j];
         }
-        if (norm(Aobstacles[i]) > 1e-2) printf("dot %g and bval %g\n", dot(Aobstacles[i],_v0),bvalue[i]);
+//        if (norm(Aobstacles[i]) > 1e-2) printf("dot %g and bval %g\n", dot(Aobstacles[i],_v0),bvalue[i]);
     }
 
     update_gradient();
@@ -449,7 +472,7 @@ void NeoQP::init(const Vector &_xr, const Vector &_v0, const std::vector<Vector>
 
 
 /****************************************************************/
-void NeoQP::update_bounds(double pos_error) // should be ok
+void NeoQP::update_bounds()
 {
     for (int i = 0; i < chain_dof; i++)
     {
@@ -459,8 +482,8 @@ void NeoQP::update_bounds(double pos_error) // should be ok
     
     for (int i = 0; i < 3; ++i)
     {
-        lowerBound[chain_dof+i] = -pos_error; // -std::numeric_limits<double>::max(); // normal(i) != 0? -10 : 0; //  normal(i)/dt/10 : 0; // normal(i)/dt/10;
-        upperBound[chain_dof+i] = pos_error; // std::numeric_limits<double>::max(); //normal(i) != 0?  pos_error : 0; //  normal(i)/dt/10 : 0;
+        lowerBound[chain_dof+i] = -std::numeric_limits<double>::max(); // -std::numeric_limits<double>::max(); // normal(i) != 0? -10 : 0; //  normal(i)/dt/10 : 0; // normal(i)/dt/10;
+        upperBound[chain_dof+i] = std::numeric_limits<double>::max(); // std::numeric_limits<double>::max(); //normal(i) != 0?  pos_error : 0; //  normal(i)/dt/10 : 0;
     }
 
     for (int i = 3; i < 6; ++i)
@@ -480,7 +503,7 @@ void NeoQP::update_bounds(double pos_error) // should be ok
         upperBound[chain_dof+i+12] = std::numeric_limits<double>::max();
         if (q0[i] - pos_lim(i, 0) <= 0.2)
         {
-            lowerBound[chain_dof+i+12] = w_n*(((pos_lim(i,0) - q0[i]) + 0.05) / (0.2 - 0.05));
+            lowerBound[chain_dof+i+12] = -w_n*(((q0[i] - pos_lim(i,0))  - 0.05) / (0.2 - 0.05));
         }
         else if (pos_lim(i, 1) - q0[i] <= 0.2)
         {
@@ -576,9 +599,9 @@ Vector NeoQP::get_resultInDegPerSecond()
     return CTRL_RAD2DEG*v;
 }
 
-int NeoQP::optimize(double pos_error)
+int NeoQP::optimize()
 {
-    update_bounds(pos_error);
+    update_bounds();
     Eigen::VectorXd primalVar(hessian.rows());
     primalVar.setZero();
     for (int i = 0; i < chain_dof; i++)
@@ -594,5 +617,13 @@ int NeoQP::optimize(double pos_error)
 //        printf("%g < %g < %g\n", lowerBound[i], constr[i], upperBound[i]);
 //    }
 //    printf("\n");
+    std::ofstream f("test.txt");
+    if (f.is_open())
+    {
+        f << "Lin matrix:\n" << linearMatrix << '\n';
+        f << "Lowerbound:\n" <<  lowerBound << '\n';
+        f << "Upperbound:\n" <<  upperBound << '\n';
+        f << "Solution\n" << solver.getSolution() << "\n";
+    }
     return static_cast<int>(solver.workspace()->info->status_val);
 }

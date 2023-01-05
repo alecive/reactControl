@@ -70,6 +70,15 @@ service reactController_IDL
   bool set_both_xd(1:Vector _xd, 2: Vector _xd2)
 
   /**
+  * Sets new Cartesian targets for both arms
+  * @param _xd Vector that specifies the new target for main arm
+  * @param _xd2 Vector that specifies the new target for secondary arm
+  * @param m_arm_constr Int32 that specifies whether the position constraint is for the main arm
+  * @return true/false on success/failure.
+  */
+  bool set_p_both_xd(1:Vector _xd, 2: Vector _xd2, 3:i32 m_arm_constr)
+
+  /**
   * Sets new 6D Cartesian targets for both arms
   * @param _xd Vector that specifies the new target for main arm
   * @param _od Vector that specifies the new orientation for main arm

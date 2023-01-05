@@ -30,13 +30,17 @@
 #include <Eigen/Dense>
 #include <unsupported/Eigen/MatrixFunctions>
 #include <utility>
+#include <iCub/skinDynLib/dynContact.h>
+#include <iCub/skinDynLib/dynContactList.h>
+#include <iCub/skinDynLib/skinContact.h>
+#include <iCub/skinDynLib/skinContactList.h>
 
 //#define NEO_TEST
-//#define IPOPT
+//#define IPOPT_TEST
 #ifdef NEO_TEST
 #include "NeoQP.h"
 #else
-#ifdef IPOPT
+#ifdef IPOPT_TEST
 #include "reactIpOpt.h"
 #include <IpIpoptApplication.hpp>
 #else
@@ -235,9 +239,9 @@ public:
 
     bool setNewTarget(const yarp::sig::Vector& _x_d, const yarp::sig::Vector& _o_d, bool _movingCircle);
 
-    bool setBothTargets(const yarp::sig::Vector& _x_d, const yarp::sig::Vector& _x2_d);
+    bool setBothTargets(const yarp::sig::Vector& _x_d, const yarp::sig::Vector& _x2_d, bool m_arm_constr=true);
 
-    bool setBothTargets(const yarp::sig::Vector& _x_d, const yarp::sig::Vector& _o_d, const yarp::sig::Vector& _x2_d, const yarp::sig::Vector& _o2_d);
+    bool setBothTargets(const yarp::sig::Vector& _x_d, const yarp::sig::Vector& _o_d, const yarp::sig::Vector& _x2_d, const yarp::sig::Vector& _o2_d, bool m_arm_constr=true);
 
     // Sets the new target relative to the current position
     bool setNewRelativeTarget(const yarp::sig::Vector&);
@@ -358,6 +362,7 @@ protected:
     double frequency;
     yarp::sig::Vector circleCenter;
     bool main_arm_constr;
+    int ee_dist_constr{-1000};
 
     bool streamingTarget;
     yarp::os::BufferedPort<yarp::os::Bottle> streamedTargets;
@@ -372,6 +377,8 @@ protected:
     yarp::os::BufferedPort<yarp::os::Bottle> aggregPPSeventsInPort; //coming from visuoTactileRF/pps_activations_aggreg:o
     //expected format for both: (skinPart_s x y z o1 o2 o3 magnitude), with position x,y,z and normal o1 o2 o3 in link FoR
     yarp::os::Port outPort;
+    BufferedPort<skinContactList> proximityEventsForiCubGuiPort;
+
     yarp::os::BufferedPort<yarp::os::Bottle> movementFinishedPort;
     std::ofstream fout_param; //log parameters that stay constant during the simulation, but are important for analysis - e.g. joint limits
     // Stamp for the setEnvelope for the ports
@@ -388,7 +395,7 @@ protected:
 #ifdef NEO_TEST
     std::unique_ptr<NeoQP> solver;
 #else
-#ifdef IPOPT
+#ifdef IPOPT_TEST
     Ipopt::SmartPtr<Ipopt::IpoptApplication> app; // pointer to instance of main application class for making calls to Ipopt
     Ipopt::SmartPtr<ControllerNLP> nlp; //pointer to IK solver instance
     bool firstSolve{true};
@@ -460,9 +467,9 @@ protected:
     bool preprocCollisions();
     /************************** communication through ports in/out ***********************************/
 
-    void getCollPointFromPort(Bottle* bot, double gain);
+    void getCollPointFromPort(Bottle* bot, double gain, bool isTactile);
 
-    void getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, double gain);
+    void getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, double gain, bool isTactile);
 
     /**
      * writing to param file

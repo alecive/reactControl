@@ -10,6 +10,17 @@ endif(COMMAND cmake_policy)
 
 project(react-control)
 
+option(USE_IPOPT "Run ipopt version" OFF)
+option(USE_NEO "Run NEO" OFF)
+
+if (USE_IPOPT)
+    add_definitions(-DIPOPT_TEST)
+endif()
+
+if (USE_NEO)
+    add_definitions(-DNEO_TEST)
+endif()
+
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED 11)
