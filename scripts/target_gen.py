@@ -10,9 +10,9 @@ import json
 
 #reactController --robot icub --part "(right left)" --trajSpeed 0.02 --vMax 10
 def bimanual_task_p2p(rpc_client, client, inp, pars, use_right=False):
-    points = [[-0.299, 0.1,0.05], [-0.289, 0.05,0.15], [-0.299, 0.0,0.05]]
-    idxs = 4* [1,2,1,0]
-    offset = -0.10
+    points = [[-0.299, 0.15,0.05], [-0.289, 0.07,0.15], [-0.299, 0.0,0.05]]
+    idxs = 10*  [1,2,1,0]
+    offset = -0.15
     p1 = [points[0][0], points[0][1], points[0][2]]
     p2 = [points[0][0], points[0][1] + offset, points[0][2]]
     result = set_both_xd(p1, p2, m_arm_constr=True, streaming=False)
@@ -34,8 +34,34 @@ def bimanual_task_p2p(rpc_client, client, inp, pars, use_right=False):
         result = set_both_xd([x, y, z], [x, y + offset, z], m_arm_constr=True, streaming=True)
         client.write(result)
         small_start = time.time()
-        while time.time() - small_start < 3:
+        while time.time() - small_start < 2:
             pass
+
+def bimanual_task_hold(rpc_client, client, inp, pars, use_right=False):
+    point = [-0.289, 0.07,0.1]
+    offset = -0.15
+    p1 = [point[0], point[1], point[2]]
+    p2 = [point[0], point[1] + offset, point[2]]
+    result = set_both_xd(p1, p2, m_arm_constr=True, streaming=False)
+    send_command(rpc_client, result)
+    pose_str = None
+    while not pose_str:
+        pose_str = read_once(inp)
+    result.clear()
+    result.addString("set_streaming_xd")
+    send_command(rpc_client, result)
+    small_start = time.time()
+    while time.time() - small_start < 0.1:
+        pass
+    
+    for idx in range(60):
+        result = set_both_xd(p1, p2, m_arm_constr=True, streaming=True)
+        client.write(result)
+        small_start = time.time()
+        while time.time() - small_start < 1:
+            pass
+
+
 
 def bimanual_task(rpc_client, client, inp, pars, use_right=False):
     center = pars["center"]
@@ -378,7 +404,7 @@ def main(move_type, config_file, seed):
         visual_exp(outport_rpc, inport, use_right_)
         holdpos(outport_rpc)
     elif move_type == 1:
-        holdpos_exp(outport_rpc, inport, 18, use_right_)
+        holdpos_exp(outport_rpc, inport, 60, use_right_)
     elif move_type == 2:
         streamed_exp(outport_rpc, params["randomTargets"], seed, use_right_)
     elif move_type == 3:
@@ -388,13 +414,15 @@ def main(move_type, config_file, seed):
     elif move_type == 5:
         both_arms_circular_colls_small(outport_rpc, outport, inport, params["circle_small"], use_right_)
     elif move_type == 6:
-        both_arms_circular_colls_avoid(outport_rpc, outport, inport, params["circle"], use_right_)
+        both_arms_circular_colls_avoid(outport_rpc, outport, inport, params["circle_big"], use_right_)
     elif move_type == 12:
         both_arms_holdpos(outport_rpc, inport, 30, use_right_)
     elif move_type == 13:
         bimanual_task(outport_rpc, outport, inport, params["circle"], use_right_)
     elif move_type == 14:
         bimanual_task_p2p(outport_rpc, outport, inport, params["circle"], use_right_)
+    elif move_type == 15:
+        bimanual_task_hold(outport_rpc, outport, inport, params["circle"], use_right_)
 
     start = time.time()
     while time.time() - start < 2:

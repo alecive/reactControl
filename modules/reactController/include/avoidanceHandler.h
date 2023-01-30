@@ -34,8 +34,9 @@ public:
                              iCub::iKin::iKinChain* _secondChain, double _useSelfColPoints, const std::string& _part,
                              yarp::sig::Vector* data, iCub::iKin::iKinChain* _torso, unsigned int _verbosity=0);
 
-    std::deque<yarp::sig::Vector> getCtrlPointsPosition();
-    
+    std::deque<std::pair<yarp::sig::Vector, int>> getCtrlPointsPosition();
+    std::deque<std::pair<iCub::iKin::iKinChain, int>> getCtrlPoints() const { return ctrlPointChains; }
+
     void getVLIM(std::vector<yarp::sig::Vector>& Aobs, std::vector<double> &bvals, bool mainpart=true);
     
     virtual ~AvoidanceHandler() { ctrlPointChains.clear(); }
@@ -48,6 +49,7 @@ public:
     }
 
     void checkSelfCollisions(bool mainpart=true);
+    void checkTableCollisions();
 
 protected:
     unsigned int verbosity;
@@ -57,10 +59,11 @@ protected:
     iCub::iKin::iKinChain* secondChain;
     iCub::iKin::iKinChain* torso;
     const std::vector<collisionPoint_t> &collisionPoints;
-    std::deque<iCub::iKin::iKinChain> ctrlPointChains;
+    std::deque<std::pair<iCub::iKin::iKinChain, int>> ctrlPointChains;
     std::vector<collisionPoint_t> totalColPoints;
     std::vector<std::vector<yarp::sig::Vector>> selfColPoints;
     std::vector<std::vector<yarp::sig::Vector>> selfControlPoints;
+    std::vector<yarp::sig::Vector> tablePoints;
 
     static bool computeFoR(const yarp::sig::Vector &pos, const yarp::sig::Vector &norm, yarp::sig::Matrix &FoR);
     

@@ -68,7 +68,8 @@ class NeoQP
     std::vector<colPoint_t> totalColPoints;
     std::vector<std::vector<yarp::sig::Vector>> selfColPoints;
     std::vector<Vector> ctrlPointsPositions;
-
+    std::vector<std::vector<yarp::sig::Vector>> selfControlPoints;
+    double selfColDistance;
 
 
     // self-avoidance constraints
@@ -92,11 +93,12 @@ class NeoQP
     void generateRobotColPoints(yarp::sig::Vector* data);
     bool computeFoR(const yarp::sig::Vector &pos, const yarp::sig::Vector &norm, yarp::sig::Matrix &FoR);
     void checkCollisions(const std::vector<Vector> &obstacles);
+    void checkSelfCollisions();
     void computeObstacles(const std::vector<Vector> &obstacles);
 //    void computeBounds();
 
 public:
-    NeoQP(iCubArm *chain_, bool hitConstr, double vmax_, double dT_, const std::string& part_, yarp::sig::Vector* data);
+    NeoQP(iCubArm *chain_, bool hitConstr, double vmax_, double dT_, const std::string& part_, double self_avoidance, yarp::sig::Vector* data);
     ~NeoQP();
 
     void init(const Vector &_xr, const Vector &_v0, const std::vector<Vector>& obstacles); //, const std::vector<Vector>& Alims, const std::vector<double>& blims);

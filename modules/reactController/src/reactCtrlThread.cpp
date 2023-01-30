@@ -20,13 +20,13 @@
 #include "reactCtrlThread.h"
 
 #define TACTILE_INPUT_GAIN 0.6
-#define VISUAL_INPUT_GAIN 0.8
-#define PROXIMITY_INPUT_GAIN 0.6
+#define VISUAL_INPUT_GAIN 0.6 // changed from 0.8 in sim to 0.6 for realsense obstacles
+#define PROXIMITY_INPUT_GAIN 0.8
 
 enum {
-STATE_WAIT,
-STATE_REACH,
-STATE_IDLE
+    STATE_WAIT,
+    STATE_REACH,
+    STATE_IDLE
 };
 
 
@@ -111,7 +111,8 @@ void ArmInterface::updateCollPoints()
     for (auto& colP : collisionPoints)
     {
         colP.duration -= dT;
-        colP.magnitude *= 0.9; // vision 0.6; tactile 0.9
+//        if (colP.duration < 0.9)
+            colP.magnitude *= 0.9; // vision 0.6; tactile 0.9
         if (colP.magnitude < 1e-3) colP.duration = -1;
     }
     collisionPoints.erase(std::remove_if(collisionPoints.begin(), collisionPoints.end(),
@@ -342,17 +343,18 @@ void ArmInterface::updateNextTarget(bool& vel_limited)
     }
 
     bool res = checkRecoveryPath(next_x);
-    if (res && last_trajectory.empty() && referenceGen == "minJerk")
-    {
-        yInfo() << next_x.toString(3);
-        minJerkTarget->init(x_t); //initial pos
-        minJerkTarget->setTs(dT); //time step
-        minJerkTarget->setT(1);
-        minJerkTarget->computeNextValues(x_d);
-        next_x = minJerkTarget->getPos();
-        yInfo() << next_x.toString(3);
-        res = false;
-    }
+//    if (res && last_trajectory.empty() && referenceGen == "minJerk")
+//    {
+//        yInfo() << next_x.toString(3);
+//        minJerkTarget->init(x_t); //initial pos
+//        minJerkTarget->setTs(dT); //time step
+//        const double T = norm(x_d - x_t)  / 0.02;
+//        minJerkTarget->setT(T);
+//        minJerkTarget->computeNextValues(x_d);
+//        next_x = minJerkTarget->getPos();
+//        yInfo() << next_x.toString(3) << "\t T = " << T;
+//        res = false;
+//    }
     x_n = next_x;
     vel_limited = vel_limited | res;
 }
@@ -402,6 +404,12 @@ reactCtrlThread::reactCtrlThread(int _rate, std::string _name, std::string _robo
                                          referenceGen != "none" && _visParticleInSim)
 {
     dT=getPeriod();
+    obsWorldPos.resize(109);
+    for (int k = 0; k < 109; k++)
+    {
+        obsWorldPos[k].resize(3,0.0);
+    }
+
     prtclThrd=_pT;  //in case of referenceGen != uniformParticle, NULL will be received
     /******** iKin chain and variables, and transforms init *************************/
     main_arm =std::make_unique<ArmInterface>(_part, _selfColPoints, referenceGen, dT);
@@ -423,13 +431,13 @@ bool reactCtrlThread::threadInit()
     circleCenter(0) = -0.3; //for safety, we assign the x-coordinate on in it within iCub's reachable space
     Time::delay(1);
     updateArmChain();
-
+    printf("%s\n", main_arm->arm->EndEffPose().toString(3).c_str());
+    printf("%s\n", second_arm->arm->EndEffPose().toString(3).c_str());
     main_arm->initialization(second_arm? second_arm->virtualArm->asChain() : nullptr, torso->asChain(), verbosity);
     if (second_arm) second_arm->initialization(main_arm->virtualArm->asChain(), torso->asChain(), verbosity);
     NeoObsInPort.open("/"+name+"/neo_obstacles:i");
 #ifdef NEO_TEST
-    solver = std::make_unique<NeoQP>(main_arm->virtualArm, hittingConstraints, vMax, dT, main_arm->part_short, main_arm->encsA);
-
+    solver = std::make_unique<NeoQP>(main_arm->virtualArm, hittingConstraints, vMax, dT, main_arm->part_short, main_arm->useSelfColPoints, main_arm->encsA);
 
 #else
 #ifdef IPOPT_TEST
@@ -481,10 +489,13 @@ bool reactCtrlThread::threadInit()
     aggregPPSeventsInPort.open("/"+name+"/pps_events_aggreg:i");
     aggregSkinEventsInPort.open("/"+name+"/skin_events_aggreg:i");
     proximityEventsInPort.open("/"+name+"/proximity_events:i");
+    proximityEvents2InPort.open("/"+name+"/proximity_events2:i");
 //    streamedTargets.open("/"+name+"/streamedWholeBodyTargets:i");
     streamedTargets.open("/"+name+"/streamedTargets:i");
 
     outPort.open("/"+name +"/data:o"); //for dumping
+    outObsPort.open("/"+name +"/obsdata:o"); //for dumping
+    sensManagerPort.open("/"+name +"/sensManager:i"); //for dumping
     movementFinishedPort.open("/" + name + "/finished:o");
     proximityEventsVisuPort.open("/"+name+"/proximity:o");
     proximityEventsForiCubGuiPort.open("/"+name+"/prox_gui:o");
@@ -609,7 +620,7 @@ void reactCtrlThread::insertTestingCollisions()
     if (t_1 > 0 && robot == "icubSim")
     {
         bool active = false;
-        collisionPoint_t collisionPointStruct{SKIN_LEFT_FOREARM};
+        collisionPoint_t collisionPointStruct{SKIN_LEFT_FOREARM, TACTILE_OBS};
         if (yarp::os::Time::now() - t_1 > 5. && counter < 100)
         {
             collisionPointStruct.x = {-0.027228, -0.054786, -0.0191051}; // {0.018, 0.095, 0.024};
@@ -681,12 +692,30 @@ void reactCtrlThread::getCollisionsFromPorts()
     if (tactileCollPointsOn)
     {
         printMessage(9,"[reactCtrlThread::run()] Getting tactile collisions from port.\n");
-        getCollisionPointsFromPort(aggregSkinEventsInPort, TACTILE_INPUT_GAIN, true);
+        getCollisionPointsFromPort(aggregSkinEventsInPort, TACTILE_INPUT_GAIN, TACTILE_OBS);
     }
     if (visualCollPointsOn) //note, these are not mutually exclusive - they can co-exist
     {
+        // process the SensationManager port
+        if (auto* sensManagerBottle = sensManagerPort.read(false))
+        {
+            int idx_v = 0;
+            for (int i = 0; i < sensManagerBottle->size(); i++)
+            {
+                const Bottle bl = *(sensManagerBottle->get(i).asList());
+                for(int j=0;j<bl.size();j++){
+                    const Bottle b = *(bl.get(j).asList());
+                    if (b.size()>=5 && idx_v < 100) {
+                        obsWorldPos[9+idx_v] = Vector{b.get(0).asFloat64(), b.get(1).asFloat64(), b.get(2).asFloat64()};
+                        idx_v++;
+
+                    }
+                }
+            }
+        }
+
         printMessage(9,"[reactCtrlThread::run()] Getting visual collisions from port.\n");
-        getCollisionPointsFromPort(aggregPPSeventsInPort, VISUAL_INPUT_GAIN, false);
+        getCollisionPointsFromPort(aggregPPSeventsInPort, VISUAL_INPUT_GAIN, VISUAL_OBS);
     }
     if (proximityCollPointsOn)
     {
@@ -697,10 +726,10 @@ void reactCtrlThread::getCollisionsFromPorts()
 
         for (int k = 0; k < 2; k++)
         {
-            Bottle* bot = proximityEventsInPort.read(false);
-
+            Bottle* bot = k == 0? proximityEventsInPort.read(false) : proximityEvents2InPort.read(false);
+            visuhdl.deleteiCubGuiObject("prox_obs"+std::to_string(k));
             if (bot) {
-                getCollPointFromPort(bot, PROXIMITY_INPUT_GAIN, true);
+                getCollPointFromPort(bot, PROXIMITY_INPUT_GAIN, PROX_OBS);
                 yarp::os::Bottle& b = proximityEventsVisuPort.prepare();
                 b.clear();
                 b.addFloat64(bot->get(13).asFloat64());
@@ -708,7 +737,7 @@ void reactCtrlThread::getCollisionsFromPorts()
 
                 Vector geocenter(3, 0.0); // geocenter from skin / average activation locus from the pps
                 Vector normal(3, 0.0);
-                Vector force(3, 0.0);
+                const Vector force(3, 0.0);
                 Vector moment(3, 0.0); // will remain zero
 
                 // printf("Bottle %d contains %s \n", i,collPointBottle->toString().c_str());
@@ -720,10 +749,6 @@ void reactCtrlThread::getCollisionsFromPorts()
                 normal(1) = bot->get(5).asFloat64();
                 normal(2) = bot->get(6).asFloat64();
                 const double normalized_activation = 20 * bot->get(13).asFloat64();
-
-                //            force(0)=-normalized_activation*normal(0);
-                //            force(1)=-normalized_activation*normal(1);
-                //            force(2) =-normalized_activation*normal(2);
                 moment(0) = -normalized_activation * normal(0);
                 moment(1) = -normalized_activation * normal(1);
                 moment(2) = -normalized_activation * normal(2);
@@ -741,8 +766,7 @@ void reactCtrlThread::getCollisionsFromPorts()
                 {
                     T_a = main_arm->arm->getH(3+SkinPart_2_LinkNum[sp].linkNum, true);
                 }
-                Vector prox_obs = {geocenter(0), geocenter(1), normal(2)*(1.05-bot->get(13).asFloat64())/0.005 ,1};
-
+                const Vector prox_obs = {geocenter(0), geocenter(1), normal(2)*(1.05-bot->get(13).asFloat64())/5 ,1};
                 visuhdl.sendiCubGuiObject("prox_obs"+ std::to_string(k), T_a*prox_obs);
                 sCLout.push_back(sc);
             }
@@ -771,6 +795,10 @@ void reactCtrlThread::run()
     //    {
     //        std::cout << t2-t_0 << " ";
     //    }
+    for (int k = 0; k < 109; k++)
+    {
+        obsWorldPos[k].zero();
+    }
     updateArmChain();
     if (streamingTarget)    //read "trajectory" - in this special case, it is only set of next target positions for possibly multiple control points
     {
@@ -795,7 +823,7 @@ void reactCtrlThread::run()
     {
         if (second_arm)
         {
-            printMessage(0, "norm(x_t-x_d) = %g \t norm(x2_t-x2_d) = %g\n",
+            printMessage(2, "norm(x_t-x_d) = %g \t norm(x2_t-x2_d) = %g\n",
                          norm(main_arm->x_t-main_arm->x_d), norm(second_arm->x_t-second_arm->x_d));
         }
         else
@@ -833,7 +861,8 @@ void reactCtrlThread::run()
 
         if(gazeControl)
         {
-            igaze->lookAtFixationPoint(Vector{-1.5,0.0,0}); //for now looking at final target (x_d), not at intermediate/next target x_n
+            igaze->lookAtFixationPoint(Vector{-1.5,0.0,0.4}); //for now looking at final target (x_d), not at intermediate/next target x_n
+//            igaze->lookAtFixationPoint(Vector{-1.2,-0.1,0.2}); //for now looking at final target (x_d), not at intermediate/next target x_n
         }
         vel_limited = preprocCollisions();
 
@@ -877,6 +906,7 @@ void reactCtrlThread::run()
     //        std::cout << yarp::os::Time::now()-t_0 << " ";
     //    }
     sendData();
+    sendObsData();
     if (vel_limited) //if vLim was changed by the avoidanceHandler, we reset it
     {
         main_arm->vLimAdapted = main_arm->vLimNominal;
@@ -897,7 +927,12 @@ void reactCtrlThread::nextMove(bool& vel_limited)
 {
     main_arm->updateNextTarget(vel_limited);
     if (second_arm) second_arm->updateNextTarget(vel_limited);
-    visuhdl.visualizeObjects(main_arm->x_d, main_arm->x_n);
+    if (second_arm) {
+        visuhdl.visualizeObjects(main_arm->x_d, main_arm->x_n, second_arm->x_d, second_arm->x_n);
+    }
+    else {
+        visuhdl.visualizeObjects(main_arm->x_d, main_arm->x_n);
+    }
     const double t_3 = yarp::os::Time::now();
     //this is the key function call where the reaching opt problem is solved
     solverExitCode = solveIK();
@@ -946,12 +981,18 @@ void reactCtrlThread::threadRelease()
     aggregSkinEventsInPort.close();
     proximityEventsInPort.interrupt();
     proximityEventsInPort.close();
+    proximityEvents2InPort.interrupt();
+    proximityEvents2InPort.close();
     proximityEventsVisuPort.interrupt();
     proximityEventsVisuPort.close();
     proximityEventsForiCubGuiPort.interrupt();
     proximityEventsForiCubGuiPort.close();
     outPort.interrupt();
     outPort.close();
+    outObsPort.interrupt();
+    outObsPort.close();
+    sensManagerPort.interrupt();
+    sensManagerPort.close();
     visuhdl.closePorts();
     movementFinishedPort.interrupt();
     movementFinishedPort.close();
@@ -1014,7 +1055,7 @@ bool reactCtrlThread::setVMax(const double _vMax)
 
 bool reactCtrlThread::setNewTarget(const Vector& _x_d, bool _movingCircle)
 {
-    return setNewTarget(_x_d, main_arm->o_d, _movingCircle);
+    return setNewTarget(_x_d, main_arm->o_t, _movingCircle);
 }
 
 bool reactCtrlThread::setNewTarget(const Vector& _x_d, const Vector& _o_d, bool _movingCircle)
@@ -1122,6 +1163,7 @@ bool reactCtrlThread::setNewCircularTarget(const double _radius, const double _f
 
 bool reactCtrlThread::stopControlAndSwitchToPositionMode()
 {
+//    ee_dist_constr = -1;
     state=STATE_WAIT;
     return  setCtrlModes(jointsToSetPosA,"arm","position")  &&
            (second_arm == nullptr || setCtrlModes(jointsToSetPosA,"second_arm","position")) &&
@@ -1203,6 +1245,8 @@ int reactCtrlThread::solveIK()
     //    }
     Vector res(dim, 0.0);
     auto vals = std::vector<double>{0, std::numeric_limits<double>::max()};
+//    auto vals = std::vector<double>{std::numeric_limits<double>::max()}; // added for bubbles
+
     Matrix bounds;
     bounds.resize(dim, 2);
     while (count < vals.size()) {
@@ -1504,7 +1548,7 @@ Vector reactCtrlThread::getPosMovingTargetOnCircle()
 }
 
 /**** communication through ports in/out ****************/
-void reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, double gain, bool isTactile)
+void reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, double gain, int type)
 {
     Bottle* collPointsMultiBottle = inPort.read(false);
     if(collPointsMultiBottle == nullptr)
@@ -1518,13 +1562,15 @@ void reactCtrlThread::getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, d
     {
         Bottle* bot = collPointsMultiBottle->get(i).asList();
         printMessage(5, "Bottle %d contains %s \n", i, bot->toString().c_str());
-        getCollPointFromPort(bot, gain, isTactile);
+        getCollPointFromPort(bot, gain, type);
     }
 }
 
-void reactCtrlThread::getCollPointFromPort(Bottle* bot, double gain, bool isTactile)
+void reactCtrlThread::getCollPointFromPort(Bottle* bot, double gain, int type)
 {
     const SkinPart sp = static_cast<SkinPart>(bot->get(0).asInt32());
+//    if (type == TACTILE_OBS && (sp == SKIN_RIGHT_HAND || sp == SKIN_LEFT_HAND)) // added for bimanual task
+//        return;
     // we take only those collision points that are relevant for the chain we are controlling + torso
     if (SkinPart_2_BodyPart[sp].body == LEFT_ARM || (sp == SKIN_FRONT_TORSO && useTorso) ||
         SkinPart_2_BodyPart[sp].body == RIGHT_ARM)
@@ -1541,13 +1587,13 @@ void reactCtrlThread::getCollPointFromPort(Bottle* bot, double gain, bool isTact
             arm_ptr = main_arm.get();
         }
 
-        collisionPoint_t newColPoint;
+        collisionPoint_t newColPoint{type};
         newColPoint.skin_part = sp;
         newColPoint.x = {bot->get(1).asFloat64(), bot->get(2).asFloat64(), bot->get(3).asFloat64()};
 //        newColPoint.n = {bot->get(4).asFloat64(), bot->get(5).asFloat64(), bot->get(6).asFloat64()};
-        newColPoint.magnitude = bot->get(13).asFloat64() * gain;
+        newColPoint.magnitude = bot->get(13).asFloat64() * gain; //* 0.7 added for bimanual task
 
-        if (isTactile)
+        if (type != VISUAL_OBS)
         {
             Matrix T_a;
             if (SkinPart_2_BodyPart[sp].body == TORSO)
@@ -1559,17 +1605,26 @@ void reactCtrlThread::getCollPointFromPort(Bottle* bot, double gain, bool isTact
                 T_a = arm_ptr->arm->getH(3+SkinPart_2_LinkNum[sp].linkNum, true);
             }
             newColPoint.n = T_a.submatrix(0,2,0,2) * Vector{bot->get(4).asFloat64(), bot->get(5).asFloat64(), bot->get(6).asFloat64()};
+            if (type == PROX_OBS) {
+                obsWorldPos[(sp == SKIN_LEFT_HAND)? 0 : 1] = (T_a * Vector{bot->get(1).asFloat64(), bot->get(2).asFloat64(),
+                                                    bot->get(6).asFloat64()*(1.05-bot->get(13).asFloat64())/5, 1}).subVector(0,2);
+//                printf("Added proximity obstacle\n");
+            } else if (type == TACTILE_OBS) {
+                obsWorldPos[1+static_cast<int>(sp)] = (T_a * Vector{bot->get(1).asFloat64(), bot->get(2).asFloat64(), bot->get(3).asFloat64(), 1}).subVector(0,2);
+//                printf("Added tactile obstacle with SP %d\n", sp);
+            }
         }
         else
         {
             newColPoint.n = {bot->get(10).asFloat64(), bot->get(11).asFloat64(), bot->get(12).asFloat64()};
+            newColPoint.duration *= 2; // added for realsense obstacles
         }
 
 
         bool exists = false;
         for (auto& colPoint : arm_ptr->collisionPoints)
         {
-            if (norm(colPoint.x - newColPoint.x) < 5e-3)
+            if (norm(colPoint.x - newColPoint.x) < 1e-2 && colPoint.type == newColPoint.type)
             {
                 colPoint.reset(newColPoint.magnitude);
                 colPoint.x = colPoint.x;
@@ -1591,14 +1646,12 @@ void reactCtrlThread::sendData()
     printMessage(5,"[reactCtrlThread::sendData()]\n");
     if (outPort.getOutputCount()>0)
     {
-#ifdef NEO_TEST
-        auto ctrlPoints = solver->getCtrlPointsPosition();
-#else
-        auto ctrlPoints = main_arm->avhdl->getCtrlPointsPosition();
-#endif
         Vector closestPoint2Obs(3,0.0);
         Vector secondclosestPoint2Obs(3,0.0);
         Vector thirdclosestPoint2Obs(3,0.0);
+
+#ifdef NEO_TEST
+        auto ctrlPoints = solver->getCtrlPointsPosition();
         if (!ctrlPoints.empty())
         {
             closestPoint2Obs = ctrlPoints[0];
@@ -1610,6 +1663,22 @@ void reactCtrlThread::sendData()
                 }
             }
         }
+
+#else
+        auto ctrlPoints = main_arm->avhdl->getCtrlPointsPosition();
+        if (!ctrlPoints.empty())
+        {
+            closestPoint2Obs = ctrlPoints[0].first;
+            if (ctrlPoints.size() > 1) {
+                secondclosestPoint2Obs = ctrlPoints[1].first;
+                if (ctrlPoints.size() > 2)
+                {
+                    thirdclosestPoint2Obs = ctrlPoints[2].first;
+                }
+            }
+        }
+
+#endif
         yarp::os::Bottle b;
         b.clear();
 
@@ -1681,12 +1750,12 @@ void reactCtrlThread::sendData()
             Vector thirdclosestPoint2Obs2(3,0.0);
             if (!ctrlPoints2.empty())
             {
-                closestPoint2Obs2 = ctrlPoints2[0];
+                closestPoint2Obs2 = ctrlPoints2[0].first;
                 if (ctrlPoints2.size() > 1) {
-                    secondclosestPoint2Obs2 = ctrlPoints2[1];
+                    secondclosestPoint2Obs2 = ctrlPoints2[1].first;
                     if (ctrlPoints2.size() > 2)
                     {
-                        thirdclosestPoint2Obs2 = ctrlPoints2[2];
+                        thirdclosestPoint2Obs2 = ctrlPoints2[2].first;
                     }
                 }
             }
@@ -1698,6 +1767,75 @@ void reactCtrlThread::sendData()
         }
         outPort.setEnvelope(ts);
         outPort.write(b);
+    }
+}
+
+
+void reactCtrlThread::sendObsData()
+{
+    printMessage(5,"[reactCtrlThread::sendObsData()]\n");
+    if (outObsPort.getOutputCount()>0)
+    {
+        yarp::os::Bottle b;
+        b.clear();
+        const int arms = (second_arm != nullptr) + 1;
+        for (int l = 0; l < arms; l++) {
+            auto ctrlPoints = (l == 0) ? main_arm->avhdl->getCtrlPoints() : second_arm->avhdl->getCtrlPoints();
+//            const int offset =  (l == 0)? 0 : 44;
+            const int visu_off =  (l == 0)? 0 : -4;
+            const int cap = (l == 0)?44:34;
+            int idx_prox = 0, idx_visu_h = 0, idx_visu_f = 0, idx_visu_u = 0, idx_visu_t = 0;
+            int idx_tact_h = 0, idx_tact_f = 0, idx_tact_u = 0, idx_tact_t = 0;
+            std::vector<Vector> closestPoints(cap);
+            for (int k = 0; k < cap; k++) {
+                closestPoints[k].resize(3, 0.0);
+            }
+            for (auto& ctrlPoint : ctrlPoints) {
+                if (ctrlPoint.second == TACTILE_OBS) {
+                    if (ctrlPoint.first.getDOF() == 10 && idx_tact_h < 4) {
+                        closestPoints[4 + idx_tact_h] = ctrlPoint.first.EndEffPosition();
+                        idx_tact_h++;
+                    } else if (ctrlPoint.first.getDOF() == 8 && idx_tact_f < 4) {
+                        closestPoints[4 + 4 + idx_tact_f] = ctrlPoint.first.EndEffPosition();
+                        idx_tact_f++;
+                    } else if (ctrlPoint.first.getDOF() == 6 && idx_tact_u < 4) {
+                        closestPoints[4 + 8 + idx_tact_u] = ctrlPoint.first.EndEffPosition();
+                        idx_tact_u++;
+                    } else if (ctrlPoint.first.getDOF() == 3 && idx_tact_t < 4 && l == 0) {
+                        closestPoints[4 + 12 + idx_tact_t] = ctrlPoint.first.EndEffPosition();
+                        idx_tact_t++;
+                    }
+                } else if (ctrlPoint.second == VISUAL_OBS) {
+                    if (ctrlPoint.first.getDOF() == 10 && idx_visu_h < 6) {
+                        closestPoints[20 + idx_visu_h + visu_off] = ctrlPoint.first.EndEffPosition();
+                        idx_visu_h++;
+                    } else if (ctrlPoint.first.getDOF() == 8 && idx_visu_f < 6) {
+                        closestPoints[20 + 6 + idx_visu_f + visu_off] = ctrlPoint.first.EndEffPosition();
+                        idx_visu_f++;
+                    } else if (ctrlPoint.first.getDOF() == 6 && idx_visu_u < 6) {
+                        closestPoints[20 + 12 + idx_visu_u + visu_off] = ctrlPoint.first.EndEffPosition();
+                        idx_visu_u++;
+                    } else if (ctrlPoint.first.getDOF() == 3 && idx_visu_t < 6 && l == 0) {
+                        closestPoints[20 + 18 + idx_visu_t + visu_off] = ctrlPoint.first.EndEffPosition();
+                        idx_visu_t++;
+                    }
+                } else if (ctrlPoint.second == PROX_OBS and idx_prox < 4) {
+                    closestPoints[idx_prox] = ctrlPoint.first.EndEffPosition();
+                    idx_prox++;
+                }
+            }
+
+            for (auto& closestPoint : closestPoints) {
+                vectorIntoBottle(closestPoint, b);
+            }
+        }
+        for (auto& obsP : obsWorldPos)
+        {
+            vectorIntoBottle(obsP, b);
+        }
+
+        outObsPort.setEnvelope(ts);
+        outObsPort.write(b);
     }
 }
 
@@ -1781,7 +1919,7 @@ bool reactCtrlThread::readStreamingTarget()
                 }
             }
         }
-//        ee_dist_constr = 1; // TODO: turn on for bimanual task
+//        ee_dist_constr = 1; // turn on for bimanual task
 //        main_arm->minJerkTarget->init(main_arm->x_t);
 //        main_arm->minJerkTarget->setTs(dT); //time step
 //        main_arm->minJerkTarget->setT(0.1);

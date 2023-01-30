@@ -12,8 +12,10 @@ using namespace yarp::os;
 using namespace iCub::iKin;
 using namespace iCub::skinDynLib;
 
+
 void NeoQP::generateRobotColPoints(yarp::sig::Vector* data)
 {
+    selfControlPoints.resize(2);
     selfColPoints.resize(4);
         // front chest, back, face, back of head, ears (2x), hip (3x), front chest low band (relative coords to SKIN_FRONT_TORSO)
         std::vector<std::vector<double>> posx{{-0.13, -0.122, -0.084}, {0.05,  0.065, 0.08}, {-0.12, -0.112, -0.082},
@@ -37,6 +39,7 @@ void NeoQP::generateRobotColPoints(yarp::sig::Vector* data)
                 }
             }
         }
+        selfControlPoints[0] = {{-0.0049, 0.0012,  0.0}, {-0.0059, 0.0162,  0.0}, {-0.0199, 0.0122,  0.0}, {-0.0049, -0.0143,  0.0}, {-0.0304, 0.0122,  0.0}};
         selfColPoints[0] = {{-0.0049, 0.0012,  0.0}, {-0.0059, 0.0162,  0.0}, {-0.0199, 0.0122,  0.0}, {-0.0049, -0.0143,  0.0}, {-0.0304, 0.0122,  0.0}};
         std::vector<std::string> fingers{"thumb", "index", "middle", "ring", "little"};
         for (int i = 0; i < 5; i++)
@@ -47,6 +50,7 @@ void NeoQP::generateRobotColPoints(yarp::sig::Vector* data)
             finger.setAng((M_PI/180.0)*vec);
             printf("%s pos is \t %s\n", fingers[i].c_str(), finger.getH().subcol(0,3,3).toString().c_str());
             selfColPoints[0].push_back(finger.getH().subcol(0,3,3));
+            selfControlPoints[0].push_back(finger.getH().subcol(0,3,3));
         }
         if (part == "left")
         {
@@ -60,6 +64,10 @@ void NeoQP::generateRobotColPoints(yarp::sig::Vector* data)
                                 {0.0445, -0.0428, 0.0297}, {0.0569, -0.0727, -0.0185}, {-0.0087, -0.0931, -0.0270}, {0.0594, -0.0455, 0.0136}, {0.0553, -0.0237, -0.0204},
                                 {0.0311, -0.0135, -0.0299}, {-0.0169, -0.0813, 0.0263}, {0.0505, -0.0030, 0.0258}, {-0.0198, -0.1015, -0.0080}, {0.0498, -0.0862, 0.0276},
                                 {0.0165, -0.0341, -0.0310}, {0.0167, -0.0313, 0.0336}, {-0.0151, -0.0707, -0.0251}, {0.0245, -0.0622, 0.0329}, {0.0579, -0.0491, -0.0170}};
+            // control points are from left forearm
+            selfControlPoints[1] = {{0.0105, -0.0891, 0.0443}, {-0.0320, -0.0924, 0.0232}, {-0.0297, -0.0553, -0.0149}, {0.0265, -0.0569, 0.0231}, {-0.0243, -0.0490, 0.0323},
+                                    {0.0219, -0.0472, -0.0214}, {-0.0131, -0.0344, -0.0303}, {0.0089, -0.0494, 0.0422}, {0.0282, -0.0637, -0.0111}, {0.0278, -0.0883, 0.0243},
+                                    {-0.0142, -0.0906, 0.0443}, {0.0077, -0.0307, -0.0308}, {0.0132, -0.0673, 0.0416}, {-0.0144, -0.0681, 0.0433}, {-0.0309, -0.0683, 0.0231}};
         }
         else
         {
@@ -73,6 +81,12 @@ void NeoQP::generateRobotColPoints(yarp::sig::Vector* data)
                                 {-0.0249, 0.0897, 0.0329}, {0.0133, 0.0773, -0.0257}, {-0.0596, 0.0369, 0.0118}, {-0.0439, 0.0020, 0.0277}, {0.0171, 0.0819, 0.0262},
                                 {-0.0173, 0.0288, 0.0336}, {-0.0520, 0.0587, 0.0246}, {-0.0587, 0.0429, -0.0151}, {0.0285, 0.0830, 0.0001}, {-0.0301, 0.0469, 0.0322},
                                 {-0.0463, 0.0921, -0.0264}, {-0.0575, 0.0763, -0.0188}, {-0.0229, 0.0553, -0.0307}, {-0.0218, 0.0659, 0.0333}, {-0.0513, 0.0608, -0.0247}};
+
+            // control points are from right forearm
+            selfControlPoints[1] = {{0.0112, 0.0872, -0.0450}, {-0.0297, 0.0899, -0.0237}, {-0.0277, 0.0557, 0.0143}, {0.0022, 0.0510, -0.0426}, {0.0249, 0.0457, 0.0208},
+                                    {-0.0275, 0.0571, -0.0237}, {0.0307, 0.0932, -0.0224}, {0.0241, 0.0744, -0.0347}, {0.0254, 0.0571, 0.0184}, {-0.0156, 0.0677, -0.0408},
+                                    {0.0281, 0.0566, -0.0243}, {-0.0114, 0.0351, 0.0301}, {0.0313, 0.0643, 0.0101}, {0.0102, 0.0318, 0.0309}, {-0.0117, 0.0898, -0.0444}};
+
         }
         for (int i = 0; i < 3; ++i)
         {
@@ -129,7 +143,6 @@ std::deque<Vector> NeoQP::getCtrlPointsPosition()
 
 void NeoQP::checkCollisions(const std::vector<Vector> &obstacles)
 {
-    totalColPoints.clear();
     std::vector<Matrix> transforms;
 //    transforms.reserve(4);
     std::vector<int> indexes = {SkinPart_2_LinkNum[SKIN_LEFT_HAND].linkNum + 3,
@@ -175,12 +188,69 @@ void NeoQP::checkCollisions(const std::vector<Vector> &obstacles)
     }
 }
 
+void NeoQP::checkSelfCollisions()
+{
+    std::vector<std::vector<Matrix>> transforms;
+    transforms.resize(2);
+    std::vector<int> indexes = {SkinPart_2_LinkNum[SKIN_LEFT_HAND].linkNum + 3,
+                                SkinPart_2_LinkNum[SKIN_LEFT_FOREARM].linkNum + 3,
+                                SkinPart_2_LinkNum[SKIN_LEFT_UPPER_ARM].linkNum + 3};
+
+    transforms[0].push_back(yarp::math::SE3inv(arm->getH(indexes[0]))*arm->getH(SkinPart_2_LinkNum[SKIN_FRONT_TORSO].linkNum));
+    transforms[1].push_back(yarp::math::SE3inv(arm->getH(indexes[1]))*arm->getH(SkinPart_2_LinkNum[SKIN_FRONT_TORSO].linkNum));
+    int index = 0;
+    for (int k = 0; k < 2; ++k)
+    {
+        const Matrix T_a = arm->getH(indexes[k]);
+        for (int j = 0; j < transforms[0].size(); ++j)
+        {
+            double limit = 0.05;
+            int nearest = -1;
+            double neardist = std::numeric_limits<double>::max();
+            Vector nearest_pos = {0.0, 0.0, 0.0, 1.0};
+
+            if (transforms[0].size() > 1 && j == 0 && k == 0) limit = selfColDistance;
+            for (const auto& colPoint : selfColPoints[j])
+            {
+                const Vector pos = transforms[k][j] * colPoint;
+                for (int i = 0; i < selfControlPoints[k].size(); i++)
+                {
+                    const double n = yarp::math::norm2(pos.subVector(0, 2) - selfControlPoints[k][i]);
+                    if (n < neardist)
+                    {
+                        nearest = i;
+                        neardist = n;
+                        nearest_pos = pos;
+                    }
+                }
+            }
+            neardist = sqrt(neardist);
+            if (neardist < limit) // distance lower than 0.04 m
+            {
+                const Vector normal = nearest_pos.subVector(0, 2) - selfControlPoints[k][nearest];
+                const colPoint_t cp {(k == 0) ? SKIN_LEFT_HAND : SKIN_LEFT_FOREARM, selfControlPoints[k][nearest], nearest_pos, T_a.submatrix(0,2,0,2)  * (normal / yarp::math::norm(normal)), {0,0,0}, neardist};
+//                cp.x = selfControlPoints[k][nearest];
+//                cp.n = T_a.submatrix(0,2,0,2)  * (normal / yarp::math::norm(normal));
+                totalColPoints.push_back(cp);
+            }
+            index++;
+        }
+    }
+}
+
 
 /****************************************************************/
 void NeoQP::computeObstacles(const std::vector<Vector> &obstacles)
 {
     ctrlPointsPositions.clear();
-    checkCollisions(obstacles);
+    totalColPoints.clear();
+    if (!obstacles.empty()) {
+        checkCollisions(obstacles);
+    }
+    if (selfColDistance > 0)
+    {
+        checkSelfCollisions();
+    }
     const int dim_offset = 3;  // 3 if dim == 10; 0 if dim == 7
     int i = 0;
     for(const auto & colPoint : totalColPoints)
@@ -305,8 +375,8 @@ blims.push_back(b);
  */
 //public:
 /****************************************************************/
-NeoQP::NeoQP(iCubArm *chain_, bool hitConstr, double vmax_, double dT_,  const std::string& part_, yarp::sig::Vector* data) :
-        arm(chain_), hitting_constraints(hitConstr), dt(dT_), vmax(vmax_*CTRL_DEG2RAD), part(part_)
+NeoQP::NeoQP(iCubArm *chain_, bool hitConstr, double vmax_, double dT_,  const std::string& part_, double self_avoidance, yarp::sig::Vector* data) :
+        arm(chain_), hitting_constraints(hitConstr), dt(dT_), vmax(vmax_*CTRL_DEG2RAD), part(part_), selfColDistance(self_avoidance)
 {
     chain_dof = static_cast<int>(arm->getDOF());
     const int vars = chain_dof + 6;
@@ -451,7 +521,9 @@ void NeoQP::init(const Vector &_xr, const Vector &_v0, const std::vector<Vector>
         Aobstacles[i].zero();
         bvalue[i] = std::numeric_limits<double>::max();
     }
-    if (!obstacles.empty())
+
+
+    if (!obstacles.empty() || selfColDistance > 0)
     {
         computeObstacles(obstacles);
         for (int j = 0; j < obs_constr_num; ++j) {
@@ -617,13 +689,5 @@ int NeoQP::optimize()
 //        printf("%g < %g < %g\n", lowerBound[i], constr[i], upperBound[i]);
 //    }
 //    printf("\n");
-    std::ofstream f("test.txt");
-    if (f.is_open())
-    {
-        f << "Lin matrix:\n" << linearMatrix << '\n';
-        f << "Lowerbound:\n" <<  lowerBound << '\n';
-        f << "Upperbound:\n" <<  upperBound << '\n';
-        f << "Solution\n" << solver.getSolution() << "\n";
-    }
     return static_cast<int>(solver.workspace()->info->status_val);
 }

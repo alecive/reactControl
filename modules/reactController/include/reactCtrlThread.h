@@ -362,7 +362,7 @@ protected:
     double frequency;
     yarp::sig::Vector circleCenter;
     bool main_arm_constr;
-    int ee_dist_constr{-1000};
+    int ee_dist_constr{-10000};
 
     bool streamingTarget;
     yarp::os::BufferedPort<yarp::os::Bottle> streamedTargets;
@@ -372,12 +372,16 @@ protected:
 
     // ports and files
     yarp::os::BufferedPort<yarp::os::Bottle> proximityEventsInPort; //coming from proximity sensor
+    yarp::os::BufferedPort<yarp::os::Bottle> proximityEvents2InPort; //coming from proximity sensor
     yarp::os::BufferedPort<yarp::os::Bottle> proximityEventsVisuPort; //sending out proximity data
     yarp::os::BufferedPort<yarp::os::Bottle> aggregSkinEventsInPort; //coming from /skinEventsAggregator/skin_events_aggreg:o
     yarp::os::BufferedPort<yarp::os::Bottle> aggregPPSeventsInPort; //coming from visuoTactileRF/pps_activations_aggreg:o
     //expected format for both: (skinPart_s x y z o1 o2 o3 magnitude), with position x,y,z and normal o1 o2 o3 in link FoR
     yarp::os::Port outPort;
+    yarp::os::Port outObsPort;
     BufferedPort<skinContactList> proximityEventsForiCubGuiPort;
+    BufferedPort<Bottle>  sensManagerPort;
+    std::vector<Vector> obsWorldPos;
 
     yarp::os::BufferedPort<yarp::os::Bottle> movementFinishedPort;
     std::ofstream fout_param; //log parameters that stay constant during the simulation, but are important for analysis - e.g. joint limits
@@ -467,9 +471,9 @@ protected:
     bool preprocCollisions();
     /************************** communication through ports in/out ***********************************/
 
-    void getCollPointFromPort(Bottle* bot, double gain, bool isTactile);
+    void getCollPointFromPort(Bottle* bot, double gain, int type);
 
-    void getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, double gain, bool isTactile);
+    void getCollisionPointsFromPort(BufferedPort<Bottle> &inPort, double gain, int type);
 
     /**
      * writing to param file
@@ -480,6 +484,11 @@ protected:
     * Sends useful data to a port in order to track it on matlab
     **/
     void sendData();
+
+    /**
+    * Sends useful data to a port in order to track it on matlab
+    **/
+    void sendObsData();
 
     /**
     * @brief Receive trajectories of control points from planner

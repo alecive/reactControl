@@ -53,8 +53,8 @@
                 3.1355
             ]
         ],
-        "p2p_reps": 6,
-        "p2p_period": 8
+        "p2p_reps": 3,
+        "p2p_period": 10
     },
     "circle": {
         "center": [

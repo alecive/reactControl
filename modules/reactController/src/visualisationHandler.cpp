@@ -118,6 +118,16 @@ void VisualisationHandler::closePorts()
     }
 }
 
+void VisualisationHandler::visualizeObjects(const Vector& x_d, const Vector& x_n, const Vector& x2_d, const Vector& x2_n)
+{
+    visualizeObjects(x_d, x_n);
+
+    if (visualizeTargetIniCubGui) sendiCubGuiObject("target_2", x2_d);
+
+    if(visualizeParticleIniCubGui) sendiCubGuiObject("particle_2", x2_n);
+
+}
+
 void VisualisationHandler::visualizeObjects(const Vector& x_d, const Vector& x_n)
 {
     if(visualizeTargetInSim)
@@ -151,21 +161,14 @@ void VisualisationHandler::sendiCubGuiObject(const std::string& object_type, Vec
         obj.addString("object");
         obj.addString(object_type);
 
-        // size
-        if (object_type == "target") {
-            obj.addFloat64(40.0);
-            obj.addFloat64(40.0);
-            obj.addFloat64(40.0);
-        }
-        else {
-            obj.addFloat64(20.0);
-            obj.addFloat64(20.0);
-            obj.addFloat64(20.0);
-        }
+        obj.addFloat64(20.0);
+        obj.addFloat64(20.0);
+        obj.addFloat64(20.0);
+
         // positions - iCubGui works in mm
-        obj.addFloat64(M2MM*x(0));
-        obj.addFloat64(M2MM*x(1));
-        obj.addFloat64(M2MM*x(2));
+        obj.addFloat64(M2MM*x(0)+10);
+        obj.addFloat64(M2MM*x(1)+10);
+        obj.addFloat64(M2MM*x(2)+10);
 
         // orientation
         obj.addFloat64(0.0);
@@ -173,19 +176,19 @@ void VisualisationHandler::sendiCubGuiObject(const std::string& object_type, Vec
         obj.addFloat64(0.0);
 
         // color
-        if (object_type == "particle") {
-            obj.addInt32(0);
-            obj.addInt32(0);
+        if (object_type.substr(0,8) == "particle") {
             obj.addInt32(255);
+            obj.addInt32(0);
+            obj.addInt32(0);
         }
-        else if(object_type == "target") {
+        else if(object_type.substr(0,6) == "target") {
             obj.addInt32(0);
             obj.addInt32(255);
             obj.addInt32(0);
         }
         else if (object_type.substr(0,4) == "prox")
         {
-            obj.addInt32(255);
+            obj.addInt32(0);
             obj.addInt32(0);
             obj.addInt32(255);
         }

@@ -670,7 +670,7 @@ public:
 
 
             //********************** Visualizations in simulator ***********************
-            if (robot == "icubSim"){
+//            if (robot == "icubSim"){
                 if (rf.check("visualizeTargetInSim"))
                 {
                     if(rf.find("visualizeTargetInSim").asString()=="on")
@@ -723,16 +723,16 @@ public:
                 {
                     yInfo("[reactController] Could not find visualizeCollisionPointsInSim flag (on/off) in the config file; using %d as default",visualizeCollisionPointsInSim);
                 }
-            }
-            else{
-                visualizeTargetInSim = false;
-                yInfo("[reactController] visualizeTargetInSim flag set to off.");
-                visualizeParticleInSim = false;
-                yInfo("[reactController] visualizeParticleInSim flag set to off.");
-                visualizeCollisionPointsInSim = false;
-                yInfo("[reactController] visualizeCollisionPointsInSim flag set to off.");
-
-            }
+//            }
+//            else{
+//                visualizeTargetInSim = false;
+//                yInfo("[reactController] visualizeTargetInSim flag set to off.");
+//                visualizeParticleInSim = false;
+//                yInfo("[reactController] visualizeParticleInSim flag set to off.");
+//                visualizeCollisionPointsInSim = false;
+//                yInfo("[reactController] visualizeCollisionPointsInSim flag set to off.");
+//
+//            }
 
         //************* THREAD ******************************
         

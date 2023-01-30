@@ -35,6 +35,14 @@ AvoidanceHandler::AvoidanceHandler(iCub::iKin::iKinChain &_chain, const std::vec
 {
     selfColPoints.resize(4);
     selfControlPoints.resize(2);
+    for (int i = 0; i < 5; i++)
+    {
+        for (int j = 0; j < 8; j++)
+        {
+            tablePoints.emplace_back(Vector{-0.15-i*0.07, -0.45+j*0.1, -0.02, 1.0});
+        }
+    }
+
     if (selfColDistance > 0)
     {
         // front chest, back, face, back of head, ears (2x), hip (3x), front chest low band (relative coords to SKIN_FRONT_TORSO)
@@ -121,12 +129,12 @@ AvoidanceHandler::AvoidanceHandler(iCub::iKin::iKinChain &_chain, const std::vec
 
 
 /****************************************************************/
-std::deque<Vector> AvoidanceHandler::getCtrlPointsPosition()
+std::deque<std::pair<Vector, int>> AvoidanceHandler::getCtrlPointsPosition()
 {
-    std::deque<Vector> ctrlPoints;
+    std::deque<std::pair<Vector, int>> ctrlPoints;
     for (auto & ctrlPointChain : ctrlPointChains)
     {
-        ctrlPoints.push_back(ctrlPointChain.EndEffPosition());
+        ctrlPoints.emplace_back(ctrlPointChain.first.EndEffPosition(), ctrlPointChain.second);
     }
     return ctrlPoints;
 }
@@ -227,7 +235,7 @@ void AvoidanceHandler::checkSelfCollisions(bool mainpart)
             neardist = sqrt(neardist);
             if (neardist < limit) // distance lower than 0.04 m
             {
-                collisionPoint_t cp {(k == 0) ? SKIN_LEFT_HAND : SKIN_LEFT_FOREARM, std::max(0.0,1.2 - 20*neardist)}; //(1.1 - neardist*5)   //(1.4 - 2*neardist) bimanual task
+                collisionPoint_t cp {(k == 0) ? SKIN_LEFT_HAND : SKIN_LEFT_FOREARM, SELFCOL_OBS, std::max(0.0,1.2 - 20*neardist)}; //(1.1 - neardist*5)   //(1.4 - 2*neardist) bimanual task
                 cp.x = selfControlPoints[k][nearest];
                 const Vector normal = nearest_pos.subVector(0, 2) - selfControlPoints[k][nearest];
                 cp.n = T_a.submatrix(0,2,0,2)  * (normal / yarp::math::norm(normal));
@@ -237,6 +245,55 @@ void AvoidanceHandler::checkSelfCollisions(bool mainpart)
             }
             index++;
         }
+    }
+}
+
+
+void AvoidanceHandler::checkTableCollisions()
+{
+    std::vector<int> indexes = {SkinPart_2_LinkNum[SKIN_LEFT_HAND].linkNum + 3,
+                                SkinPart_2_LinkNum[SKIN_LEFT_FOREARM].linkNum + 3,
+                                SkinPart_2_LinkNum[SKIN_LEFT_UPPER_ARM].linkNum + 3,
+                                SkinPart_2_LinkNum[SKIN_FRONT_TORSO].linkNum};
+    const std::vector<SkinPart> parts = {SKIN_LEFT_HAND, SKIN_LEFT_FOREARM, SKIN_LEFT_UPPER_ARM, SKIN_FRONT_TORSO};
+    int index = 0;
+    for (int k = 0; k < 2; ++k)
+    {
+        const Matrix T_a = chain.getH(indexes[k]);
+        const double limit = LIMIT;
+        int nearest = -1;
+        double neardist = std::numeric_limits<double>::max();
+        Vector nearest_pos = {0.0, 0.0, 0.0, 1.0};
+        auto transform = yarp::math::SE3inv(chain.getH(indexes[k]));
+//        printf("Transform\n%s\n", transform.toString(3).c_str());
+        for (const auto& colPoint : tablePoints)
+        {
+//            printf("Col point %s\n", colPoint.toString(3).c_str());
+            const Vector pos = transform * colPoint;
+//            printf("Pos %s\n", pos.toString(3).c_str());
+            for (int i = 0; i < selfControlPoints[k].size(); i++)
+            {
+                const double n = yarp::math::norm2(pos.subVector(0, 2) - selfControlPoints[k][i]);
+                if (n < neardist)
+                {
+                    nearest = i;
+                    neardist = n;
+                    nearest_pos = pos;
+                }
+            }
+        }
+        neardist = sqrt(neardist);
+        if (neardist < limit) // distance lower than 0.04 m
+        {
+            collisionPoint_t cp {parts[k], SELFCOL_OBS, std::max(0.0,1.2 - 20*neardist)}; //(1.1 - neardist*5)   //(1.4 - 2*neardist) bimanual task
+            cp.x = selfControlPoints[k][nearest];
+            const Vector normal = nearest_pos.subVector(0, 2) - selfControlPoints[k][nearest];
+            cp.n = T_a.submatrix(0,2,0,2)  * (normal / yarp::math::norm(normal));
+            totalColPoints.push_back(cp);
+            yDebug("colPoint %d with pos = %s, dist = %.3f and mag = %.2f for k = %d\n",
+                   index, cp.x.toString().c_str(), neardist, cp.magnitude, k);
+        }
+        index++;
     }
 }
 
@@ -259,6 +316,7 @@ void AvoidanceHandler::getVLIM(std::vector<yarp::sig::Vector>& Aobs, std::vector
 
 //    if (!mainPart) totalColPoints.clear();
     checkSelfCollisions(mainpart);
+//    checkTableCollisions(); // added for bubbles
     for(const auto & colPoint : totalColPoints)
     {
         double coef = 0.8;
@@ -317,8 +375,8 @@ void AvoidanceHandler::getVLIM(std::vector<yarp::sig::Vector>& Aobs, std::vector
 //        printMessage(2, "J for positions at control point:\n %s \nJ.transposed:\n %s \nNormal at control point: (%s), norm: %f \n",J.toString(3,3).c_str(),J.transposed().toString(3,3).c_str(), normal.toString(3,3).c_str(),norm(normal));
 
         Aobs[i] = J.transposed()*colPoint.n;
-        bvals[i] = (0.3-colPoint.magnitude) * coef*0.6 * 1.1;
-        ctrlPointChains.push_back(customChain);
+        bvals[i] = (0.3-colPoint.magnitude) * coef*0.66;
+        ctrlPointChains.emplace_back(customChain, colPoint.type);
         i++;
     }
 }

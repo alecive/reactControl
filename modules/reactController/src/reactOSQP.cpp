@@ -201,7 +201,7 @@ void ArmHelper::addConstraints(Eigen::SparseMatrix<double>& linearMatrix, int ob
 /****************************************************************/
 QPSolver::QPSolver(iCubArm *chain_, bool hitConstr, iCubArm* second_chain_, double vmax_, bool orientationControl_,
                              double dT_, const Vector& restPos, double restPosWeight_, const std::string& part_) :
-        second_arm(nullptr), dt(dT_), w2(restPosWeight_), orig_w2(restPosWeight_), w3(10), w4(0.5), part(part_), obsConstrActive(false) // w4(1) for react None
+        second_arm(nullptr), dt(dT_), w2(restPosWeight_), orig_w2(restPosWeight_), w3(0.1), w4(0.5), part(part_), obsConstrActive(false) // TODO: w3 = 10, w4 = 0.05 is original // for bubbles is w3 = 0.01 and w4 = 0.5, for one-arm exp w3=1, w4=0.05, for bimanual w3 =0.1 and w=0.5
 {
     main_arm = std::make_unique<ArmHelper>(chain_, dt, 0, vmax_*CTRL_DEG2RAD, restPos, hitConstr);
     vars_offset = main_arm->chain_dof + 6; // + 1;
@@ -214,7 +214,7 @@ QPSolver::QPSolver(iCubArm *chain_, bool hitConstr, iCubArm* second_chain_, doub
     if (second_arm)
     {
         vars += second_arm->chain_dof + 6;
-        constr += 6 + second_arm->chain_dof + 6 + 3 + hitConstr * 3 + obs_constr_num/2 + 3; //three constraint for distance between end effectors
+        constr += 6 + second_arm->chain_dof + 6 + 3 + hitConstr * 3 + obs_constr_num/2 + 6; //six constraint for distance between end effectors and same ori
     }
     hessian.resize(vars, vars);
     set_hessian();
@@ -238,7 +238,7 @@ QPSolver::QPSolver(iCubArm *chain_, bool hitConstr, iCubArm* second_chain_, doub
             upperBound[i + second_arm->chain_dof + 12 + 3 + constr_offset + 3 * hitConstr] = std::numeric_limits<double>::max();
         }
         second_arm->addConstraints(linearMatrix, obs_constr_num/2);
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 6; i++) { // bimanual task constraints
             lowerBound[obs_constr_num/2 + i + second_arm->chain_dof + 12 + 3 + constr_offset + 3 * hitConstr] = -std::numeric_limits<double>::max();
             upperBound[obs_constr_num/2 + i + second_arm->chain_dof + 12 + 3 + constr_offset + 3 * hitConstr] = std::numeric_limits<double>::max();
             for (int j = 0; j < 3; j++) {
@@ -341,14 +341,22 @@ void QPSolver::update_bounds(double pos_error, bool main_arm_constr)
 
         const Vector x1 = main_arm->arm->getH().getCol(3).subVector(0, 2);
         const Vector x2 = second_arm->arm->getH().getCol(3).subVector(0, 2);
-        const Vector ref_dist = {0.0, 0.10,0.0};
+        const Vector o1 = main_arm->arm->EndEffPose(true).subVector(3,6);
+        const Vector o2 = second_arm->arm->EndEffPose(true).subVector(3,6);
+        const Vector ref_dist = {0.0, 0.15,0.0, 0.0,0.0,0.0};
         if (eeDistConstr) {
+//            printf("Ori main arm %s\tOri second arm %s\n", main_arm->arm->EndEffPose(true).subVector(3,6).toString(3).c_str(), second_arm->arm->EndEffPose(true).subVector(3,6).toString(3).c_str());
             for (int i = 0; i < 3; i++) {
-                printf("%g\t", x2[i] - x1[i]);
+//                printf("%g\t", x2[i] - x1[i]);
                 lowerBound[obs_constr_num / 2 + i + second_arm->chain_dof + 12 + 3 + constr_offset + 3 * main_arm->hit_constr] = (-1e-6 + ref_dist[i] + x2[i] - x1[i]) / dt;
                 upperBound[obs_constr_num / 2 + i + second_arm->chain_dof + 12 + 3 + constr_offset + 3 * main_arm->hit_constr] = ( 1e-6 + ref_dist[i] + x2[i] - x1[i]) / dt;
             }
-            printf("\n");
+            for (int i = 4; i < 6; i++) {
+//                printf("%g\t", o2[i]*o2[3] - o1[i]*o1[3]);
+                lowerBound[obs_constr_num / 2 + i + second_arm->chain_dof + 12 + 3 + constr_offset + 3 * main_arm->hit_constr] = (-1e-5 + ref_dist[i] + o2[i]*o2[3] - o1[i]*o1[3]) / dt;
+                upperBound[obs_constr_num / 2 + i + second_arm->chain_dof + 12 + 3 + constr_offset + 3 * main_arm->hit_constr] = ( 1e-5 + ref_dist[i] + o2[i]*o2[3] - o1[i]*o1[3]) / dt;
+            }
+//            printf("\n");
         }
 //        lowerBound[obs_constr_num / 2 + 1 + second_arm->chain_dof + 12 + 3 + constr_offset + 3 * main_arm->hit_constr] = -std::numeric_limits<double>::max();
 //        upperBound[obs_constr_num / 2 + 1 + second_arm->chain_dof + 12 + 3 + constr_offset + 3 * main_arm->hit_constr] = std::numeric_limits<double>::max();
@@ -367,10 +375,10 @@ void QPSolver::update_hessian(double pos_error)
    // yInfo("Weights are %g %g\n", 10*norm(main_arm->v_des.subVector(0,2)), norm(main_arm->v_des.subVector(3,5)));
 //    double scale = (pos_error > 0 && !obsConstrActive)? 20  : ((obsConstrActive)? 0.1 : 1);
     const double scale = (pos_error > 0)? 10  : 1;
-    for (int i = 3; i < 6; ++i)
-    {
-        hessian.coeffRef(main_arm->chain_dof+i,main_arm->chain_dof+i) = 2*w4/scale;
-    }
+//    for (int i = 3; i < 6; ++i)
+//    {
+//        hessian.coeffRef(main_arm->chain_dof+i,main_arm->chain_dof+i) = 2*w4/scale;
+//    }
 
     if (second_arm != nullptr)
     {
@@ -382,7 +390,7 @@ void QPSolver::update_hessian(double pos_error)
         else
         {
             for (int i = 0; i < 3; ++i) {
-                hessian.coeffRef(second_arm->chain_dof + i + vars_offset, second_arm->chain_dof + i + vars_offset) = 2 * w4 / scale;
+                hessian.coeffRef(second_arm->chain_dof + i + vars_offset, second_arm->chain_dof + i + vars_offset) = 2 * w3 / scale / 4; // changed for bubbles from 2 * w4 / scale to 2 * w3 / scale / 4
             }
         }
         for (int i = 3; i < 6; ++i)
@@ -473,7 +481,7 @@ void QPSolver::update_constraints()
             }
         }
 
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 6; i++) { // bimanual task constraints
             for (int j = 0; j < 3; j++) {
                 linearMatrix.coeffRef(obs_constr_num/2 + i + constr_offset + second_arm->chain_dof + 12 + 3 + 3 * second_arm->hit_constr, j) = main_arm->J0(i, j) - second_arm->J0(i, j);
             }
@@ -527,12 +535,5 @@ int QPSolver::optimize(double pos_error, bool main_arm_constr)
     }
     solver.setPrimalVariable(primalVar);
     solver.solve();
-    std::ofstream f("test.txt");
-    if (f.is_open())
-    {
-        f << "Lin matrix:\n" << linearMatrix << '\n';
-        f << "Lowerbound:\n" <<  lowerBound << '\n';
-        f << "Upperbound:\n" <<  upperBound << '\n';
-    }
     return static_cast<int>(solver.workspace()->info->status_val);
 }

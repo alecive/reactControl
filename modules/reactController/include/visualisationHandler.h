@@ -58,6 +58,8 @@ public:
 
     void visualizeObjects(const Vector& x_d, const Vector& x_n);
 
+    void visualizeObjects(const Vector& x_d, const Vector& x_n, const Vector& x2_d, const Vector& x2_n);
+
     void closePorts();
 
 private:

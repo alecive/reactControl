@@ -188,6 +188,8 @@ def main():
    # print(sys.argv[1], bool(sys.argv[1]), int(sys.argv[1]), bool(int(sys.argv[1])))
     use_neo = int(sys.argv[1])
     outport_name = "/reactController/neo_obstacles:i" if use_neo else "/visuoTactileWrapper/sensManager:i"
+    if not use_neo:
+        outport_name_data = "/reactController/sensManager:i"
     conf = open('app/conf/reactController.ini')
     part = "left"
     for line in conf.readlines():
@@ -203,6 +205,8 @@ def main():
     dataPort.open('/data_obstacles:o')
     guiPort.open('/gui_obst:o')
     yarp.Network.connect(out_port.getName(), outport_name)
+    if not use_neo:
+        yarp.Network.connect(out_port.getName(), outport_name_data)
     yarp.Network.connect(guiPort.getName(), "/iCubGui/objects")
     prox_port = yarp.Port()
     prox_port.open('/prox_obst:o')
@@ -213,32 +217,26 @@ def main():
 
     obs_type = int(sys.argv[2])
 
-    # close the network
-    if obs_type == 1:
-        gen_dynamic_obstacle(out_port, [-0.319, 0.084, 0.1], 0.08, [0, -1, 0], 3, 3, use_neo, use_right)  # exp 1
-    elif obs_type == 3:
-        gen_dynamic_obstacle(out_port, [-0.119, -0.404, 0.05], 0.05, [0, 1, 0], 10, 3, use_neo, use_right)  # exp 3
-    elif obs_type == 4:
-        gen_dynamic_obstacle(out_port, [-0.319, 0.104, 0.05], 0.05, [0, -1, 0], 5, 3, use_neo, use_right)  # exp 4
-    elif obs_type == 5:
-        gen_dynamic_obstacle(out_port, [-0.319, 0.104, 0.05], 0.05, [0, -1, 0], 5, 3, use_neo, use_right)  # exp 4
-    elif obs_type == 8:
-        gen_dynamic_obstacle(out_port, [-0.219, 0.054, 0.15], 0.05, [1, 0, 0], 5, 3, use_neo, use_right)  # exp 4
-    elif obs_type == 10:
-        gen_proximity_obstacle(prox_port, 5, 5, 1.5, use_right)
-    elif obs_type == 11:
-        gen_static_obstacle(out_port, [-0.349, -0.17, 0.1], 30, use_neo, use_right)
-#        gen_proximity_obstacle(prox_port, 5, 5, 2, use_right)
-    elif obs_type == 100:
-        gen_falling_obstacle(out_port, [-0.249, -0.074, 0.35], 0.1, 3, 4, use_neo, use_right)  # exp 4
-    elif obs_type == 13:
-        gen_dynamic_1way_obstacle(out_port, [-0.28, 0.044, 0.02], 0.05, [0, -1, 0], 15, 8, use_neo, use_right)  # exp 3
-    elif obs_type == 14:
-        gen_dynamic_1way_obstacle(out_port, [-0.43, -0.164, 0.02], 0.06, [1, 0, 0], 15, 9, use_neo, use_right)  # exp 3
-    elif obs_type == 15:
-        gen_dynamic_1way_obstacle(out_port, [-0.2, -0.22, 0.3], 0.08, [0, 0, -1], 15, 8, use_neo, use_right)  # exp 3
-    elif obs_type == 0:
-        gen_static_obstacle(out_port, [-0.099, 0.0, 0.2], 30, use_neo, use_right)
+    if obs_type == 100:
+        gen_static_obstacle(out_port, [-0.349, -0.22, 0.1], 60, use_neo, use_right)
+    elif obs_type == 101:
+        gen_static_obstacle(out_port, [-0.27, -0.14, 0.06], 60, use_neo, use_right)
+    elif obs_type == 102:
+        gen_static_obstacle(out_port, [-0.27, -0.11, 0.06], 60, use_neo, use_right)
+    # elif obs_type == 13:
+    #     gen_dynamic_1way_obstacle(out_port, [-0.28, 0.044, 0.02], 0.05, [0, -1, 0], 15, 8, use_neo, use_right)  # exp 3
+    # elif obs_type == 14:
+    #     gen_dynamic_1way_obstacle(out_port, [-0.43, -0.164, 0.02], 0.06, [1, 0, 0], 15, 9, use_neo, use_right)  # exp 3
+    # elif obs_type == 15:
+    #     gen_dynamic_1way_obstacle(out_port, [-0.2, -0.22, 0.3], 0.08, [0, 0, -1], 15, 8, use_neo, use_right)  # exp 3
+    elif obs_type == 16:
+        gen_dynamic_1way_obstacle(out_port, [-0.27, 0.052, 0.0], 0.06, [0, -1, 0], 6, 8, use_neo, use_right)  # exp 3
+    elif obs_type == 17:
+        gen_dynamic_1way_obstacle(out_port, [-0.43, -0.164, 0.02], 0.06, [1, 0, 0], 6, 8, use_neo, use_right)  # exp 3
+    elif obs_type == 18:
+        gen_dynamic_1way_obstacle(out_port, [-0.2, -0.2, 0.28], 0.06, [0, 0, -1], 6, 8, use_neo, use_right)  # exp 3
+    # elif obs_type == 0:
+    #     gen_static_obstacle(out_port, [-0.099, 0.0, 0.2], 30, use_neo, use_right)
     yarp.Network.fini()
 
 
