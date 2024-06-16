@@ -482,7 +482,9 @@ void NeoQP::init(const Vector &_xr, const Vector &_v0, const std::vector<Vector>
 
     v_des.resize(6,0);
     v_des.setSubvector(0, (pr-p0) / dt);
-    v_des.setSubvector(3, dcm2rpy(R) / dt);
+    Vector axang = dcm2axis(R);
+    v_des.setSubvector(3, axang.subVector(0,2) * axang(3) / dt);
+//    v_des.setSubvector(3, dcm2rpy(R) / dt);
     w_d = 0;
     for (int i = 0; i < 6; i++)
     {

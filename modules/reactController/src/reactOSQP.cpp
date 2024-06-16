@@ -3,7 +3,8 @@
 //
 
 #include "reactOSQP.h"
-
+#include <yarp/os/LogStream.h>
+#include <yarp/math/SVD.h>
 #include <fstream>
 
 
@@ -39,10 +40,19 @@ void ArmHelper::init(const Vector &_xr, const Vector &_v0, const Matrix &_v_lim)
     const Matrix R = axis2dcm(ang).submatrix(0,2,0,2)*H0.submatrix(0,2,0,2).transposed();
     v_des.resize(6,0);
     v_des.setSubvector(0, (pr-p0) / dt);
-    v_des.setSubvector(3, dcm2rpy(R) / dt);
+//    Vector v2 = dcm2rpy(R) / dt;
+    Vector axang = dcm2axis(R);
+    v_des.setSubvector(3, axang.subVector(0,2) * axang(3) / dt);
     J0=arm->GeoJacobian();
     const double manip_thr = 0.05;
-    const double man = sqrt(det(J0*J0.transposed()));
+    Matrix U,V;
+    Vector S;
+    yarp::math::SVD(J0, U, S, V);
+    double man = 1.0;
+    for (int i = 0; i < S.length(); i++)
+    {
+        man *= S(i);
+    }
     adapt_w5 = (man < manip_thr)? 1 - man/manip_thr : 0;  // not used anymore
     adapt_w5 = adapt_w5 * adapt_w5 + 0.01;
 //    printf("adapt_w5 = %g\n", adapt_w5);
@@ -201,7 +211,7 @@ void ArmHelper::addConstraints(Eigen::SparseMatrix<double>& linearMatrix, int ob
 /****************************************************************/
 QPSolver::QPSolver(iCubArm *chain_, bool hitConstr, iCubArm* second_chain_, double vmax_, bool orientationControl_,
                              double dT_, const Vector& restPos, double restPosWeight_, const std::string& part_) :
-        second_arm(nullptr), dt(dT_), w2(restPosWeight_), orig_w2(restPosWeight_), w3(0.1), w4(0.5), part(part_), obsConstrActive(false) // TODO: w3 = 10, w4 = 0.05 is original // for bubbles is w3 = 0.01 and w4 = 0.5, for one-arm exp w3=1, w4=0.05, for bimanual w3 =0.1 and w=0.5
+        second_arm(nullptr), dt(dT_), w2(restPosWeight_), orig_w2(restPosWeight_), w3(10), w4(0.05), part(part_), obsConstrActive(false) // TODO: w3 = 10, w4 = 0.05 is original // for bubbles is w3 = 0.01 and w4 = 0.5, for one-arm exp w3=1, w4=0.05, for bimanual w3 =0.1 and w=0.5
 {
     main_arm = std::make_unique<ArmHelper>(chain_, dt, 0, vmax_*CTRL_DEG2RAD, restPos, hitConstr);
     vars_offset = main_arm->chain_dof + 6; // + 1;
@@ -390,7 +400,7 @@ void QPSolver::update_hessian(double pos_error)
         else
         {
             for (int i = 0; i < 3; ++i) {
-                hessian.coeffRef(second_arm->chain_dof + i + vars_offset, second_arm->chain_dof + i + vars_offset) = 2 * w3 / scale / 4; // changed for bubbles from 2 * w4 / scale to 2 * w3 / scale / 4
+                hessian.coeffRef(second_arm->chain_dof + i + vars_offset, second_arm->chain_dof + i + vars_offset) = 2 * w4 / scale; // changed for bubbles from 2 * w4 / scale to 2 * w3 / scale / 4
             }
         }
         for (int i = 3; i < 6; ++i)
@@ -481,7 +491,7 @@ void QPSolver::update_constraints()
             }
         }
 
-        for (int i = 0; i < 6; i++) { // bimanual task constraints
+        for (int i = 0; i < 3; i++) { // bimanual task constraints
             for (int j = 0; j < 3; j++) {
                 linearMatrix.coeffRef(obs_constr_num/2 + i + constr_offset + second_arm->chain_dof + 12 + 3 + 3 * second_arm->hit_constr, j) = main_arm->J0(i, j) - second_arm->J0(i, j);
             }

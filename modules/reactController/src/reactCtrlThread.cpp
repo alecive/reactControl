@@ -432,7 +432,7 @@ bool reactCtrlThread::threadInit()
     Time::delay(1);
     updateArmChain();
     printf("%s\n", main_arm->arm->EndEffPose().toString(3).c_str());
-    printf("%s\n", second_arm->arm->EndEffPose().toString(3).c_str());
+    if (second_arm) printf("%s\n", second_arm->arm->EndEffPose().toString(3).c_str());
     main_arm->initialization(second_arm? second_arm->virtualArm->asChain() : nullptr, torso->asChain(), verbosity);
     if (second_arm) second_arm->initialization(main_arm->virtualArm->asChain(), torso->asChain(), verbosity);
     NeoObsInPort.open("/"+name+"/neo_obstacles:i");
@@ -485,7 +485,6 @@ bool reactCtrlThread::threadInit()
                                         main_arm->homePos*CTRL_DEG2RAD, restPosWeight, main_arm->part_short);
 #endif
 #endif
-
     aggregPPSeventsInPort.open("/"+name+"/pps_events_aggreg:i");
     aggregSkinEventsInPort.open("/"+name+"/skin_events_aggreg:i");
     proximityEventsInPort.open("/"+name+"/proximity_events:i");
