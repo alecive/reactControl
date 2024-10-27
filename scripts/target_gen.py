@@ -8,10 +8,10 @@ import sys
 import json
 
 
-#reactController --robot icub --part "(right left)" --trajSpeed 0.02 --vMax 10
+# reactController --robot icub --part "(right left)" --trajSpeed 0.02 --vMax 10
 def bimanual_task_p2p(rpc_client, client, inp, pars, use_right=False):
-    points = [[-0.299, 0.15,0.05], [-0.289, 0.07,0.15], [-0.299, 0.0,0.05]]
-    idxs = 10*  [1,2,1,0]
+    points = [[-0.299, 0.15, 0.05], [-0.289, 0.07, 0.15], [-0.299, 0.0, 0.05]]
+    idxs = 10 * [1, 2, 1, 0]
     offset = -0.15
     p1 = [points[0][0], points[0][1], points[0][2]]
     p2 = [points[0][0], points[0][1] + offset, points[0][2]]
@@ -26,7 +26,7 @@ def bimanual_task_p2p(rpc_client, client, inp, pars, use_right=False):
     small_start = time.time()
     while time.time() - small_start < 0.1:
         pass
-    
+
     for idx in idxs:
         x = points[idx][0]
         y = points[idx][1]
@@ -37,8 +37,9 @@ def bimanual_task_p2p(rpc_client, client, inp, pars, use_right=False):
         while time.time() - small_start < 2:
             pass
 
+
 def bimanual_task_hold(rpc_client, client, inp, pars, use_right=False):
-    point = [-0.289, 0.07,0.1]
+    point = [-0.289, 0.07, 0.1]
     offset = -0.15
     p1 = [point[0], point[1], point[2]]
     p2 = [point[0], point[1] + offset, point[2]]
@@ -53,14 +54,13 @@ def bimanual_task_hold(rpc_client, client, inp, pars, use_right=False):
     small_start = time.time()
     while time.time() - small_start < 0.1:
         pass
-    
+
     for idx in range(60):
         result = set_both_xd(p1, p2, m_arm_constr=True, streaming=True)
         client.write(result)
         small_start = time.time()
         while time.time() - small_start < 1:
             pass
-
 
 
 def bimanual_task(rpc_client, client, inp, pars, use_right=False):
@@ -207,6 +207,24 @@ def set_both_xd(p1, p2, m_arm_constr=True, streaming=False):
     return bot
 
 
+def set_both_6d(p1, o1, p2, o2):
+    bot = yarp.Bottle()
+    bot.clear()
+    bot.addString("set_both_6d")
+    m = bot.addList()
+    for p in p1:
+        m.addFloat64(p)
+    n = bot.addList()
+    for p in o1:
+        n.addFloat64(p)
+    k = bot.addList()
+    for p in p2:
+        k.addFloat64(p)
+    l = bot.addList()
+    for p in o2:
+        l.addFloat64(p)
+    return bot
+
 def streamed_exp(rpc_client, pars, seed, use_right=False):
     np.random.seed(pars["seed"] if seed == 0 else seed)
     x = np.round(np.arange(pars["xmin"], pars["xmax"], pars["xstep"]), 2)  # np.round(np.arange(-0.3, -0.05, 0.05),2)
@@ -269,7 +287,6 @@ def p2p_exp(client, pars, use_right=False):
                 while (time.time() - start) < pars["p2p_period"] * ite:
                     pass
                 break
-
 
 
 def set_xd(x, y, z, streaming=False):
@@ -401,8 +418,35 @@ def main(move_type, config_file, seed):
     while time.time() - start < 1:
         pass
     if move_type == 0:
-        visual_exp(outport_rpc, inport, use_right_)
-        holdpos(outport_rpc)
+        p1 = [-0.289, 0.1, 0.05]
+        # o1 = [-0.1477, -0.7912, 0.5933, 3.0637]
+        # o1 = [-0.112, 0.9935, 0.01514, 3.1355]
+        p2 = [-0.289, -0.1, 0.05]
+        # o2 = [-0.1477, 0.5933, -0.7912, 3.0637]
+        # o2 = [-0.112, 0.01514, 0.9935, 3.1355]
+        result = set_both_xd(p1, p2, False, False)
+        # result = set_both_6d(p1, o1, p2, o2)
+        send_command(outport_rpc, result)
+        pose_str = None
+        while not pose_str:
+            pose_str = read_once(inport)
+
+        p1 = [-0.299, -0.05, 0.05]
+        # o1 = [-0.1477, -0.7912, 0.5933, 3.0637]
+        # o1 = [-0.112, 0.9935, 0.01514, 3.1355]
+        p2 = [-0.299, 0.05, 0.05]
+        # o2 = [-0.1477, 0.5933, -0.7912, 3.0637]
+        # o2 = [-0.112, 0.01514, 0.9935, 3.1355]
+        result = set_both_xd(p1, p2, False, False)
+        # result = set_both_6d(p1, o1, p2, o2)
+        send_command(outport_rpc, result)
+        pose_str = None
+        while not pose_str:
+            pose_str = read_once(inport)
+
+
+    # visual_exp(outport_rpc, inport, use_right_)
+    # holdpos(outport_rpc)
     elif move_type == 1:
         holdpos_exp(outport_rpc, inport, 60, use_right_)
     elif move_type == 2:
@@ -436,9 +480,9 @@ def main(move_type, config_file, seed):
 if __name__ == "__main__":
     filename = "scripts/params-noobs.json"
     seed = 0
-    if (len(sys.argv) > 2):
+    if len(sys.argv) > 2:
         filename = sys.argv[2]
-        if (len(sys.argv) > 3):
+        if len(sys.argv) > 3:
             seed = int(sys.argv[3])
-    
+
     main(int(sys.argv[1]), filename, seed)
