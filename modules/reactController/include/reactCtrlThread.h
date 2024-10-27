@@ -35,18 +35,7 @@
 #include <iCub/skinDynLib/skinContact.h>
 #include <iCub/skinDynLib/skinContactList.h>
 
-//#define NEO_TEST
-//#define IPOPT_TEST
-#ifdef NEO_TEST
-#include "NeoQP.h"
-#else
-#ifdef IPOPT_TEST
-#include "reactIpOpt.h"
-#include <IpIpoptApplication.hpp>
-#else
 #include "reactOSQP.h"
-#endif
-#endif
 #include "particleThread.h"
 #include "avoidanceHandler.h"
 #include "visualisationHandler.h"
@@ -395,19 +384,7 @@ protected:
     double timeToSolveProblem_s; //time taken by q_dot = solveIK(solverExitCode)
     Vector obstacle{0.0,0.0,0.0};
     yarp::os::BufferedPort<yarp::os::Bottle> NeoObsInPort; //coming from python script
-
-#ifdef NEO_TEST
-    std::unique_ptr<NeoQP> solver;
-#else
-#ifdef IPOPT_TEST
-    Ipopt::SmartPtr<Ipopt::IpoptApplication> app; // pointer to instance of main application class for making calls to Ipopt
-    Ipopt::SmartPtr<ControllerNLP> nlp; //pointer to IK solver instance
-    bool firstSolve{true};
-#else
     std::unique_ptr<QPSolver> solver;
-#endif
-#endif
-
     VisualisationHandler visuhdl;
 
     /**

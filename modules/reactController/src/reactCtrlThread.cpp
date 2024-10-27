@@ -436,55 +436,10 @@ bool reactCtrlThread::threadInit()
     main_arm->initialization(second_arm? second_arm->virtualArm->asChain() : nullptr, torso->asChain(), verbosity);
     if (second_arm) second_arm->initialization(main_arm->virtualArm->asChain(), torso->asChain(), verbosity);
     NeoObsInPort.open("/"+name+"/neo_obstacles:i");
-#ifdef NEO_TEST
-    solver = std::make_unique<NeoQP>(main_arm->virtualArm, hittingConstraints, vMax, dT, main_arm->part_short, main_arm->useSelfColPoints, main_arm->encsA);
-
-#else
-#ifdef IPOPT_TEST
-    app=new Ipopt::IpoptApplication;
-    app->Options()->SetNumericValue("tol",tol);
-    app->Options()->SetNumericValue("constr_viol_tol",1e-6);
-    app->Options()->SetIntegerValue("acceptable_iter",0);
-    app->Options()->SetStringValue("mu_strategy","adaptive");
-    app->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
-    app->Options()->SetNumericValue("max_cpu_time",0.75*dT);
-    app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
-    app->Options()->SetStringValue("hessian_approximation","limited-memory");
-    app->Options()->SetStringValue("derivative_test",verbosity?"second-order":"none");
-    app->Options()->SetIntegerValue("print_level",verbosity?5:0);
-    app->Initialize();
-
-
-//    app=new Ipopt::IpoptApplication;
-//    app->Options()->SetNumericValue("tol",tol);
-//    app->Options()->SetNumericValue("constr_viol_tol",1e-6);
-//    app->Options()->SetIntegerValue("acceptable_iter",0);
-//    app->Options()->SetStringValue("mu_strategy","adaptive");
-//    app->Options()->SetIntegerValue("max_iter",std::numeric_limits<int>::max());
-//    app->Options()->SetNumericValue("max_cpu_time",0.7*dT);
-//    app->Options()->SetStringValue("nlp_scaling_method","gradient-based");
-//    app->Options()->SetStringValue("hessian_constant", "yes");
-//    app->Options()->SetStringValue("jac_c_constant", "yes");
-//    app->Options()->SetStringValue("jac_d_constant", "yes");
-//    app->Options()->SetStringValue("mehrotra_algorithm", "yes");
-////    app->Options()->SetStringValue("derivative_test",verbosity?"first-order":"none");
-//    //    app->Options()->SetStringValue("derivative_test_print_all", "yes");
-//    app->Options()->SetIntegerValue("print_level", verbosity?10:0);
-//    app->Options()->SetNumericValue("derivative_test_tol", 1e-7);
-//    //    app->Options()->SetStringValue("print_timing_statistics", "yes");
-//    app->Initialize();
-
-    //in positionDirect mode, ipopt will use the qIntegrated values to update its copy of chain
-//    nlp=new ControllerNLP(*main_arm->virtualArm->asChain(), hittingConstraints, orientationControl, dT, restPosWeight);
-    //the "tactile" handler will currently be applied to visual inputs (from PPS) as well
-    firstSolve = true;
-#else
     solver = std::make_unique<QPSolver>(main_arm->virtualArm, hittingConstraints,
                                         second_arm? second_arm->virtualArm : nullptr,
                                         vMax, orientationControl,dT,
                                         main_arm->homePos*CTRL_DEG2RAD, restPosWeight, main_arm->part_short);
-#endif
-#endif
     aggregPPSeventsInPort.open("/"+name+"/pps_events_aggreg:i");
     aggregSkinEventsInPort.open("/"+name+"/skin_events_aggreg:i");
     proximityEventsInPort.open("/"+name+"/proximity_events:i");
@@ -789,11 +744,6 @@ void reactCtrlThread::getCollisionsFromPorts()
 
 void reactCtrlThread::run()
 {
-    //    double t2 = yarp::os::Time::now();
-    //    if (state == STATE_REACH)
-    //    {
-    //        std::cout << t2-t_0 << " ";
-    //    }
     for (int k = 0; k < 109; k++)
     {
         obsWorldPos[k].zero();
@@ -900,10 +850,6 @@ void reactCtrlThread::run()
         yFatal("[reactCtrlThread] reactCtrlThread should never be here!!! Step: %d",state);
     }
 
-    //    if (state == STATE_REACH)
-    //    {
-    //        std::cout << yarp::os::Time::now()-t_0 << " ";
-    //    }
     sendData();
     sendObsData();
     if (vel_limited) //if vLim was changed by the avoidanceHandler, we reset it
@@ -913,13 +859,6 @@ void reactCtrlThread::run()
     }
 
     printMessage(2,"[reactCtrlThread::run()] finished, state: %d.\n\n\n",state);
-    //    if (state == STATE_REACH) {
-    //        double t3 = yarp::os::Time::now();
-    //
-    //     //   std::cout << t3-t_0 << " " << timeToSolveProblem_s << " " << t3-t2;
-    //        if (t3-t2 > 0.01) { std::cout << " Alert!"; }
-    //     //   std::cout << "\n";
-    //    }
 }
 
 void reactCtrlThread::nextMove(bool& vel_limited)
@@ -995,10 +934,8 @@ void reactCtrlThread::threadRelease()
     visuhdl.closePorts();
     movementFinishedPort.interrupt();
     movementFinishedPort.close();
-//#ifdef NEO_TEST
     NeoObsInPort.interrupt();
     NeoObsInPort.close();
-//#endif
 }
 
 
@@ -1068,9 +1005,6 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, const Vector& _o_d, bool 
         holding_position = _x_d == main_arm->x_t;
         movingTargetCircle = _movingCircle;
         updateArmChain(); //updates ==chain, q and x_t
-//        if (norm(_x_d - Vector{-0.290,  0.210,  0.240}) < 3e-3)
-//            main_arm->resetTarget(Vector{-0.285,  0.20,  0.235},  comingHome? main_arm->o_home : _o_d, trajSpeed);
-//        else
         main_arm->resetTarget(_x_d,  comingHome? main_arm->o_home : _o_d, trajSpeed);
 
         if (second_arm)
@@ -1086,14 +1020,6 @@ bool reactCtrlThread::setNewTarget(const Vector& _x_d, const Vector& _o_d, bool 
             second_arm->o_0 = second_arm->o_t;
             second_arm->useSampling = false;
         }
-//        if (referenceGen == "uniformParticle"){
-//            yarp::sig::Vector vel(3,0.0);
-//            vel=trajSpeed * (main_arm->x_d-main_arm->x_0) / norm(main_arm->x_d-main_arm->x_0);
-//            if (!prtclThrd->setupNewParticle(main_arm->x_0,vel)){
-//                yWarning("prtclThrd->setupNewParticle(x_0,vel) returned false.\n");
-//                return false;
-//            }
-//        }
 
         yInfo("[reactCtrlThread] got new target: x_0: %s",main_arm->x_0.toString(3,3).c_str());
         yInfo("[reactCtrlThread]                 x_d: %s",main_arm->x_d.toString(3,3).c_str());
@@ -1213,35 +1139,11 @@ int reactCtrlThread::solveIK()
         Vector xr2(7, 0.0);
         xr2.setSubvector(0, second_arm->x_n);
         xr2.setSubvector(3, second_arm->o_n);
-#ifndef NEO_TEST
-#    ifndef IPOPT_TEST
         solver->init(xr, main_arm->q_dot, main_arm->vLimAdapted, comingHome ? 10 : restPosWeight, main_arm->Aobst, main_arm->bvalues,
                      second_arm->Aobst, second_arm->bvalues, xr2, second_arm->q_dot, second_arm->vLimAdapted, ee_dist_constr > 0);
-#    endif
-#endif
     } else {
-#ifdef NEO_TEST
-        solver->init(xr, main_arm->q_dot, obstacles);
-#else
-#    ifdef IPOPT_TEST
-//        nlp->init(xr, main_arm->q_dot, main_arm->vLimAdapted);
-#    else
         solver->init(xr, main_arm->q_dot, main_arm->vLimAdapted, comingHome ? 10 : restPosWeight, main_arm->Aobst, main_arm->bvalues);
-#    endif
-#endif
     }
-    //    if (second_arm)
-    //    {
-    //        dim += second_arm->chainActiveDOF-NR_TORSO_JOINTS;
-    //        Vector xr2(7,0.0);
-    //        xr2.setSubvector(0, second_arm->x_n);
-    //        xr2.setSubvector(3, second_arm->o_d);
-    //        solver->init(xr, main_arm->q_dot, main_arm->vLimAdapted, comingHome? 10:restPosWeight, xr2, second_arm->q_dot, second_arm->vLimAdapted);
-    //    }
-    //    else
-    //    {
-    //        solver->init(xr, main_arm->q_dot, main_arm->vLimAdapted, comingHome? 10:restPosWeight);
-    //    }
     Vector res(dim, 0.0);
     auto vals = std::vector<double>{0, std::numeric_limits<double>::max()};
 //    auto vals = std::vector<double>{std::numeric_limits<double>::max()}; // added for bubbles
@@ -1249,80 +1151,27 @@ int reactCtrlThread::solveIK()
     Matrix bounds;
     bounds.resize(dim, 2);
     while (count < vals.size()) {
-#ifdef IPOPT_TEST
-//        Ipopt::SmartPtr<ControllerNLP> nlp2;
-        auto vec = std::vector<ControlPoint> {};
-        nlp = new ControllerNLP(*main_arm->virtualArm->asChain(), vec);
-        nlp->set_hitting_constraints(hittingConstraints);
-        nlp->set_orientation_control(orientationControl);
-        nlp->set_additional_control_points(false);
-        nlp->set_dt(dT);
-        nlp->set_xr(xr);
-        nlp->set_v_limInDegPerSecond(main_arm->vLimAdapted);
-        nlp->set_v0InDegPerSecond(main_arm->q_dot);
-        nlp->init();
-        exit_code = app->OptimizeTNLP(GetRawPtr(nlp));
-        res = nlp->get_resultInDegPerSecond();
-
-//        nlp->init(xr, main_arm->q_dot, main_arm->vLimAdapted);
-//        if (firstSolve) {
-//            exit_code = app->OptimizeTNLP(GetRawPtr(nlp));
-//            firstSolve = false;
-//        } else {
-//            exit_code = app->ReOptimizeTNLP(GetRawPtr(nlp));
-//        }
-//        res=nlp->get_resultInDegPerSecond();
-        break;
-#else
-#    ifdef NEO_TEST
-        exit_code = solver->optimize();
-        if (exit_code >= OSQP_SOLVED)
-        {
-            res = solver->get_resultInDegPerSecond();
-        }
-        break;
-#    else
         exit_code = solver->optimize(vals[count], main_arm_constr);
         if (exit_code >= OSQP_SOLVED) {
-//            yInfo("Problem solved in %d run(s)\n", count + 1);
             res = solver->get_resultInDegPerSecond(bounds);
             break;
         }
-#    endif
-#endif
         count++;
     }
-#ifndef NEO_TEST
-#    ifndef IPOPT_TEST
     if (exit_code >= OSQP_SOLVED)
     {
         main_arm->vLimAdapted = bounds.submatrix(0, main_arm->chainActiveDOF - 1, 0, 1) * CTRL_RAD2DEG;
     }
-#endif
-#endif
     main_arm->q_dot = res.subVector(0, main_arm->chainActiveDOF-1);
     if (second_arm)
     {
         second_arm->q_dot.setSubvector(0, res.subVector(0, 2));
         second_arm->q_dot.setSubvector(NR_TORSO_JOINTS, res.subVector(main_arm->chainActiveDOF, res.size() - 1));
-#ifndef NEO_TEST
-#    ifndef IPOPT_TEST
         if (exit_code >= OSQP_SOLVED) {
             second_arm->vLimAdapted.setSubmatrix(bounds.submatrix(0, NR_TORSO_JOINTS - 1, 0, 1) * CTRL_RAD2DEG, 0, 0);
             second_arm->vLimAdapted.setSubmatrix(bounds.submatrix(main_arm->chainActiveDOF, bounds.rows() - 1, 0, 1) * CTRL_RAD2DEG, NR_TORSO_JOINTS, 0);
         }
-#    endif
-#endif
     }
-#ifdef IPOPT_TEST
-    if (exit_code==Ipopt::Solve_Succeeded || exit_code==Ipopt::Maximum_CpuTime_Exceeded)
-    {
-        if (exit_code==Ipopt::Maximum_CpuTime_Exceeded)
-            yWarning("[reactCtrlThread] Ipopt cpu time was higher than the rate of the thread!");
-    }
-    else
-        yWarning("[reactCtrlThread] Ipopt solve did not succeed!");
-#else
     if (exit_code == OSQP_TIME_LIMIT_REACHED)
     {
         yWarning("[reactCtrlThread] OSQP cpu time was higher than the rate of the thread!");
@@ -1331,8 +1180,6 @@ int reactCtrlThread::solveIK()
     {
         yWarning("[reactCtrlThread] OSQP solve did not succeed!");
     }
-#endif
-    // printMessage(0,"t_d: %g\tt_t: %g\n",t_d-t_0, t_t-t_0);
     if(verbosity >= 1){
         printf("x_n: %s\tx_d: %s\tdT %g\n",main_arm->x_n.toString(3,3).c_str(),main_arm->x_d.toString(3,3).c_str(),dT);
         printf("x_0: %s\tx_t: %s\n",       main_arm->x_0.toString(3,3).c_str(),main_arm->x_t.toString(3,3).c_str());
@@ -1648,22 +1495,6 @@ void reactCtrlThread::sendData()
         Vector closestPoint2Obs(3,0.0);
         Vector secondclosestPoint2Obs(3,0.0);
         Vector thirdclosestPoint2Obs(3,0.0);
-
-#ifdef NEO_TEST
-        auto ctrlPoints = solver->getCtrlPointsPosition();
-        if (!ctrlPoints.empty())
-        {
-            closestPoint2Obs = ctrlPoints[0];
-            if (ctrlPoints.size() > 1) {
-                secondclosestPoint2Obs = ctrlPoints[1];
-                if (ctrlPoints.size() > 2)
-                {
-                    thirdclosestPoint2Obs = ctrlPoints[2];
-                }
-            }
-        }
-
-#else
         auto ctrlPoints = main_arm->avhdl->getCtrlPointsPosition();
         if (!ctrlPoints.empty())
         {
@@ -1677,7 +1508,6 @@ void reactCtrlThread::sendData()
             }
         }
 
-#endif
         yarp::os::Bottle b;
         b.clear();
 
