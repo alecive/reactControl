@@ -10,7 +10,7 @@ The reaching controller is standalone in the `reactController` module here, but 
 
 The core module is the `reactController`.
 
-There are other modules in the repository which have so far an internal/development character. They are `jointVelCtrlIdentSimple`, `reactController-sim`, `reactController-sim-enhanced` under `modules` and there is another internal piece of code in `tests` (which implements the same controller formulation for the optimizer with the simplest possible infrastructure needed to run on the robot). 
+The old modules and tests which had an internal/development character are placed in `deprecated` folder.
 
 ### Documentation of the `reactController`
 
@@ -19,17 +19,40 @@ There are other modules in the repository which have so far an internal/developm
     iKin
     skinDynLib
     ctrlLib
+    osqpEigen
+    Eigen3
 
 #### Principles of operation:
 
-This modules parallels the functionality of the iCub [Cartesian interface] (http://wiki.icub.org/brain/icub_cartesian_interface.html), but both the solver and controller are encapsulated in the single problem formulation. It is an *Iterative Inverse Kinematics Solver + Controller*: the optimization step (i.e. `IPOPT`) will take care of everything in a single step: there is *no decoupling* between Inverse Kinematics and Control. The solution to the task is given in the *joint velocity space* (rather than joint configuration space), that are sent directly to the robot. Importantly, there is no distinction between end-effector and whole-body: the obstacles affect every body part in the same way - by limiting the joint velocities
+This modules parallels the functionality of the iCub [Cartesian interface](http://wiki.icub.org/brain/icub_cartesian_interface.html), but both the solver and controller are encapsulated in the single problem formulation. 
+
+The task is formulated as a quadratic program that seeks joint velocity commands respecting multiple constraints while minimizing the magnitude of the velocities. 
+The obstacles are dynamically managed by mapping visual and proximity (pre-collision) and tactile (post-collision) obstacles as additional constraints to the motion controller.
+The solution to the task (given in the *joint velocity space*) is integrated into new joint positions sent directly to the robot (see the schema below). 
+Importantly, there is no distinction between end-effector and whole-body: the obstacles affect every body part in the same way - by limiting the joint velocities.
+
+![Schema of the controller](misc/new-react-schema.png)
+
+
+## Citation
+If you found this work useful, please cite our manuscript:
+
+```bibtex
+@ARTICLE{rozlivek2024harmonious,
+  author={Jakub Rozlivek and Alessandro Roncone and Ugo Pattacini and Matej Hoffmann},
+  journal={IEEE Transactions on Robotics}, 
+  title={{HARMONIOUS – Human-like reactive motion control and multimodal perception for humanoid robots}}, 
+  year={2024},
+  volume={?},
+  number={?},
+  pages={???},
+  doi={10.1109/TRO.202}}
+```
 
 ## Authors
 
  * [Alessandro Roncone (@alecive)](https://github.com/alecive)
  * [Matej Hoffmann (@matejhof)](https://github.com/matejhof)
  * [Ugo Pattacini (@pattacini)](https://github.com/pattacini)
-
-
-
+ * [Jakub Rozlivek (@rozliv)](https://github.com/rozliv)
 
