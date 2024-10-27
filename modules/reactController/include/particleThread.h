@@ -32,9 +32,9 @@
 #include <iCub/ctrl/math.h>
 #include <iCub/ctrl/pids.h>
 
-#include <stdarg.h>
+#include <cstdarg>
+#include <utility>
 
-using namespace std;
 
 class particleThread: public yarp::os::PeriodicThread
 {
@@ -44,7 +44,7 @@ protected:
     // Flag that manages verbosity (v=1 -> more text printed out; v=2 -> even more text):
     int verbosity;
     // Name of the module (to change port names accordingly):
-    string name;
+    std::string name;
 
     /***************************************************************************/
     // INTERNAL VARIABLES:
@@ -64,15 +64,15 @@ protected:
     * @param l is the level of verbosity: if level > verbosity, something is printed
     * @param f is the text. Please use c standard (like printf)
     */
-    int printMessage(const int l, const char *f, ...) const;
+    int printMessage(int l, const char *f, ...) const;
 
 public:
     // CONSTRUCTOR
-    particleThread(int , const string & , int );
+    particleThread(int , std::string , int );
     // RUN
-    virtual void run();
+    void run() override;
     // RELEASE
-    virtual void threadRelease();
+    void threadRelease() override;
 
     /**
     * Initializes the integrator to a new particle to track.

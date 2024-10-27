@@ -23,8 +23,9 @@ using namespace yarp::sig;
 using namespace yarp::os;
 using namespace iCub::ctrl;
 
-particleThread::particleThread(int _rate, const string &_name, int _verbosity) :
-                               PeriodicThread((double)_rate/1000.0), name(_name), verbosity(_verbosity)
+particleThread::particleThread(int _rate, std::string _name, int _verbosity) :
+                               PeriodicThread(static_cast<double>(_rate)/1000.0), name(std::move(_name)),
+                               verbosity(_verbosity)
 {
     // Create the integrator
     integrator=new Integrator(_rate/1000.0,Vector(3,0.0));
@@ -89,13 +90,12 @@ int particleThread::printMessage(const int l, const char *f, ...) const
         va_end(ap);
         return ret;
     }
-    else
-        return -1;
+    return -1;
 }
 
 void particleThread::threadRelease()
 {
-    delete integrator; integrator = NULL;
+    delete integrator; integrator = nullptr;
 }
 
 // empty line to make gcc happy

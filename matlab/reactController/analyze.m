@@ -1,26 +1,31 @@
 % Author: Matej Hoffmann
 clear; 
 
-visualize_time_stats = true;
-visualize_target = true;
-visualize_elbow_target = true;
+visualize_time_stats = false;
+visualize_target = false;
+visualize_elbow_target = false;
 visualize_all_joint_pos = true;
 visualize_all_joint_vel = true;
-visualize_single_joint_in_detail = true;
-visualize_ineq_constr = true;
-visualize_ipopt_stats = true;
+visualize_single_joint_in_detail = false;
+visualize_ineq_constr = false;
+visualize_ipopt_stats = false;
 save_figs = false;
 chosen_time_column = 6; % 4 for sender, 6 for receiver 
 
 %path_prefix = 'input/';
 %path_prefix = 'icubSimTests/test_20160404a/';
-path_prefix = 'multipleControlPoints_icubSim/data2/';
+path_prefix = 'logs/obstacles_comparison/';
 %path_prefix = 'icubSimTests/circleUgosTestCode_a/';
 %path_prefix = 'icubSimTests/circleUgosTestCode_c_orientation_dt0.04/';
 %path_prefix = 'icubExperiments/moveWithIpoptWithoutAcceptHeuristicsOldTolerance_works/';
 path_prefix_dumper = '';
+folders = {'c0_mpc0', 'c0_mpc1_con', 'c0_mpc1_min', 'c1_mpc1_con', 'c1_mpc1_min'};
+names = {'mpc0', 'mpc1_as_constraint', 'mpc1_minimization', 'mpc1_as_constraint_smooth_constr', 'mpc1_minimization_smooth_constr'};
+folders= {'omin','vmin_oc001', 'vmin_oc004', 'omin_vmin_oc004'};
 
-
+for kk = 1:1
+path_prefix = ['logs/obstacles_comparison/', folders{kk},'/'];
+path_prefix = 'logs/contact_collision/'
 if save_figs
   mkdir('output');
 end
@@ -250,10 +255,10 @@ end
     
 
 %% info about data matrix
-
+d = d(d(:,6) > 10,:);
 sz=size(d);
 L=sz(1); % ~ nr. rows
-
+disp(L)
 t = d(:,chosen_time_column); 
 
 
@@ -301,33 +306,33 @@ end
 %% reference vs. real position end-effector and elbow
 if visualize_target
 
-    f1 = figure(1); clf(f1); set(f1,'Color','white','Name','Target, reference, end-effector (and elbow) in space');  
-    hold on; axis equal; view([-130 30]); grid;
-    xlabel('x [m]');
-    ylabel('y [m]');
-    zlabel('z [m]');
+%     f1 = figure(1+100*kk); clf(f1); set(f1,'Color','white','Name','Target, reference, end-effector (and elbow) in space');  
+%     hold on; axis equal; view([-130 30]); grid;
+%     xlabel('x [m]');
+%     ylabel('y [m]');
+%     zlabel('z [m]');
+% 
+%     plot3(d(:,target_x.column),d(:,target_y.column),d(:,target_z.column),'r*','LineWidth',4); % plots the desired target trajectory
+%     %plot3(d(end,5),d(end,6),d(end,7),'r*','LineWidth',10); % plots the desired target final pos
+% 
+%     plot3(d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column),'go','LineWidth',2); % plots the end-eff targets as given by reference
+%     plot3(d(end,targetEE_x.column),d(end,targetEE_y.column),d(end,targetEE_z.column),'go','LineWidth',4); % plots the end-eff reference final pos
+% 
+%     plot3(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),'k.','LineWidth',3); % plots the end-eff trajectory
+%     plot3(d(end,EE_x.column),d(end,EE_y.column),d(end,EE_z.column),'kx','LineWidth',6); % plots the end-eff final pos
+% 
+%     if visualize_elbow_target % for elbow - target and reference are currently identical (9.12.2016) 
+%          plot3(d(:,target_elbow_x.column),d(:,target_elbow_y.column),d(:,target_elbow_z.column),'r*','LineWidth',4); % plots the desired elbow target trajectory
+%          plot3(d(:,target_elbow_x.column),d(:,target_elbow_y.column),d(:,target_elbow_z.column),'go','LineWidth',2); % plots the elbow targets as given by reference
+%          plot3(d(end,target_elbow_x.column),d(end,target_elbow_y.column),d(end,target_elbow_z.column),'go','LineWidth',4); % plots the elbow reference final pos
+%          plot3(d(:,elbow_x.column),d(:,elbow_y.column),d(:,elbow_z.column),'k.','LineWidth',3); % plots the elbow real trajectory
+%          plot3(d(end,elbow_x.column),d(end,elbow_y.column),d(end,elbow_z.column),'kx','LineWidth',6); % plots the elbow final pos plot3(d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column),'go','LineWidth',2); % plots the end-eff targets as given by reference
+%          plot3(d(end,targetEE_x.column),d(end,targetEE_y.column),d(end,targetEE_z.column),'go','LineWidth',4); % plots the end-eff target final pos
+%     end    
+%        
+%     hold off;
 
-    plot3(d(:,target_x.column),d(:,target_y.column),d(:,target_z.column),'r*','LineWidth',4); % plots the desired target trajectory
-    %plot3(d(end,5),d(end,6),d(end,7),'r*','LineWidth',10); % plots the desired target final pos
-
-    plot3(d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column),'go','LineWidth',2); % plots the end-eff targets as given by reference
-    plot3(d(end,targetEE_x.column),d(end,targetEE_y.column),d(end,targetEE_z.column),'go','LineWidth',4); % plots the end-eff reference final pos
-
-    plot3(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),'k.','LineWidth',3); % plots the end-eff trajectory
-    plot3(d(end,EE_x.column),d(end,EE_y.column),d(end,EE_z.column),'kx','LineWidth',6); % plots the end-eff final pos
-
-    if visualize_elbow_target % for elbow - target and reference are currently identical (9.12.2016) 
-         plot3(d(:,target_elbow_x.column),d(:,target_elbow_y.column),d(:,target_elbow_z.column),'r*','LineWidth',4); % plots the desired elbow target trajectory
-         plot3(d(:,target_elbow_x.column),d(:,target_elbow_y.column),d(:,target_elbow_z.column),'go','LineWidth',2); % plots the elbow targets as given by reference
-         plot3(d(end,target_elbow_x.column),d(end,target_elbow_y.column),d(end,target_elbow_z.column),'go','LineWidth',4); % plots the elbow reference final pos
-         plot3(d(:,elbow_x.column),d(:,elbow_y.column),d(:,elbow_z.column),'k.','LineWidth',3); % plots the elbow real trajectory
-         plot3(d(end,elbow_x.column),d(end,elbow_y.column),d(end,elbow_z.column),'kx','LineWidth',6); % plots the elbow final pos plot3(d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column),'go','LineWidth',2); % plots the end-eff targets as given by reference
-         plot3(d(end,targetEE_x.column),d(end,targetEE_y.column),d(end,targetEE_z.column),'go','LineWidth',4); % plots the end-eff target final pos
-    end    
-       
-    hold off;
-
-    f11 = figure(11); clf(f11); set(f11,'Color','white','Name','Target, reference, end-effector in time and space');  
+    f11 = figure(11+100*kk); clf(f11); set(f11,'Color','white','Name','Target, reference, end-effector in time and space');  
         subplot(3,1,1);
             hold on;
             title('x coordinate');
@@ -389,7 +394,7 @@ if visualize_target
          
     
     
-    f2 = figure(2); clf(f2); set(f2,'Color','white','Name','End-eff reference evolution');  
+    f2 = figure(2+100*kk); clf(f2); set(f2,'Color','white','Name','End-eff reference evolution');  
         subplot(4,1,1);
             hold on;
             title('reference (x), reference (y)');
@@ -408,10 +413,11 @@ if visualize_target
         subplot(4,1,3);
             title('End-eff reference increments');
             hold on;
-            for i=2:L
-                plot(t(i),100*myEuclDist3d(d(i,targetEE_x.column),d(i,targetEE_y.column),d(i,targetEE_z.column),...
-                    d(i-1,targetEE_x.column),d(i-1,targetEE_y.column),d(i-1,targetEE_z.column)),'ko','MarkerSize',4);
-            end
+%             for i=2:L
+%                 plot(t(i),100*myEuclDist3d(d(i,targetEE_x.column),d(i,targetEE_y.column),d(i,targetEE_z.column),...
+%                     d(i-1,targetEE_x.column),d(i-1,targetEE_y.column),d(i-1,targetEE_z.column)),'ko','MarkerSize',4);
+%             end
+            plot(t(2:end), 100* sqrt(sum(diff(d(:, targetEE_x.column:targetEE_z.column)).^2,2)),'ko','MarkerSize',4);
             %xlabel('Time (s)');
             ylabel('Distance (cm)');
             hold off;
@@ -419,74 +425,104 @@ if visualize_target
         subplot(4,1,4);  
             title('End-eff speed needed');
             hold on;
-            for i=2:L
-                plot(t(i),100*myEuclDist3d(d(i,targetEE_x.column),d(i,targetEE_y.column),d(i,targetEE_z.column),...
-                    d(i-1,targetEE_x.column),d(i-1,targetEE_y.column),d(i-1,targetEE_z.column))/dT,'ko','MarkerSize',4);
-            end
+%             for i=2:L
+%                 plot(t(i),100*myEuclDist3d(d(i,targetEE_x.column),d(i,targetEE_y.column),d(i,targetEE_z.column),...
+%                     d(i-1,targetEE_x.column),d(i-1,targetEE_y.column),d(i-1,targetEE_z.column))/dT,'ko','MarkerSize',4);
+%             end
+            plot(t(2:end), 100* sqrt(sum(diff(d(:, targetEE_x.column:targetEE_z.column)).^2,2))/dT,'ko','MarkerSize',4);
             xlabel('Time (s)');
             ylabel('Speed (cm/s)');
             hold off;
             
-      f21 = figure(21); clf(f21); set(f21,'Color','white','Name','End-eff evolution');  
-        subplot(4,1,1);
-            hold on;
-            title('Position (x), (y)');
-            plotyy(t,100*d(:,EE_x.column),t,100*d(:,EE_y.column));
-            legend('(x)','(y)');
-            ylabel('position (cm)');
-            hold off;
+      f21 = figure(21+100*kk); clf(f21); set(f21,'Color','white','Name','End-eff pose error');  
+      subplot(3,1,1)
+      plot(t(2:end),sqrt(sum((d(1:end-1, targetEE_x.column:targetEE_z.column)-d(2:end, EE_x.column:EE_z.column)).^2,2)), 'go', 'MarkerSize',4)
+      subplot(3,1,2)
+      hold on
+      Hr = getRotMat(d(1:end, 18:20));
+      He = getRotMat(d(1:end, 21:23));
+      Hr(1:3,4,:)=permute(d(1:end, targetEE_x.column:targetEE_z.column), [2,3,1]);
+      He(1:3,4,:)=permute(d(1:end, EE_x.column:EE_z.column), [2,3,1]);
+      H = pagemtimes(Hr, 'none', He, 'transpose');
+      v = zeros(length(d),3);
+      v(:,1) = H(3,2,:)-H(2,3,:);
+      v(:,2) = H(1,3,:)-H(3,1,:);
+      v(:,3) = H(2,1,:)-H(1,2,:);
+      r = sqrt(sum(v.^2,2));
+      theta = atan2(0.5*r,squeeze(0.5*(H(1,1,:)+H(3,3,:)+H(2,2,:)-1)));
+      v=(theta/r)*v;    
 
-        subplot(4,1,2);
-            hold on;
-            title('Position (z)');
-            plot(t,100*d(:,EE_z.column));
-            ylabel('position (cm)');
-            hold off;
-
-        subplot(4,1,3);
-            title('End-eff increments');
-            hold on;
-            for i=2:L
-                plot(t(i),100*myEuclDist3d(d(i,EE_x.column),d(i,EE_y.column),d(i,EE_z.column),...
-                    d(i-1,EE_x.column),d(i-1,EE_y.column),d(i-1,EE_z.column)),'ko','MarkerSize',4);
-            end
-            %xlabel('Time (s)');
-            ylabel('Distance (cm)');
-            hold off;
-
-        subplot(4,1,4);  
-            title('End-eff speed');
-            hold on;
-            for i=2:L
-                plot(t(i),100*myEuclDist3d(d(i,EE_x.column),d(i,EE_y.column),d(i,EE_z.column),...
-                    d(i-1,EE_x.column),d(i-1,EE_y.column),d(i-1,EE_z.column))/dT,'ko','MarkerSize',4);
-            end
-            xlabel('Time (s)');
-            ylabel('Speed (cm/s)');
-            hold off;
+      plot(t(1:end),theta.*theta, 'ro', 'MarkerSize',4)
+%       subplot(3,1,3)
+      vals = zeros(length(d),1);
+      for i = 1:length(d)
+          vals(i) = norm(Hr(:,:,i)-He(:,:,i),'fro');
+      end
+      plot(t(1:end),vals, 'bo', 'MarkerSize',4)
+      subplot(3,1,3)
+      plot(t(2:end), sum(diff(d(:,27:36)).^2,2)/180/180*pi*pi, 'go', 'MarkerSize',4)
+      
+%         subplot(4,1,1);
+%             hold on;
+%             title('Position (x), (y)');
+%             plotyy(t,100*d(:,EE_x.column),t,100*d(:,EE_y.column));
+%             legend('(x)','(y)');
+%             ylabel('position (cm)');
+%             hold off;
+% 
+%         subplot(4,1,2);
+%             hold on;
+%             title('Position (z)');
+%             plot(t,100*d(:,EE_z.column));
+%             ylabel('position (cm)');
+%             hold off;
+% 
+%         subplot(4,1,3);
+%             title('End-eff increments');
+%             hold on;
+% %             for i=2:L
+% %                plot(t(i),100*myEuclDist3d(d(i,EE_x.column),d(i,EE_y.column),d(i,EE_z.column),...
+% %                    d(i-1,EE_x.column),d(i-1,EE_y.column),d(i-1,EE_z.column)),'ko','MarkerSize',4);
+% %             end
+%             plot(t(2:end), 100* sqrt(sum(diff(d(:, EE_x.column:EE_z.column)).^2,2)),'ko','MarkerSize',4);
+%             %xlabel('Time (s)');
+%             ylabel('Distance (cm)');
+%             hold off;
+% 
+%         subplot(4,1,4);  
+%             title('End-eff speed');
+%             hold on;
+% %             for i=2:L
+% %                 plot(t(i),100*myEuclDist3d(d(i,EE_x.column),d(i,EE_y.column),d(i,EE_z.column),...
+% %                     d(i-1,EE_x.column),d(i-1,EE_y.column),d(i-1,EE_z.column))/dT,'ko','MarkerSize',4);
+% %             end
+%             plot(t(2:end), 100* sqrt(sum(diff(d(:, EE_x.column:EE_z.column)).^2,2))/dT,'ko','MarkerSize',4);
+%             xlabel('Time (s)');
+%             ylabel('Speed (cm/s)');
+%             hold off;
     
     
-    f22 = figure(22); clf(f22); set(f22,'Color','white','Name','Distance end-eff vs. reference and target');      
-   
-        xlabel('time (s)');
-        [ax,h1,h2] = plotyy(t,100*myEuclDist3d_matrix(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column)),...
-            t,100*myEuclDist3d_matrix(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),d(:,target_x.column),d(:,target_y.column),d(:,target_z.column)));
-        set(h1,'Marker','o','MarkerSize',10,'Color','b');
-        set(h2,'Marker','*','MarkerSize',10,'Color','g');
-        legend('Distance end-eff to reference','Distance end-eff to final target'); % reference is the current target
-        set(get(ax(1),'Ylabel'),'String','Distance (cm)'); 
-        set(get(ax(2),'Ylabel'),'String','Distance (cm)');
-        
-    f23 = figure(23); clf(f23); set(f23,'Color','white','Name','Distance elbow vs. reference and target');      
-   
-        xlabel('time (s)');
-        [ax,h1,h2] = plotyy(t,100*myEuclDist3d_matrix(d(:,elbow_x.column),d(:,elbow_y.column),d(:,elbow_z.column),d(:,target_elbow_x.column),d(:,target_elbow_y.column),d(:,target_elbow_z.column)),...
-            t,100*myEuclDist3d_matrix(d(:,elbow_x.column),d(:,elbow_y.column),d(:,elbow_z.column),d(:,target_elbow_x.column),d(:,target_elbow_y.column),d(:,target_elbow_z.column)));
-        set(h1,'Marker','o','MarkerSize',10,'Color','b');
-        set(h2,'Marker','*','MarkerSize',10,'Color','g');
-        legend('Distance elbow to reference','Distance elbow to final target'); % reference is the current target
-        set(get(ax(1),'Ylabel'),'String','Distance (cm)'); 
-        set(get(ax(2),'Ylabel'),'String','Distance (cm)');    
+%     f22 = figure(22+100*kk); clf(f22); set(f22,'Color','white','Name','Distance end-eff vs. reference and target');      
+%    
+%         xlabel('time (s)');
+%         [ax,h1,h2] = plotyy(t,100*myEuclDist3d_matrix(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),d(:,targetEE_x.column),d(:,targetEE_y.column),d(:,targetEE_z.column)),...
+%             t,100*myEuclDist3d_matrix(d(:,EE_x.column),d(:,EE_y.column),d(:,EE_z.column),d(:,target_x.column),d(:,target_y.column),d(:,target_z.column)));
+%         set(h1,'Marker','o','MarkerSize',10,'Color','b');
+%         set(h2,'Marker','*','MarkerSize',10,'Color','g');
+%         legend('Distance end-eff to reference','Distance end-eff to final target'); % reference is the current target
+%         set(get(ax(1),'Ylabel'),'String','Distance (cm)'); 
+%         set(get(ax(2),'Ylabel'),'String','Distance (cm)');
+%         
+%     f23 = figure(23+100*kk); clf(f23); set(f23,'Color','white','Name','Distance elbow vs. reference and target');      
+%    
+%         xlabel('time (s)');
+%         [ax,h1,h2] = plotyy(t,100*myEuclDist3d_matrix(d(:,elbow_x.column),d(:,elbow_y.column),d(:,elbow_z.column),d(:,target_elbow_x.column),d(:,target_elbow_y.column),d(:,target_elbow_z.column)),...
+%             t,100*myEuclDist3d_matrix(d(:,elbow_x.column),d(:,elbow_y.column),d(:,elbow_z.column),d(:,target_elbow_x.column),d(:,target_elbow_y.column),d(:,target_elbow_z.column)));
+%         set(h1,'Marker','o','MarkerSize',10,'Color','b');
+%         set(h2,'Marker','*','MarkerSize',10,'Color','g');
+%         legend('Distance elbow to reference','Distance elbow to final target'); % reference is the current target
+%         set(get(ax(1),'Ylabel'),'String','Distance (cm)'); 
+%         set(get(ax(2),'Ylabel'),'String','Distance (cm)');    
 
 
     if save_figs
@@ -505,7 +541,7 @@ end
 %% joint values vs. joint limits
 if visualize_all_joint_pos
         data = [];
-        f3 = figure(3); clf(f3); set(f3,'Color','white','Name','Joint positions');  
+        f3 = figure(3+kk*100); clf(f3); set(f3,'Color','white','Name','Joint positions');  
        % f4 = figure(4); clf(f4); set(f4,'Color','white','Name','Joint positions - Visual avoidance');  
        % f5 = figure(5); clf(f5); set(f5,'Color','white','Name','Joint positions - Tactile avoidance');  
 
@@ -534,8 +570,7 @@ if visualize_all_joint_pos
                 ylabel('angle [deg]');
                 title(joint_info(j).name);
                 hold off;
-            end    
-                
+            end             
         end   
     if save_figs
         saveas(f3,'output/JointPositions.fig');
@@ -551,10 +586,25 @@ end
 if visualize_all_joint_vel
        
         data = [];
-        f6 = figure(6); clf(f6); set(f6,'Color','white','Name','Joint vel - control commands');  
+        f6 = figure(6+kk*100); clf(f6); set(f6,'Color','white','Name',names{kk});  
+        set(f6,'Position',[1 1 800 800])
         %f7 = figure(7); clf(f7); set(f7,'Color','white','Name','Joint velocities - Visual avoidance');  
         %f8 = figure(8); clf(f8); set(f8,'Color','white','Name','Joint velocities - Tactile avoidance');  
-
+        positions{kk} = d(:,9:17) ;
+        vels = diff(d(:,12:14))./diff(t);
+        tv = (t(1:end-1)+t(2:end))/2; 
+        ta = (tv(1:end-1)+tv(2:end))/2;
+        time_data{kk} = t;
+        vels_norm{kk} = vecnorm(vels');
+        jerk = diff(diff(vels)./diff(tv))./diff(ta);
+        jerk_norm{kk} = vecnorm(jerk');
+        joint_vels2 = diff(d(:,69:78))./diff(t);
+        joint_vels3 = diff(d(:,69:78))./0.02;
+        joint_vels_norm{kk} = vecnorm(d(:,27:36)');
+        joint_vels_norm2{kk} = vecnorm(joint_vels2');
+        joint_jerk = diff(diff(d(2:end,27:36))./diff(tv))./diff(ta);
+        joint_jerk_norm{kk} = vecnorm(joint_jerk');
+        
         for i=1:1 % for all variants of the simulation
             switch i
                 case 1 
@@ -567,62 +617,74 @@ if visualize_all_joint_vel
                     set(0, 'currentfigure', f8); 
                     data = d_t;
             end
-            
+            index = 1;
             for j=1:chainActiveDOF
-                subplot(4,3,j); hold on;
+                if j == 2
+                    continue
+                end
+                subplot(3,3,index); hold on;
+%                 yyaxis left
                 plot(t,data(:,joint_info(j).vel_limit_min_avoid_column),'--c','Marker','v','MarkerSize',2); % current min joint vel limit set by avoidance handler
                 plot(t,data(:,joint_info(j).vel_limit_max_avoid_column),'--m','Marker','^','MarkerSize',2); % current max joint vel limit set by avoidance handler
                 plot([t(1) t(end)],[joint_info(j).vel_limit_min joint_info(j).vel_limit_min],'-.r'); % min joint vel limit
                 plot([t(1) t(end)],[joint_info(j).vel_limit_max joint_info(j).vel_limit_max],'-.r'); % max joint vel limit   
                 plot(t,data(:,joint_info(j).vel_column),'-k'); % current joint velocity
+                data_joint = data(:,joint_info(j).vel_column);
+                index = index + 1;
+                
+%                 plot(t(3:end), diff(diff(data_joint)), '--r', 'lineWidth', 1.5)
+%                 plot(t(2:end-1), , '--c')
                 ylim([(joint_info(j).vel_limit_min - 1) (joint_info(j).vel_limit_max + 1) ]);
                 xlabel('t [s]');
                 ylabel('joint velocity [deg/s]');
                 title(joint_info(j).name);
+%                 yyaxis right
+%                 plot(t(2:end), diff(data_joint)./diff(t), 'g')
                 hold off;
             end    
         end
-
-        f60 = figure(60); clf(f60); set(f60,'Color','white','Name','Joint vel limits');  
-            data = d;
-            
-            for j=1:chainActiveDOF
-                subplot(4,3,j); hold on;
-                plot(t,data(:,joint_info(j).vel_limit_min_avoid_column),'--c','Marker','v','MarkerSize',2); % current min joint vel limit set by avoidance handler
-                plot(t,data(:,joint_info(j).vel_limit_max_avoid_column),'--m','Marker','^','MarkerSize',2); % current max joint vel limit set by avoidance handler
-                plot([t(1) t(end)],[joint_info(j).vel_limit_min joint_info(j).vel_limit_min],'-.r'); % min joint vel limit
-                plot([t(1) t(end)],[joint_info(j).vel_limit_max joint_info(j).vel_limit_max],'-.r'); % max joint vel limit   
-                plot([t(1) t(end)],[0 0],'--k'); % max joint vel limit   
-                                %plot(t,data(:,joint_info(j).vel_column),'-k'); % current joint velocity
-                ylim([(joint_info(j).vel_limit_min - 1) (joint_info(j).vel_limit_max + 1) ]);
-                xlabel('t [s]');
-                ylabel('joint velocity [deg/s]');
-                title(joint_info(j).name);
-                hold off;
-            end    
+%         figure(100*kk)
         
-        
-        
-        f61 = figure(61); clf(f61); set(f61,'Color','white','Name','Joint vel increments (control commands)');  
-        for j=1:chainActiveDOF
-            subplot(4,3,j); hold on;
-            if boundSmoothnessFlag
-                plot([t(2) t(end)],[boundSmoothnessValue boundSmoothnessValue],'-.r','LineWidth',3); % smoothness limit
-                plot([t(2) t(end)],[-boundSmoothnessValue -boundSmoothnessValue],'-.r','LineWidth',3); % smoothness limit
-            end
-            for i=2:L
-                plot(t(i),data(i,joint_info(j).vel_column)-data(i-1,joint_info(j).vel_column),'ok','MarkerSize',4); % increment in joint velocity
-            end
-            %if boundSmoothnessFlag
-             %  ylim([boundSmoothnessValue-0.1 boundSmoothnessValue+0.1]); 
-            %end
-            xlabel('t [s]');
-            ylabel('delta joint vel. [deg/s]');
-            title(joint_info(j).name);
-            hold off;
-        end    
+%         f60 = figure(60); clf(f60); set(f60,'Color','white','Name','Joint vel limits');  
+%             data = d;
+%             
+%             for j=1:chainActiveDOF
+%                 subplot(4,3,j); hold on;
+%                 plot(t,data(:,joint_info(j).vel_limit_min_avoid_column),'--c','Marker','v','MarkerSize',2); % current min joint vel limit set by avoidance handler
+%                 plot(t,data(:,joint_info(j).vel_limit_max_avoid_column),'--m','Marker','^','MarkerSize',2); % current max joint vel limit set by avoidance handler
+%                 plot([t(1) t(end)],[joint_info(j).vel_limit_min joint_info(j).vel_limit_min],'-.r'); % min joint vel limit
+%                 plot([t(1) t(end)],[joint_info(j).vel_limit_max joint_info(j).vel_limit_max],'-.r'); % max joint vel limit   
+%                 plot([t(1) t(end)],[0 0],'--k'); % max joint vel limit   
+%                                 %plot(t,data(:,joint_info(j).vel_column),'-k'); % current joint velocity
+%                 ylim([(joint_info(j).vel_limit_min - 1) (joint_info(j).vel_limit_max + 1) ]);
+%                 xlabel('t [s]');
+%                 ylabel('joint velocity [deg/s]');
+%                 title(joint_info(j).name);
+%                 hold off;
+%             end    
+%         
+%         
+%         
+%         f61 = figure(61); clf(f61); set(f61,'Color','white','Name','Joint vel increments (control commands)');  
+%         for j=1:chainActiveDOF
+%             subplot(4,3,j); hold on;
+%             if boundSmoothnessFlag
+%                 plot([t(2) t(end)],[boundSmoothnessValue boundSmoothnessValue],'-.r','LineWidth',3); % smoothness limit
+%                 plot([t(2) t(end)],[-boundSmoothnessValue -boundSmoothnessValue],'-.r','LineWidth',3); % smoothness limit
+%             end
+%             for i=2:L
+%                 plot(t(i),data(i,joint_info(j).vel_column)-data(i-1,joint_info(j).vel_column),'ok','MarkerSize',4); % increment in joint velocity
+%             end
+%             %if boundSmoothnessFlag
+%              %  ylim([boundSmoothnessValue-0.1 boundSmoothnessValue+0.1]); 
+%             %end
+%             xlabel('t [s]');
+%             ylabel('delta joint vel. [deg/s]');
+%             title(joint_info(j).name);
+%             hold off;
+%         end    
          
-    
+    saveas(f6, ['jointVelocities20ms_',names{kk},'.png'])
     if save_figs
         saveas(f6,'output/JointVelocities.fig');
         saveas(f6,'output/JointVelocityLimits.fig');
@@ -699,9 +761,9 @@ if visualize_ineq_constr
     
     EXTRA_MARGIN_SHOULDER_INEQ_DEG = (0.05 / (2 * pi) ) * 360; 
     %each of the ineq. constraints for shoulder joints will have an extra safety marging of 0.05 rad on each side - i.e. the actual allowed range will be smaller
-    EXTRA_MARGIN_GENERAL_INEQ_DEG =  (0.05 / (2 * pi) ) * 360;
+    EXTRA_MARGIN_GENERAL_INEQ_DEG =  0; % (0.05 / (2 * pi) ) * 360;
     
-    f14 = figure(14); clf(f14); set(f14,'Color','white','Name','Inequality constraints');  
+    f14 = figure(14+kk*100); clf(f14); set(f14,'Color','white','Name','Inequality constraints');  
 
         subplot(6,1,1);
         hold on;
@@ -784,12 +846,12 @@ end
 
 %% ipopt stats
 if (visualize_ipopt_stats)
-   f15 = figure(15); clf(f15); set(f15,'Color','white','Name','Ipopt statistics');  
+   f15 = figure(15+kk*100); clf(f15); set(f15,'Color','white','Name','Ipopt statistics');  
 
    subplot(2,1,1);
    hold on;
     title('ipopt exit code');
-    plot(t,data(:,ipoptExitCode_col),'or');
+    plot(t,d(:,ipoptExitCode_col),'or');
    hold off;
    xlabel('time (s)');
    ylim([-5 7]);
@@ -810,7 +872,7 @@ if (visualize_ipopt_stats)
    subplot(2,1,2);
    hold on;
     title('solver time taken');
-    plot(t,data(:,timeToSolve_s_col));
+    plot(t,d(:,timeToSolve_s_col));
     hold off;
    xlabel('time (s)');
    ylabel('time (s)');
@@ -824,5 +886,72 @@ if (visualize_ipopt_stats)
     
 end
 
-
-
+end
+%% RMSE
+% f1100 = figure(1100); clf(f1100);
+for i = 1:5
+%     subplot(3,2,i)
+%     plot(time_data{i}, positions{i}(:,5:6))
+%     hold on
+%     plot(time_data{i}, positions{i}(:,8:9))
+    dists(i,1) = sum(sqrt(sum((positions{i}(:,4:6)-positions{i}(:,7:9)).^2,2)).^2)/size(positions{i}(:,7:9),1);
+end
+f1100 = figure(1100); clf(f1100);
+scatter(1:5,dists)
+xticklabels(folders)
+set(gca,'TickLabelInterpreter','none')
+xtickangle(30)
+grid on
+%% jerk and velocity cart/joint
+% f1000 = figure(1000); clf(f1000);
+% 
+% subplot(4,1,1)
+% hold on
+% for i = 1:
+%     plot(time_data{i}(4:end),cumsum(jerk_norm{i}), 'lineWidth', 2)
+% end
+% legend(folders)
+% subplot(4,1,2)
+% hold on
+% for i = 1:6
+%     plot(time_data{i}(4:end),jerk_norm{i}, 'lineWidth', 1.5)
+% end
+% subplot(4,1,3)
+% hold on
+% for i = 1:6
+%     plot(time_data{i}(4:end),cumsum(joint_jerk_norm{i}), 'lineWidth', 2)
+% end
+% 
+% subplot(4,1,4)
+% hold on
+% for i = 1:6
+%     plot(time_data{i}(4:end),joint_jerk_norm{i}, 'lineWidth', 1.5)
+% end
+% f1000 = figure(1000); clf(f1000);
+% 
+% subplot(4,1,1)
+% hold on
+% title('Cumulative sum of cart jerks (20 ms period)')
+% for i = 1:4
+%     plot(time_data{i}(4:end),cumsum(jerk_norm{i}), 'lineWidth', 2)
+% end
+% legend(folders)
+% subplot(4,1,2)
+% hold on
+% title('Cumulative sum of joint jerks (20 ms period)')
+% for i = 1:4
+%     plot(time_data{i}(4:end),cumsum(joint_jerk_norm{i}), 'lineWidth', 1.5)
+% end
+% subplot(4,1,3)
+% hold on
+% title('Cumulative sum of cart jerks (50 ms period)')
+% for i = 5:8
+%     plot(time_data{i}(4:end),cumsum(jerk_norm{i}), 'lineWidth', 2)
+% end
+% 
+% subplot(4,1,4)
+% hold on
+% title('Cumulative sum of joint jerks (50 ms period)')
+% for i = 5:8
+%     plot(time_data{i}(4:end),cumsum(joint_jerk_norm{i}), 'lineWidth', 1.5)
+% end

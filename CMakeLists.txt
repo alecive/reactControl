@@ -20,7 +20,7 @@ find_package(ICUBcontrib)
 
 list(APPEND CMAKE_MODULE_PATH ${ICUB_MODULE_PATH})
 list(APPEND CMAKE_MODULE_PATH ${ICUBCONTRIB_MODULE_PATH})
-
+set(CMAKE_INSTALL_PREFIX ${ICUBCONTRIB_INSTALL_PREFIX})
 include(ICUBcontribHelpers)
 include(ICUBcontribOptions)
 icubcontrib_set_default_prefix()
@@ -37,5 +37,6 @@ endif()
 ## then apps
 add_subdirectory(app)
 
+#icubcontrib_finalize_export(react-control)
 icubcontrib_add_uninstall_target()
 

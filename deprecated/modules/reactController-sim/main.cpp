@@ -574,14 +574,14 @@ public:
     {
         if (parameters.check("rho"))
         {
-            rho=parameters.find("rho").asDouble();
+            rho=parameters.find("rho").asFloat64();
             this->parameters.unput("rho");
             this->parameters.put("rho",rho);
         }
 
         if (parameters.check("alpha"))
         {
-            alpha=parameters.find("alpha").asDouble();
+            alpha=parameters.find("alpha").asFloat64();
             this->parameters.unput("alpha");
             this->parameters.put("alpha",alpha);
         }
@@ -687,7 +687,7 @@ public:
     {
         if (parameters.check("k"))
         {
-            k=parameters.find("k").asDouble();
+            k=parameters.find("k").asFloat64();
             this->parameters.unput("k");
             this->parameters.put("k",k);
         }
@@ -786,9 +786,9 @@ int main(int argc, char *argv[])
     rf.setDefaultConfigFile("reactController-sim.ini");
     rf.configure(argc,argv);
 
-    int verbosity = rf.check("verbosity",Value(0)).asInt();
-    double sim_time=rf.check("sim-time",Value(10.0)).asDouble();
-    double motor_tau=rf.check("motor-tau",Value(0.0)).asDouble(); //motor transfer function
+    int verbosity = rf.check("verbosity",Value(0)).asInt32();
+    double sim_time=rf.check("sim-time",Value(10.0)).asFloat64();
+    double motor_tau=rf.check("motor-tau",Value(0.0)).asFloat64(); //motor transfer function
     string avoidance_type=rf.check("avoidance-type",Value("tactile")).asString();   //none | visuo | tactile
     bool visuo_scaling_by_sNorm=rf.check("visuo-scaling-snorm",Value("off")).asString()=="on"?true:false; // on | off
     string target_type=rf.check("target-type",Value("moving-circular")).asString(); // moving-circular | static

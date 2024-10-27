@@ -52,8 +52,57 @@ service reactController_IDL
   * @return true/false on success/failure.
   **/
   bool set_streaming_xd();
-  
-  
+
+  /**
+  * Sets a new 6D Cartesian target
+  * @param _xd Vector that specifies the new target
+  * @param _od Vector that specifies the new orientation
+  * @return true/false on success/failure.
+  */
+  bool set_6d(1:Vector _xd, 2: Vector _od)
+
+  /**
+  * Sets new Cartesian targets for both arms
+  * @param _xd Vector that specifies the new target for main arm
+  * @param _xd2 Vector that specifies the new target for secondary arm
+  * @return true/false on success/failure.
+  */
+  bool set_both_xd(1:Vector _xd, 2: Vector _xd2)
+
+  /**
+  * Sets new Cartesian targets for both arms
+  * @param _xd Vector that specifies the new target for main arm
+  * @param _xd2 Vector that specifies the new target for secondary arm
+  * @param m_arm_constr Int32 that specifies whether the position constraint is for the main arm
+  * @return true/false on success/failure.
+  */
+  bool set_p_both_xd(1:Vector _xd, 2: Vector _xd2, 3:i32 m_arm_constr)
+
+  /**
+  * Sets new 6D Cartesian targets for both arms
+  * @param _xd Vector that specifies the new target for main arm
+  * @param _od Vector that specifies the new orientation for main arm
+  * @param _xd2 Vector that specifies the new target for the secondary arm
+  * @param _od2 Vector that specifies the new orientation for secondary arm
+  * @return true/false on success/failure.
+  */
+  bool set_both_6d(1:Vector _xd, 2: Vector _od, 3:Vector _xd2, 4: Vector _od2)
+
+
+  /**
+  * Moves robot to home configuration.
+  * @return true/false on success/failure.
+  **/
+  bool go_home();
+
+
+  /**
+  * Robot holds its current position.
+  * @return true/false on success/failure.
+  **/
+  bool hold_position();
+
+
   /**
   * Sets tolerance.
   * @param _tol the solver exits if norm(x_d-x)<tol.
@@ -122,7 +171,7 @@ service reactController_IDL
   * Stops the particle motion at the current state.
   * @return true/false on success/failure.
   **/
-  bool stop_particle();
+  bool particle_stop();
 
   /**
   * Gets the particle state. 

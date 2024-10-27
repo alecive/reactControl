@@ -56,25 +56,15 @@ None for now.
 \author: Alessandro Roncone
 */ 
 
-#include <yarp/os/Log.h>
-#include <yarp/os/RpcServer.h>
-#include <yarp/os/ResourceFinder.h>
 #include <yarp/os/RFModule.h>
 
-#include <yarp/math/Math.h>
- 
-#include <iostream>
-#include <string.h> 
-
 #include "reactCtrlThread.h"
-#include "particleThread.h"
 #include "reactController_IDL.h"
 
 using namespace yarp;
 using namespace yarp::os;
 using namespace yarp::math;
 
-using namespace std;
 
 /**
 * \ingroup reactController
@@ -88,9 +78,10 @@ private:
     particleThread    *prtclThrd;
     RpcServer            rpcSrvr;
 
-    string robot;       // Name of the robot
-    string  name;       // Name of the module
-    string  part;       // Part to use
+    std::string robot;       // Name of the robot
+    std::string  name;       // Name of the module
+    std::string  main_part;       // Part to use
+    std::string  second_part;       // Second part to use (can be None)
 
     int     verbosity;  // Verbosity level
     int   rctCtrlRate;  // rate of the reactCtrlThread
@@ -100,31 +91,25 @@ private:
 
     bool gazeControl; //will follow target with gaze
     bool stiffInteraction; //stiff vs. compliant interaction mode
-    
-    string controlMode; //either "velocity" (original) or "positionDirect" (new option after problems with oscillations)
-    
+
     double  trajSpeed;  // trajectory speed
     double        tol;  // Tolerance of the ipopt task. The solver exits if norm2(x_d-x)<tol.
     double  globalTol;  // global tolerance of the task. The controller exits if norm(x_d-x)<globalTol
     double       vMax;  // max velocity set for the joints
+    double restPosWeight; // Weight of the reaching joint rest position task (disabled if 0.0)
+    double timeLimit;  // time limit to reach target
     
-    string referenceGen; // either "uniformParticle" (constant velocity with particleThread) or "minJerk" 
+    std::string referenceGen; // either "uniformParticle" (constant velocity with particleThread) or "minJerk"
     //or "none" (will directly apply the target - used especially in the mode when targets are streamed)  
     
     bool hittingConstraints; //inequality constraints for safety of shoudler assembly and to prevent self-collisions torso-upper arm, upper-arm - forearm  
     bool orientationControl; //if orientation should be controlled as well
-    bool additionalControlPoints; //if there are additional control points - Cartesian targets for others parts of the robot body - e.g. elbow
-    
-    bool ipOptMemoryOn; // whether ipopt should account for the real motor model
-    bool ipOptFilterOn; 
-    //double ipOptFilter_tc;
+    double selfColPoints; // minimum distance between robot body parts (-1 to turn off self-collision avoidance)
     
     bool tactileCollisionPointsOn; //if on, will be reading collision points from /skinEventsAggregator/skin_events_aggreg:o
     bool visualCollisionPointsOn; //if on, will be reading predicted collision points from visuoTactileRF/pps_activations_aggreg:o
-    
-    bool boundSmoothnessFlag; //for ipopt - whether changes in velocity commands need to be smooth
-    //double boundSmoothnessValue; //actual allowed change in every joint velocity commands in deg/s from one time step to the next. Note: this is not adapted to the thread rate set by the rctCtrlRate param
-    
+    bool proximityCollisionPointsOn; //if on will be reading predicted collision points from proximity sensor
+
     //setting visualization in iCub simulator; the visualizations in iCubGui constitute an independent pipeline
     // (currently the iCubGui ones are on and cannot be toggled on/off from the outside)
     bool visualizeTargetInSim; // will use the yarp rpc /icubSim/world to visualize the target
@@ -134,39 +119,35 @@ private:
 public:
     reactController()
     {
-        rctCtrlThrd=0;
-        prtclThrd=0;
+        rctCtrlThrd=nullptr;
+        prtclThrd=nullptr;
 
         robot =         "icubSim";
         name  = "reactController";
-        part  =        "left_arm";
-
+        main_part  = "left_arm";
+        second_part = "None";
         verbosity    =     0;
         rctCtrlRate  =    10;    
         prtclRate    =    10;
         disableTorso = false;
         gazeControl = false;
         stiffInteraction = true;
-        controlMode = "positionDirect";        
         trajSpeed    =   0.1;
         tol          =  1e-5;
         globalTol    =  1e-2;
         vMax         =  20.0;
-        
+        restPosWeight = 0.0;
+        timeLimit   = 10;
+
         referenceGen = "minJerk";
         hittingConstraints = true;
         orientationControl = true;
-        additionalControlPoints = false;
-        ipOptMemoryOn = false;
-        ipOptFilterOn = false;
-        //ipOptFilter_tc = 0.25;
+        selfColPoints = -1;
         
         tactileCollisionPointsOn = true;
         visualCollisionPointsOn = true;
-        
-        boundSmoothnessFlag = false;
-        //boundSmoothnessValue = 30; // 30 deg/s change in a time step is huge - would have no effect 
-        
+        proximityCollisionPointsOn = true;
+
         if(robot == "icubSim"){
             visualizeTargetInSim = true;
             visualizeParticleInSim = true;
@@ -179,7 +160,7 @@ public:
         }
     }
 
-    bool set_xd(const yarp::sig::Vector& _xd)
+    bool set_xd(const yarp::sig::Vector& _xd) override
     {
         if (_xd.size()>=3)
         {
@@ -190,7 +171,7 @@ public:
         return false;
     }
 
-    bool set_relative_xd(const yarp::sig::Vector& _rel_xd)
+    bool set_relative_xd(const yarp::sig::Vector& _rel_xd) override
     {
         if (_rel_xd.size()>=3)
         {
@@ -201,84 +182,151 @@ public:
         return false;
     }
 
-    bool set_relative_circular_xd(const double _radius, const double _frequency)
+    bool set_relative_circular_xd(const double _radius, const double _frequency) override
     {
-            yInfo(" ");
-            yInfo("[reactController] received new relative circular x_d: radius %f, frequency: %f.",_radius,_frequency);
-            if ((_radius>=0.0) && (_radius <= 0.3) && (_frequency >=0.0) && (_frequency<=1.0)  )
-                return rctCtrlThrd->setNewCircularTarget(_radius,_frequency);   
-            else{
-                yWarning("[reactController] set_relative_circular_xd(): expecting radius <0,0.3>, frequency <0,1>");    
-                return false;
-            }
+        yInfo(" ");
+        yInfo("[reactController] received new relative circular x_d: radius %f, frequency: %f.",_radius,_frequency);
+        if ((_radius>=0.0) && (_radius <= 0.3) && (_frequency >=0.0) && (_frequency<=1.0)  )
+        {
+            return rctCtrlThrd->setNewCircularTarget(_radius,_frequency);
+        }
+        yWarning("[reactController] set_relative_circular_xd(): expecting radius <0,0.3>, frequency <0,1>");
+        return false;
+
     }
     
-    bool set_streaming_xd()
+    bool set_streaming_xd() override
     {
         yInfo(" ");
         yInfo("[reactController] will be reading reaching targets from a port.");
         return rctCtrlThrd->setStreamingTarget();   
     }
+
+    bool set_6d(const yarp::sig::Vector& _xd, const yarp::sig::Vector& _od) override
+    {
+        if (_xd.size()>=3 && _od.size() >=4)
+        {
+            yInfo(" ");
+            yInfo("[reactController] received new x_d: %s\t o_d: %s", _xd.toString(3).c_str(), _od.toString(3).c_str());
+            return rctCtrlThrd->setNewTarget(_xd, _od, false);
+        }
+        yInfo("[reactController] return false\n");
+        return false;
+    }
+
+    bool set_both_xd(const yarp::sig::Vector& _xd, const yarp::sig::Vector& _xd2) override
+    {
+        if (_xd.size()>=3 && _xd2.size() >=3)
+        {
+            yInfo(" ");
+            yInfo("[reactController] received new x_d: %s\t x2_d: %s", _xd.toString(3).c_str(), _xd2.toString(3).c_str());
+            return rctCtrlThrd->setBothTargets(_xd, _xd2);
+        }
+        yInfo("[reactController] return false\n");
+        return false;
+    }
+
+    bool set_p_both_xd(const yarp::sig::Vector& _xd, const yarp::sig::Vector& _xd2, int32_t m_arm_constr) override
+    {
+        if (_xd.size()>=3 && _xd2.size() >=3)
+        {
+            yInfo(" ");
+            yInfo("[reactController] received new x_d: %s\t x2_d: %s", _xd.toString(3).c_str(), _xd2.toString(3).c_str());
+            return rctCtrlThrd->setBothTargets(_xd, _xd2, m_arm_constr);
+        }
+        yInfo("[reactController] return false\n");
+        return false;
+    }
+
+    bool set_both_6d(const yarp::sig::Vector& _xd, const yarp::sig::Vector& _od,
+                     const yarp::sig::Vector& _xd2,const yarp::sig::Vector& _od2) override
+    {
+        if (_xd.size()>=3 && _od.size() >=4 && _xd2.size()>=3 && _od2.size() >=4)
+        {
+            yInfo(" ");
+            yInfo("[reactController] received new x_d: %s\t o_d: %s", _xd.toString(3).c_str(), _od.toString(3).c_str());
+            yInfo("[reactController] received new x2_d: %s\t o2_d: %s", _xd2.toString(3).c_str(), _od2.toString(3).c_str());
+            return rctCtrlThrd->setBothTargets(_xd, _od, _xd2, _od2);
+        }
+        yInfo("[reactController] return false\n");
+        return false;
+    }
+
+
+
+    bool go_home() override
+    {
+        yInfo(" ");
+        yInfo("[reactController] robot will move to his home configuration.");
+        return rctCtrlThrd->goHome();
+    }
+
+    bool hold_position() override
+    {
+        yInfo(" ");
+        yInfo("[reactController] robot will hold his current position.");
+        return rctCtrlThrd->holdPosition();
+    }
     
-    bool set_tol(const double _tol)
+    bool set_tol(const double _tol) override
     {
         return rctCtrlThrd->setTol(_tol);
     }
 
-    double get_tol()
+    double get_tol() override
     {
         return rctCtrlThrd->getTol();
     }
 
-    bool set_v_max(const double _v_max)
+    bool set_v_max(const double _v_max) override
     {
         return rctCtrlThrd->setVMax(_v_max);
     }
 
-    double get_v_max()
+    double get_v_max() override
     {
         return rctCtrlThrd->getVMax();
     }
 
-    bool set_traj_speed(const double _traj_speed)
+    bool set_traj_speed(const double _traj_speed) override
     {
         return rctCtrlThrd->setTrajSpeed(_traj_speed);
     }
 
-    int get_verbosity()
+    int get_verbosity() override
     {
         return rctCtrlThrd->getVerbosity();
     }
 
-    int get_state()
+    int get_state() override
     {
         return rctCtrlThrd->getState();
     }
 
-    bool set_verbosity(const int32_t _verbosity)
+    bool set_verbosity(const int32_t _verbosity) override
     {
         yInfo("[reactController] Setting verbosity to %i",_verbosity);
         return rctCtrlThrd->setVerbosity(_verbosity);
     }
 
-    bool setup_new_particle(const yarp::sig::Vector& _x_0_vel)
+    bool setup_new_particle(const yarp::sig::Vector& _x_0_vel) override
     {
-        if (referenceGen == "uniformParticle"){
+        if (referenceGen == "uniformParticle")
+        {
             yarp::sig::Vector _x_0 = _x_0_vel.subVector(0,2);
             yarp::sig::Vector _vel = _x_0_vel.subVector(3,5);
             yInfo("[reactController] Setting up new particle.. x_0: %s\tvel: %s\n",
                 _x_0.toString(3,3).c_str(), _vel.toString(3,3).c_str());
             return prtclThrd->setupNewParticle(_x_0,_vel);
         }
-        else{
-            yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
-            return false;
-        }
+        yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
+        return false;
     }
 
-    bool reset_particle(const yarp::sig::Vector& _x_0)
+    bool reset_particle(const yarp::sig::Vector& _x_0) override
     {
-        if (referenceGen == "uniformParticle"){
+        if (referenceGen == "uniformParticle")
+        {
             if (_x_0.size()<3)
             {
                 return false;
@@ -286,56 +334,53 @@ public:
             yInfo("[reactController] Resetting particle to %s..",_x_0.toString(3,3).c_str());
             return prtclThrd->resetParticle(_x_0);
         }
-        else{
-            yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
-            return false;
-        }
+        yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
+        return false;
     }
 
-    bool stop_particle()
+    bool particle_stop() override
     {
-        if (referenceGen == "uniformParticle"){
+        if (referenceGen == "uniformParticle")
+        {
             yInfo("[reactController] Stopping particle..");
             return prtclThrd->stopParticle();
         }
-        else{
-            yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
-            return false;
-        }
+        yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
+        return false;
     }
 
-    yarp::sig::Vector get_particle()
+    yarp::sig::Vector get_particle() override
     {
-        if (referenceGen == "uniformParticle"){
+        if (referenceGen == "uniformParticle")
+        {
             yInfo("[reactController] Getting particle..");
             return prtclThrd->getParticle();
         }
-        else{
-            yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
-            yarp::sig::Vector v(3,0.0);
-            return v;
-        }
+        yWarning("[reactController] to command the particle, referenceGen needs to be set to uniformParticle");
+        yarp::sig::Vector v(3,0.0);
+        return v;
+
     }
 
-    bool enable_torso()
+    bool enable_torso() override
     {
         yInfo("[reactController] Enabling torso..");
         return rctCtrlThrd->enableTorso();
     }
 
-    bool disable_torso()
+    bool disable_torso() override
     {
         yInfo("[reactController] Disabling torso..");
         return rctCtrlThrd->disableTorso();
     }
 
-    bool stop()
+    bool stop() override
     {
         yInfo("[reactController] Stopping control by going to position mode..");
         return rctCtrlThrd->stopControlAndSwitchToPositionMode();
     }
 
-    bool configure(ResourceFinder &rf)
+    bool configure(ResourceFinder &rf) override
     {
         //******************************************************
         //******************* NAME ******************
@@ -358,7 +403,7 @@ public:
          //******************* VERBOSE ******************
             if (rf.check("verbosity"))
             {
-                verbosity = rf.find("verbosity").asInt();
+                verbosity = rf.find("verbosity").asInt32();
                 yInfo("[reactController] verbosity set to %i", verbosity);
             }
             else yInfo("[reactController] Could not find verbosity option in the config file; using %i as default",verbosity);
@@ -366,7 +411,7 @@ public:
         //****************** rctCtrlRate ******************
             if (rf.check("rctCtrlRate"))
             {
-                rctCtrlRate = rf.find("rctCtrlRate").asInt();
+                rctCtrlRate = rf.find("rctCtrlRate").asInt32();
                 yInfo("[reactController] rctCTrlThread working at %i ms.",rctCtrlRate);
             }
             else yInfo("[reactController] Could not find rctCtrlRate in the config file; using %i as default",rctCtrlRate);
@@ -374,28 +419,32 @@ public:
          //******************* PART ******************
             if (rf.check("part"))
             {
-                part = rf.find("part").asString();
-                if (part=="left")
+                auto* parts = rf.find("part").asList();
+                main_part = parts->get(0).asString();
+                second_part = parts->size() > 1 ? parts->get(1).asString() : "None";
+                if (main_part == "left" || main_part == "right") main_part += "_arm";
+                if (second_part == "left" || second_part == "right") second_part += "_arm";
+
+                if (main_part!="left_arm" && main_part!="right_arm")
                 {
-                    part="left_arm";
+                    main_part="left_arm";
+                    yWarning("[reactController] main part was not in the admissible values. Using %s as default.",main_part.c_str());
                 }
-                else if (part=="right")
+                if (second_part!="left_arm" && second_part!="right_arm")
                 {
-                    part="right_arm";
+                    second_part="None";
+                    yWarning("[reactController] second part was not in the admissible values. Using %s as default.",second_part.c_str());
                 }
-                else if (part!="left_arm" && part!="right_arm")
-                {
-                    part="left_arm";
-                    yWarning("[reactController] part was not in the admissible values. Using %s as default.",part.c_str());
-                }
-                yInfo("[reactController] part to use is: %s", part.c_str());
+                yInfo("[reactController] part to use is: %s", main_part.c_str());
+                yInfo("[reactController] second part to use is: %s", second_part.c_str());
             }
-            else yInfo("[reactController] Could not find part option in the config file; using %s as default",part.c_str());
+            else yInfo("[reactController] Could not find part option in the config file; using %s as default",main_part.c_str());
 
         //********************** CONFIGS ***********************
             if (rf.check("disableTorso"))
             {
-                if(rf.find("disableTorso").asString()=="on"){
+                if(rf.find("disableTorso").asString()=="on")
+                {
                     disableTorso = true;
                     yInfo("[reactController] disableTorso flag set to on.");
                 }
@@ -412,7 +461,8 @@ public:
         //************** getting collision points either from aggregated skin events or from pps (predictions from vision)
         if (rf.check("tactileCollisionPoints"))
         {
-            if(rf.find("tactileCollisionPoints").asString()=="on"){
+            if(rf.find("tactileCollisionPoints").asString()=="on")
+            {
                 tactileCollisionPointsOn = true;
                 yInfo("[reactController] tactileCollisionPoints flag set to on.");
             }
@@ -428,7 +478,8 @@ public:
         
         if (rf.check("visualCollisionPoints"))
         {
-            if(rf.find("visualCollisionPoints").asString()=="on"){
+            if(rf.find("visualCollisionPoints").asString()=="on")
+            {
                 visualCollisionPointsOn = true;
                 yInfo("[reactController] visualCollisionPoints flag set to on.");
             }
@@ -440,12 +491,30 @@ public:
         else
         {
             yInfo("[reactController] Could not find visualCollisionPoints flag (on/off) in the config file; using %d as default",visualCollisionPointsOn);
-        }  
+        }
+
+        if (rf.check("proximityCollisionPoints"))
+        {
+            if(rf.find("proximityCollisionPoints").asString()=="on")
+            {
+                proximityCollisionPointsOn = true;
+                yInfo("[reactController] proximityCollisionPoints flag set to on.");
+            }
+            else{
+                proximityCollisionPointsOn = false;
+                yInfo("[reactController] proximityCollisionPoints flag set to off.");
+            }
+        }
+        else
+        {
+            yInfo("[reactController] Could not find proximityCollisionPoints flag (on/off) in the config file; using %d as default",proximityCollisionPointsOn);
+        }
         
         //************************** gazeControl ******************************************************8
         if (rf.check("gazeControl"))
         {
-            if(rf.find("gazeControl").asString()=="on"){
+            if(rf.find("gazeControl").asString()=="on")
+            {
                 gazeControl = true;
                 yInfo("[reactController] gazeControl flag set to on.");
             }
@@ -462,7 +531,8 @@ public:
         //************************** gazeControl ******************************************************8
         if (rf.check("stiff"))
         {
-            if(rf.find("stiff").asString()=="on"){
+            if(rf.find("stiff").asString()=="on")
+            {
                 stiffInteraction = true;
                 yInfo("[reactController] stiff interaction flag set to on.");
             }
@@ -479,14 +549,23 @@ public:
           //****************** globalTol ******************
             if (rf.check("globalTol"))
             {
-                globalTol = rf.find("globalTol").asDouble();
+                globalTol = rf.find("globalTol").asFloat64();
                 yInfo("[reactController] globalTol to reach target set to %g m.",globalTol);
             }
             else yInfo("[reactController] Could not find globalTol in the config file; using %g as default",globalTol);
-            
-       
-          //*** generating positions for end-effector - trajectory between current pos and final target
-           if (rf.check("referenceGen"))
+
+
+            //****************** timeLimit ******************
+            if (rf.check("timeLimit"))
+            {
+                timeLimit = rf.find("timeLimit").asFloat64();
+                yInfo("[reactController] timeLimit to reach target set to %g s.",timeLimit);
+            }
+            else yInfo("[reactController] Could not find timeLimit in the config file; using %g as default",timeLimit);
+
+
+        //*** generating positions for end-effector - trajectory between current pos and final target
+            if (rf.check("referenceGen"))
             {
                 referenceGen = rf.find("referenceGen").asString();
                 if((referenceGen!="uniformParticle") && (referenceGen!="minJerk") && (referenceGen!="none"))
@@ -494,15 +573,17 @@ public:
                     referenceGen="minJerk";
                     yWarning("[reactController] referenceGen was not in the admissible values (uniformParticle / minJerk / none). Using %s as default.",referenceGen.c_str());
                 }
-                else 
+                else
+                {
                     yInfo("[reactController] referenceGen to use is: %s", referenceGen.c_str());
+                }
             }
             else yInfo("[reactController] Could not find referenceGen option in the config file; using %s as default",referenceGen.c_str());
             
              //****************** prtclRate ******************
             if (rf.check("prtclRate"))
             {
-                prtclRate = rf.find("prtclRate").asInt();
+                prtclRate = rf.find("prtclRate").asInt32();
                 yInfo("[reactController] particleThread period (if referenceGen == uniformParticle)  %i ms.",prtclRate);
             }
             else yInfo("[reactController] Could not find prtclRate in the config file; using %i as default",prtclRate);
@@ -510,7 +591,7 @@ public:
         //****************** trajSpeed ******************
             if (rf.check("trajSpeed"))
             {
-                trajSpeed = rf.find("trajSpeed").asDouble();
+                trajSpeed = rf.find("trajSpeed").asFloat64();
                 yInfo("[reactController] trajSpeed (if referenceGen == uniformParticle) set to %g s.",trajSpeed);
             }
             else yInfo("[reactController] Could not find trajSpeed in the config file; using %g as default",trajSpeed);
@@ -519,30 +600,16 @@ public:
           //****************** vMax ******************
             if (rf.check("vMax"))
             {
-                vMax = rf.find("vMax").asDouble();
+                vMax = rf.find("vMax").asFloat64();
                 yInfo("[reactController] vMax (max joint vel) set to %g [deg/s].",vMax);
             }
             else yInfo("[reactController] Could not find vMax (max joint vel) in the config file; using %g [deg/s] as default",vMax);
 
-     
-          //*** we will command the robot in velocity or in positionDirect
-           if (rf.check("controlMode"))
-            {
-                controlMode = rf.find("controlMode").asString();
-                if(controlMode!="velocity" && controlMode!="positionDirect")
-                {
-                    controlMode="velocity";
-                    yWarning("[reactController] controlMode was not in the admissible values (velocity / positionDirect). Using %s as default.",controlMode.c_str());
-                }
-                else 
-                    yInfo("[reactController] controlMode to use is: %s", controlMode.c_str());
-            }
-            else yInfo("[reactController] Could not find controlMode option in the config file; using %s as default",controlMode.c_str());
             
             //****************** tol ******************
             if (rf.check("tol"))
             {
-                tol = rf.find("tol").asDouble();
+                tol = rf.find("tol").asFloat64();
                 yInfo("[reactController] ipopt: tol set to %g m.",tol);
             }
             else yInfo("[reactController] Could not find tol in the config file; using %g as default",tol);
@@ -551,11 +618,13 @@ public:
             //*********** hitting constraints *************************************************/
             if (rf.check("hittingConstraints"))
             {
-                if(rf.find("hittingConstraints").asString()=="on"){
+                if(rf.find("hittingConstraints").asString()=="on")
+                {
                     hittingConstraints = true;
                     yInfo("[reactController] hittingConstraints flag set to on.");
                 }
-                else{
+                else
+                {
                     hittingConstraints = false;
                     yInfo("[reactController] hittingConstraints flag set to off.");
                 }
@@ -569,10 +638,12 @@ public:
             if (rf.check("orientationControl"))
             {
                 if(rf.find("orientationControl").asString()=="on"){
+
                     orientationControl = true;
                     yInfo("[reactController] orientationControl flag set to on.");
                 }
-                else{
+                else
+                {
                     orientationControl = false;
                     yInfo("[reactController] orientationControl flag set to off.");
                 }
@@ -580,98 +651,35 @@ public:
             else
             {
                 yInfo("[reactController] Could not find orientationControl flag (on/off) in the config file; using %d as default",orientationControl);
-            }  
-            
-            //*********** orientation control *************************************************/
-            if (rf.check("additionalControlPoints"))
-            {
-                if(rf.find("additionalControlPoints").asString()=="on"){
-                    additionalControlPoints = true;
-                    yInfo("[reactController] additionalControlPoints flag set to on.");
-                }
-                else{
-                    additionalControlPoints = false;
-                    yInfo("[reactController] additionalControlPoints flag set to off.");
-                }
             }
-            else
+
+            //****************** restPosWeight ******************
+            if (rf.check("restPosWeight"))
             {
-                yInfo("[reactController] Could not find additionalControlPoints flag (on/off) in the config file; using %d as default",additionalControlPoints);
-            }  
-            
-            //********************** ipopt using memory - motor model ***********************
-            if (rf.check("ipOptMemory"))
-            {
-                if(rf.find("ipOptMemory").asString()=="on"){
-                    ipOptMemoryOn = false;
-                    yWarning("[reactController] ipOptMemory flag on requested, but setting to off - currently not supported.");
-                }
-                else{
-                    ipOptMemoryOn = false;
-                    yInfo("[reactController] ipOptMemory flag set to off.");
-                }
+                restPosWeight = rf.find("restPosWeight").asFloat64();
+                yInfo("[reactController] restPosWeight set to %g.",restPosWeight);
             }
-            else
+            else yInfo("[reactController] Could not find restPosWeight in the config file; using %g as default",restPosWeight);
+            //****************** self-collision points ******************
+            if (rf.check("selfColPoints"))
             {
-                 yInfo("[reactController] Could not find ipOptMemory flag (on/off) in the config file; using %d as default",ipOptMemoryOn);
-            }  
-        
-            //********************** ipopt using filter ***********************
-            if (rf.check("ipOptFilter"))
-            {
-                if(rf.find("ipOptFilter").asString()=="on"){
-                    ipOptFilterOn = false;
-                    yWarning("[reactController] ipOptFilter flag on requested, but setting to off - currently not supported.");
-                }
-                else{
-                    ipOptFilterOn = false;
-                    yInfo("[reactController] ipOptFilter flag set to off.");
-                }
+                selfColPoints = rf.find("selfColPoints").asFloat64();
+                yInfo("[reactController] selfColPoints distance set to %g.",selfColPoints);
             }
-            else
-            {
-                 yInfo("[reactController] Could not find ipOptFilter flag (on/off) in the config file; using %d as default",ipOptFilterOn);
-            }  
-//             if (rf.check("ipOptFilter_tc"))
-//                 {
-//                 ipOptFilter_tc = rf.find("ipOptFilter_tc").asDouble();
-//                 yInfo("[reactController] ipopt: ipOptFilter_tc set to %g.",ipOptFilter_tc);
-//             }
-//             else yInfo("[reactController] Could not find ipOptFilter_tc in the config file; using %g as default",ipOptFilter_tc);
-//        
-        
-        if (rf.check("boundSmoothnessFlag"))
-        {
-            if(rf.find("boundSmoothnessFlag").asString()=="on"){
-                boundSmoothnessFlag = false;
-                yWarning("[reactController] ipopt: boundSmoothnessFlag flag on requested, but setting to off - currently not supported.");
-                
-            }
-            else{
-                boundSmoothnessFlag = false;
-                yInfo("[reactController] ipopt: boundSmoothnessFlag flag set to off.");
-            }
-        }
-        else
-        {
-            yInfo("[reactController] Could not find boundSmoothnessFlag flag (on/off) in the config file; using %d as default",boundSmoothnessFlag);
-        }
-        /*if (rf.check("boundSmoothnessValue"))
-        {
-              boundSmoothnessValue = rf.find("boundSmoothnessValue").asDouble();
-               yInfo("[reactController] ipopt: boundSmoothnessValue set to %g deg/s (allowed change in joint vel in a time step).",boundSmoothnessValue);
-        }
-        else yInfo("[reactController] Could not find boundSmoothnessValue in the config file; using %g as default",boundSmoothnessValue);
-        */   
-         //********************** Visualizations in simulator ***********************
-            if (robot == "icubSim"){
+            else yInfo("[reactController] Could not find restPosWeight in the config file; using %g as default",selfColPoints);
+
+
+            //********************** Visualizations in simulator ***********************
+//            if (robot == "icubSim"){
                 if (rf.check("visualizeTargetInSim"))
                 {
-                    if(rf.find("visualizeTargetInSim").asString()=="on"){
+                    if(rf.find("visualizeTargetInSim").asString()=="on")
+                    {
                         visualizeTargetInSim = true;
                         yInfo("[reactController] visualizeTargetInSim flag set to on.");
                     }
-                    else{
+                    else
+                    {
                         visualizeTargetInSim = false;
                         yInfo("[reactController] visualizeTargetInSim flag set to off.");
                     }
@@ -683,11 +691,13 @@ public:
                 
                 if (rf.check("visualizeParticleInSim"))
                 {
-                    if(rf.find("visualizeParticleInSim").asString()=="on"){
+                    if(rf.find("visualizeParticleInSim").asString()=="on")
+                    {
                         visualizeParticleInSim = true;
                         yInfo("[reactController] visualizeParticleInSim flag set to on.");
                     }
-                    else{
+                    else
+                    {
                         visualizeParticleInSim = false;
                         yInfo("[reactController] visualizeParticleInSim flag set to off.");
                     }
@@ -698,11 +708,13 @@ public:
                 }
                 if (rf.check("visualizeCollisionPointsInSim"))
                 {
-                    if(rf.find("visualizeCollisionPointsInSim").asString()=="on"){
+                    if(rf.find("visualizeCollisionPointsInSim").asString()=="on")
+                    {
                         visualizeCollisionPointsInSim = true;
                         yInfo("[reactController] visualizeCollisionPointsInSim flag set to on.");
                     }
-                    else{
+                    else
+                    {
                         visualizeCollisionPointsInSim = false;
                         yInfo("[reactController] visualizeCollisionPointsInSim flag set to off.");
                     }
@@ -711,55 +723,51 @@ public:
                 {
                     yInfo("[reactController] Could not find visualizeCollisionPointsInSim flag (on/off) in the config file; using %d as default",visualizeCollisionPointsInSim);
                 }
-            }
-            else{
-                visualizeTargetInSim = false;
-                yInfo("[reactController] visualizeTargetInSim flag set to off.");
-                visualizeParticleInSim = false;
-                yInfo("[reactController] visualizeParticleInSim flag set to off.");
-                visualizeCollisionPointsInSim = false;
-                yInfo("[reactController] visualizeCollisionPointsInSim flag set to off.");
-
-            }
+//            }
+//            else{
+//                visualizeTargetInSim = false;
+//                yInfo("[reactController] visualizeTargetInSim flag set to off.");
+//                visualizeParticleInSim = false;
+//                yInfo("[reactController] visualizeParticleInSim flag set to off.");
+//                visualizeCollisionPointsInSim = false;
+//                yInfo("[reactController] visualizeCollisionPointsInSim flag set to off.");
+//
+//            }
 
         //************* THREAD ******************************
-        if((controlMode == "positionDirect") && (ipOptMemoryOn)){
-            ipOptMemoryOn = false;
-            yWarning("You're using controlMode positionDirect. Switching ipOptMemoryOn to false, as it is compatible with velocity controlMode only. ");
-        }
         
-        if(referenceGen == "uniformParticle"){
+        if(referenceGen == "uniformParticle")
+        {
             prtclThrd = new particleThread(prtclRate, name, verbosity);
             if (!prtclThrd->start())
             {
                 delete prtclThrd;
-                prtclThrd=0;
+                prtclThrd=nullptr;
 
                 yError("[reactController] particleThread wasn't instantiated!!");
                 return false;
             }
         }
-        else
-            prtclThrd = NULL;
+        else prtclThrd = nullptr;
             
-        rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, part, verbosity,
-                                          disableTorso, controlMode, trajSpeed, 
-                                          globalTol, vMax, tol, referenceGen, 
-                                          tactileCollisionPointsOn,visualCollisionPointsOn,
+        rctCtrlThrd = new reactCtrlThread(rctCtrlRate, name, robot, main_part, second_part, verbosity,
+                                          disableTorso, trajSpeed,
+                                          globalTol, vMax, tol, timeLimit, referenceGen,
+                                          tactileCollisionPointsOn,visualCollisionPointsOn, proximityCollisionPointsOn,
                                           gazeControl,stiffInteraction,
-                                          hittingConstraints, orientationControl, additionalControlPoints,
+                                          hittingConstraints, orientationControl,
                                           visualizeTargetInSim, visualizeParticleInSim,
-                                          visualizeCollisionPointsInSim, prtclThrd);
+                                          visualizeCollisionPointsInSim, prtclThrd, restPosWeight, selfColPoints);
         if (!rctCtrlThrd->start())
         {
             delete rctCtrlThrd;
-            rctCtrlThrd = 0;
+            rctCtrlThrd = nullptr;
 
             if (prtclThrd)
             {
                 prtclThrd->stop();
                 delete prtclThrd;
-                prtclThrd=0;
+                prtclThrd=nullptr;
             }
 
             yError("[reactController] reactCtrlThread wasn't instantiated!!");
@@ -773,12 +781,12 @@ public:
     }
 
     /************************************************************************/
-    bool attach(RpcServer &source)
+    bool attach(RpcServer &source) override
     {
         return this->yarp().attachAsServer(source);
     }
 
-    bool close()
+    bool close() override
     {
         yInfo("REACT CONTROLLER: Stopping threads..");
         if (rctCtrlThrd)
@@ -786,22 +794,22 @@ public:
             yInfo("REACT CONTROLLER: Stopping rctCtrlThrd...");
             rctCtrlThrd->stop();
             delete rctCtrlThrd;
-            rctCtrlThrd=0;
+            rctCtrlThrd=nullptr;
         }
         if (prtclThrd)
         {
             yInfo("REACT CONTROLLER: Stopping prtclThrd...");
             prtclThrd->stop();
             delete prtclThrd;
-            prtclThrd=0;
+            prtclThrd=nullptr;
         }
         rpcSrvr.close();
 
         return true;
     }
 
-    double getPeriod()  { return 1.0; }
-    bool updateModule() { return true; }
+    double getPeriod() override  { return 1.0; }
+    bool updateModule() override { return true; }
 };
 
 /**

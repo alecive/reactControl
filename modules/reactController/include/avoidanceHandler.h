@@ -21,84 +21,59 @@
 #ifndef __AVOIDANCEHANDLER_H__
 #define __AVOIDANCEHANDLER_H__
 
-#include <vector>
-#include <deque>
-
-#include <stdarg.h>
-#include <string>
-
-#include <algorithm>
-
-#include <yarp/sig/all.h>
-#include <yarp/math/Math.h>
-#include <yarp/os/Property.h>
-
 #include <iCub/iKin/iKinFwd.h>
-#include <iCub/skinDynLib/common.h>
+#include "common.h"
 
 
-struct collisionPoint_t{
-        iCub::skinDynLib::SkinPart skin_part;
-        yarp::sig::Vector x; //position (x,y,z) in the FoR of the respective skin part
-        yarp::sig::Vector n; //direction of normal vector at that point - derived from taxel normals, pointing out of the skin
-        double magnitude; // ~ activation level from probabilistic representation in pps - likelihood of collision
-};
 
 /****************************************************************/
-class AvoidanceHandlerAbstract
+class AvoidanceHandler
 {
-
-
 public:
-    AvoidanceHandlerAbstract(const iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_collisionPoints, const unsigned int _verbosity=0);
-    
-    std::string getType() const;
+    AvoidanceHandler(iCub::iKin::iKinChain &_chain, const std::vector<collisionPoint_t> &_colPoints,
+                             iCub::iKin::iKinChain* _secondChain, double _useSelfColPoints, const std::string& _part,
+                             yarp::sig::Vector* data, iCub::iKin::iKinChain* _torso, unsigned int _verbosity=0);
 
-    virtual yarp::os::Property getParameters() const;
+    std::deque<std::pair<yarp::sig::Vector, int>> getCtrlPointsPosition();
+    std::deque<std::pair<iCub::iKin::iKinChain, int>> getCtrlPoints() const { return ctrlPointChains; }
+
+    void getVLIM(std::vector<yarp::sig::Vector>& Aobs, std::vector<double> &bvals, bool mainpart=true);
     
-    virtual void setParameters(const yarp::os::Property &parameters);
-    
-    std::deque<yarp::sig::Vector> getCtrlPointsPosition();
-    
-    virtual yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim);
-    
-    virtual ~AvoidanceHandlerAbstract();
-    
- protected:
+    virtual ~AvoidanceHandler() { ctrlPointChains.clear(); }
+
+    const std::vector<yarp::sig::Vector>& getSelfColPointsTorso() { return selfColPoints[3]; }
+
+    bool existsCtrlPoint()
+    {
+        return !ctrlPointChains.empty();
+    }
+
+    void checkSelfCollisions(bool mainpart=true);
+    void checkTableCollisions();
+
+protected:
     unsigned int verbosity;
-    std::string type;
-    iCub::iKin::iKinChain chain;
+    std::string part;
+    double selfColDistance;
+    iCub::iKin::iKinChain& chain;
+    iCub::iKin::iKinChain* secondChain;
+    iCub::iKin::iKinChain* torso;
     const std::vector<collisionPoint_t> &collisionPoints;
-    std::deque<iCub::iKin::iKinChain> ctrlPointChains;
-    yarp::os::Property parameters;
-    
-    bool computeFoR(const yarp::sig::Vector &pos, const yarp::sig::Vector &norm, yarp::sig::Matrix &FoR);
+    std::deque<std::pair<iCub::iKin::iKinChain, int>> ctrlPointChains;
+    std::vector<collisionPoint_t> totalColPoints;
+    std::vector<std::vector<yarp::sig::Vector>> selfColPoints;
+    std::vector<std::vector<yarp::sig::Vector>> selfControlPoints;
+    std::vector<yarp::sig::Vector> tablePoints;
+
+    static bool computeFoR(const yarp::sig::Vector &pos, const yarp::sig::Vector &norm, yarp::sig::Matrix &FoR);
     
     /**
     * Prints a message according to the verbosity level:
     * @param l is the level of verbosity: if verbosity >= l, something is printed
     * @param f is the text. Please use c standard (like printf)
     */
-    int printMessage(const unsigned int l, const char *f, ...) const;
-    
+    int printMessage(unsigned int l, const char *f, ...) const;
+
 };
-
-
-
-/****************************************************************/
-class AvoidanceHandlerTactile : public virtual AvoidanceHandlerAbstract
-{
-
-public:
-    AvoidanceHandlerTactile(const iCub::iKin::iKinChain &_chain,const std::vector<collisionPoint_t> &_collisionPoints,const unsigned int _verbosity=0);
-    void setParameters(const yarp::os::Property &parameters);
-    yarp::sig::Matrix getVLIM(const yarp::sig::Matrix &v_lim);
-
-protected:
-    double avoidingSpeed;
-
-    
-};
-
 
 #endif
