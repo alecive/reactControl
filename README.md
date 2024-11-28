@@ -46,7 +46,7 @@ If you found this work useful, please cite our manuscript:
   volume={?},
   number={?},
   pages={???},
-  doi={10.1109/TRO.202}}
+  doi={10.1109/TRO.2024.3502216}
 ```
 
 ## Authors
