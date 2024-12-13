@@ -33,6 +33,13 @@ Importantly, there is no distinction between end-effector and whole-body: the ob
 
 ![Schema of the controller](misc/new-react-schema.png)
 
+## Publication, video etc.
+There is a [webpage](https://sites.google.com/site/matejhof/publications/harmonious) dedicated to the main article:  Rozlivek, J.; Roncone, A.; Pattacini, U. & Hoffmann, M. (2025), 'HARMONIOUS – Human-like reactive motion control and multimodal perception for humanoid robots', IEEE Transactions on Robotics 41, 378 - 393.
+* Full text: [DOI - IEEE Xplore](https://doi.org/10.1109/TRO.2024.3502216) , [pdf-arxiv](https://arxiv.org/abs/2312.02711)
+
+Videos:
+* Main video - playing the card game: [youtube](https://youtu.be/gw8JB-1R3bs)
+* Additional supplementary videos: [link](https://ieeexplore.ieee.org/document/10758235/media#media) 
 
 ## Citation
 If you found this work useful, please cite our manuscript:
@@ -42,10 +49,9 @@ If you found this work useful, please cite our manuscript:
   author={Jakub Rozlivek and Alessandro Roncone and Ugo Pattacini and Matej Hoffmann},
   journal={IEEE Transactions on Robotics}, 
   title={{HARMONIOUS – Human-like reactive motion control and multimodal perception for humanoid robots}}, 
-  year={2024},
-  volume={?},
-  number={?},
-  pages={???},
+  year={2025},
+  volume={41},
+  pages={378-393},
   doi={10.1109/TRO.2024.3502216}
 ```
 
